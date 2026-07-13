@@ -320,6 +320,10 @@ button {
   background: #eeeeea;
 }
 
+.topbar-tools button.active {
+  background: #e7f2ef;
+}
+
 .topbar-tools .primary-action {
   min-width: 0;
   padding: 9px 16px;
@@ -354,6 +358,25 @@ button {
   font-size: clamp(1.4rem, 2.3vw, 2.05rem);
   font-weight: 850;
   letter-spacing: 0;
+}
+
+.operator-notice {
+  display: block;
+  margin-top: 5px;
+  color: #667680;
+  font-size: 0.86rem;
+}
+
+.filter-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin: -4px 0 18px;
+  padding: 14px;
+  border: 1px solid #e2e1d8;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .topbar p,
@@ -527,6 +550,13 @@ button {
   font-weight: 800;
 }
 
+.response-column-header button.active,
+.response-column-header button:hover {
+  color: #fff;
+  border-color: #171717;
+  background: #171717;
+}
+
 .response-card-list {
   display: grid;
   gap: 12px;
@@ -624,6 +654,58 @@ button {
 .response-card-footer strong {
   font-size: 0.82rem;
   white-space: nowrap;
+}
+
+.board-inspector,
+.rescue-detail-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px;
+  border: 1px solid #d8d7ce;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.board-inspector h2,
+.rescue-detail-strip h3 {
+  margin: 0 0 5px;
+  color: #171717;
+  font-size: 1.04rem;
+  font-weight: 850;
+}
+
+.board-inspector span,
+.rescue-detail-strip span {
+  color: #667680;
+}
+
+.board-inspector-meta,
+.rescue-detail-meta,
+.facility-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.empty-state {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 72px;
+  align-content: center;
+  padding: 14px;
+  color: #667680;
+  border: 1px dashed #d6d5cc;
+  border-radius: 8px;
+  background: #fbfbf7;
+}
+
+.empty-state strong {
+  color: #171717;
 }
 
 .role-hero {
@@ -1214,9 +1296,29 @@ button {
   background: #171717;
 }
 
+.secondary-button {
+  color: #171717;
+  border: 1px solid #d8d7ce;
+  background: #fff;
+}
+
 .compact-button:disabled {
   cursor: not-allowed;
   background: #9aa9b0;
+}
+
+.secondary-button:hover:not(:disabled) {
+  color: #fff;
+  border-color: #171717;
+  background: #171717;
+}
+
+.command-table tbody tr {
+  cursor: pointer;
+}
+
+.command-table tbody tr.selected-row td {
+  background: #edf6f3;
 }
 
 .facility-title {
@@ -1242,6 +1344,32 @@ button {
 .facility-item strong,
 .facility-item span {
   display: block;
+}
+
+.facility-snapshot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.facility-snapshot {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e3e2da;
+  border-radius: 8px;
+  background: #fbfbf7;
+}
+
+.facility-snapshot strong,
+.facility-snapshot span {
+  display: block;
+}
+
+.facility-snapshot span {
+  margin-bottom: 7px;
+  color: #667680;
+  font-size: 0.84rem;
 }
 
 .stepper {
@@ -1315,6 +1443,10 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .filter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .command-hero,
   .role-hero,
   .main-grid,
@@ -1379,6 +1511,28 @@ button {
   .page-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .filter-panel,
+  .board-inspector,
+  .rescue-detail-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-panel {
+    display: grid;
+  }
+
+  .board-inspector,
+  .rescue-detail-strip {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .board-inspector-meta,
+  .rescue-detail-meta,
+  .facility-actions {
+    justify-content: flex-start;
   }
 
   .primary-action {

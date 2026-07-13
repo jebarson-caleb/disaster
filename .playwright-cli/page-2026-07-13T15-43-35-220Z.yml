@@ -1,0 +1,195 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e9]:
+      - strong [ref=f1e10]: ResQ Command
+      - text: Disaster response platform
+    - generic [ref=f1e11]: Active role
+    - combobox "Active role" [ref=f1e12]:
+      - option "Admin" [selected]
+      - option "Citizen"
+      - option "Hospital"
+      - option "Shelter"
+      - option "Ambulance"
+      - option "NGO"
+      - option "Volunteer"
+      - option "Police"
+      - option "Fire Service"
+    - navigation "Main views" [ref=f1e13]:
+      - button "Command" [ref=f1e171] [cursor=pointer]
+      - button "Report Disaster" [ref=f1e179] [cursor=pointer]
+      - button "Rescue Queue" [ref=f1e180] [cursor=pointer]
+      - button "Facilities" [ref=f1e181] [cursor=pointer]
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: Early warning readiness
+      - strong [ref=f1e28]: 79%
+      - generic "79%" [ref=f1e29]
+    - generic [ref=f1e31]: All dashboards, queues, and facilities are visible.
+  - generic [ref=f1e36]:
+    - generic [ref=f1e37]:
+      - textbox "Search operations" [ref=f1e42]:
+        - /placeholder: Search Chennai incident, shelter, patient...
+      - generic [ref=f1e43]:
+        - 'button "Sort: newest" [ref=f1e688] [cursor=pointer]'
+        - button "Filters" [ref=f1e706] [cursor=pointer]
+        - button "Admin" [ref=f1e186] [cursor=pointer]
+        - button "Review priority queue" [ref=f1e187] [cursor=pointer]
+    - region "Operational filters" [ref=f1e690]:
+      - generic [ref=f1e691]:
+        - generic [ref=f1e692]: Disaster type
+        - combobox "Disaster type" [ref=f1e693]:
+          - option "All types" [selected]
+          - option "flood"
+          - option "earthquake"
+          - option "cyclone"
+          - option "landslide"
+          - option "fire"
+      - generic [ref=f1e694]:
+        - generic [ref=f1e695]: Risk level
+        - combobox "Risk level" [ref=f1e696]:
+          - option "All levels" [selected]
+          - option "low"
+          - option "medium"
+          - option "high"
+          - option "critical"
+      - generic [ref=f1e697]:
+        - generic [ref=f1e698]: Status
+        - combobox "Status" [ref=f1e699]:
+          - option "All statuses" [selected]
+          - option "pending"
+          - option "assigned"
+          - option "en route"
+          - option "triage"
+          - option "rescued"
+          - option "active"
+          - option "monitoring"
+      - button "Clear" [ref=f1e700] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Operational dashboard
+        - heading "Emergency coordination center" [level=1] [ref=f1e188]
+        - generic [ref=f1e60]: Showing all Tamil Nadu operations - All Tamil Nadu operations
+      - generic [ref=f1e61]: Admin
+    - generic [ref=f1e189]:
+      - generic [ref=f1e190]:
+        - generic [ref=f1e191]:
+          - paragraph [ref=f1e192]: Common operating picture
+          - heading "Tamil Nadu live risk and relief readiness" [level=2] [ref=f1e193]
+          - text: GIS map, resources, alerts, health capacity and field teams across Chennai, Cuddalore and the Nilgiris.
+        - generic [ref=f1e194]:
+          - generic [ref=f1e195]:
+            - generic [ref=f1e201]: People affected
+            - strong [ref=f1e202]: "546"
+          - generic [ref=f1e203]:
+            - generic [ref=f1e207]: Priority index
+            - strong [ref=f1e208]: 71/100
+          - generic [ref=f1e209]:
+            - generic [ref=f1e212]: Readiness
+            - strong [ref=f1e213]: 79%
+      - region "Dashboard focus" [ref=f1e214]:
+        - button "Overview" [ref=f1e215] [cursor=pointer]
+        - button "Response" [ref=f1e219] [cursor=pointer]
+        - button "Health" [active] [ref=f1e225] [cursor=pointer]
+        - button "Logistics" [ref=f1e229] [cursor=pointer]
+      - generic [ref=f1e234]:
+        - region "Active disasters" [ref=f1e235]:
+          - generic [ref=f1e239]:
+            - paragraph [ref=f1e240]: Active disasters
+            - strong [ref=f1e241]: "3"
+            - text: All Tamil Nadu operations
+        - region "Critical rescues" [ref=f1e242]:
+          - generic [ref=f1e247]:
+            - paragraph [ref=f1e248]: Critical rescues
+            - strong [ref=f1e249]: "1"
+            - text: 1 pending requests
+        - region "Ambulances ready" [ref=f1e250]:
+          - generic [ref=f1e257]:
+            - paragraph [ref=f1e258]: Ambulances ready
+            - strong [ref=f1e259]: "2"
+            - text: 2 units assigned/en route
+        - region "Shelter capacity" [ref=f1e260]:
+          - generic [ref=f1e265]:
+            - paragraph [ref=f1e266]: Shelter capacity
+            - strong [ref=f1e267]: "684"
+            - text: 1220 total relief slots
+        - region "Hospital beds" [ref=f1e268]:
+          - generic [ref=f1e274]:
+            - paragraph [ref=f1e275]: Hospital beds
+            - strong [ref=f1e276]: "111"
+            - text: 660 total beds tracked
+      - generic [ref=f1e842]:
+        - generic [ref=f1e843]:
+          - generic [ref=f1e845]:
+            - paragraph [ref=f1e846]: Health capacity
+            - heading "Hospitals and relief camps" [level=2] [ref=f1e847]
+          - generic [ref=f1e848]:
+            - generic [ref=f1e854]:
+              - strong [ref=f1e855]: Rajiv Gandhi Govt General Hospital
+              - generic [ref=f1e856]: 52/220 beds, ICU 10
+              - generic "24%" [ref=f1e857]
+            - generic [ref=f1e864]:
+              - strong [ref=f1e865]: Stanley Medical College Hospital
+              - generic [ref=f1e866]: 31/260 beds, ICU 6
+              - generic "12%" [ref=f1e867]
+            - generic [ref=f1e874]:
+              - strong [ref=f1e875]: Cuddalore Govt Medical College Hospital
+              - generic [ref=f1e876]: 28/180 beds, ICU 4
+              - generic "16%" [ref=f1e877]
+            - generic [ref=f1e883]:
+              - strong [ref=f1e884]: Velachery Govt School Relief Camp
+              - generic [ref=f1e885]: 420/700 relief slots
+              - generic "60%" [ref=f1e886]
+            - generic [ref=f1e892]:
+              - strong [ref=f1e893]: Cuddalore Cyclone Shelter
+              - generic [ref=f1e894]: 190/360 relief slots
+              - generic "53%" [ref=f1e895]
+            - generic [ref=f1e901]:
+              - strong [ref=f1e902]: Coonoor Community Hall Camp
+              - generic [ref=f1e903]: 74/160 relief slots
+              - generic "46%" [ref=f1e904]
+        - generic [ref=f1e906]:
+          - generic [ref=f1e908]:
+            - paragraph [ref=f1e909]: Clinical triage
+            - heading "Incoming high-risk rescues" [level=2] [ref=f1e910]
+          - generic [ref=f1e911]:
+            - generic [ref=f1e912]:
+              - generic [ref=f1e913]: High
+              - generic [ref=f1e914]:
+                - strong [ref=f1e915]: R. Murugan
+                - generic [ref=f1e916]: Cyclone wind damage at Cuddalore coast - Tree fall injury; needs 108 ambulance and stretcher support.
+            - generic [ref=f1e917]:
+              - generic [ref=f1e918]: Critical
+              - generic [ref=f1e919]:
+                - strong [ref=f1e920]: Meena Kumar
+                - generic [ref=f1e921]: Flooding near Velachery lake bund - Child and two adults stranded on first-floor terrace near the canal.
+        - generic [ref=f1e922]:
+          - generic [ref=f1e924]:
+            - paragraph [ref=f1e925]: Early warning
+            - heading "Readiness pillars" [level=2] [ref=f1e926]
+          - generic [ref=f1e927]:
+            - generic [ref=f1e928]:
+              - generic [ref=f1e929]:
+                - generic [ref=f1e930]: Risk knowledge
+                - strong [ref=f1e935]: 82%
+              - generic "82%" [ref=f1e936]
+              - paragraph [ref=f1e938]: Loss history, exposure and vulnerable groups mapped
+            - generic [ref=f1e939]:
+              - generic [ref=f1e940]:
+                - generic [ref=f1e941]: Monitoring
+                - strong [ref=f1e946]: 76%
+              - generic "76%" [ref=f1e947]
+              - paragraph [ref=f1e949]: Weather, field reports and incident sensors tracked
+            - generic [ref=f1e950]:
+              - generic [ref=f1e951]:
+                - generic [ref=f1e952]: Communication
+                - strong [ref=f1e956]: 88%
+              - generic "88%" [ref=f1e957]
+              - paragraph [ref=f1e959]: SMS, siren, radio and volunteer relay prepared
+            - generic [ref=f1e960]:
+              - generic [ref=f1e961]:
+                - generic [ref=f1e962]: Preparedness
+                - strong [ref=f1e966]: 71%
+              - generic "71%" [ref=f1e967]
+              - paragraph [ref=f1e969]: Shelter, hospital and resource readiness reviewed
+      - generic [ref=f1e972]:
+        - paragraph [ref=f1e973]: Health trend
+        - heading "Emergency response trend" [level=2] [ref=f1e974]

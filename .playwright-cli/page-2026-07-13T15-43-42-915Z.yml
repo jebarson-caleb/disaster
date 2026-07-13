@@ -1,0 +1,364 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e9]:
+      - strong [ref=f1e10]: ResQ Command
+      - text: Disaster response platform
+    - generic [ref=f1e11]: Active role
+    - combobox "Active role" [ref=f1e12]:
+      - option "Admin" [selected]
+      - option "Citizen"
+      - option "Hospital"
+      - option "Shelter"
+      - option "Ambulance"
+      - option "NGO"
+      - option "Volunteer"
+      - option "Police"
+      - option "Fire Service"
+    - navigation "Main views" [ref=f1e13]:
+      - button "Command" [ref=f1e171] [cursor=pointer]
+      - button "Report Disaster" [ref=f1e179] [cursor=pointer]
+      - button "Rescue Queue" [ref=f1e180] [cursor=pointer]
+      - button "Facilities" [ref=f1e181] [cursor=pointer]
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: Early warning readiness
+      - strong [ref=f1e28]: 79%
+      - generic "79%" [ref=f1e29]
+    - generic [ref=f1e31]: All dashboards, queues, and facilities are visible.
+  - generic [ref=f1e36]:
+    - generic [ref=f1e37]:
+      - textbox "Search operations" [ref=f1e42]:
+        - /placeholder: Search Chennai incident, shelter, patient...
+      - generic [ref=f1e43]:
+        - 'button "Sort: newest" [ref=f1e688] [cursor=pointer]'
+        - button "Filters" [ref=f1e706] [cursor=pointer]
+        - button "Admin" [ref=f1e186] [cursor=pointer]
+        - button "Review priority queue" [ref=f1e187] [cursor=pointer]
+    - region "Operational filters" [ref=f1e690]:
+      - generic [ref=f1e691]:
+        - generic [ref=f1e692]: Disaster type
+        - combobox "Disaster type" [ref=f1e693]:
+          - option "All types" [selected]
+          - option "flood"
+          - option "earthquake"
+          - option "cyclone"
+          - option "landslide"
+          - option "fire"
+      - generic [ref=f1e694]:
+        - generic [ref=f1e695]: Risk level
+        - combobox "Risk level" [ref=f1e696]:
+          - option "All levels" [selected]
+          - option "low"
+          - option "medium"
+          - option "high"
+          - option "critical"
+      - generic [ref=f1e697]:
+        - generic [ref=f1e698]: Status
+        - combobox "Status" [ref=f1e699]:
+          - option "All statuses" [selected]
+          - option "pending"
+          - option "assigned"
+          - option "en route"
+          - option "triage"
+          - option "rescued"
+          - option "active"
+          - option "monitoring"
+      - button "Clear" [ref=f1e700] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Operational dashboard
+        - heading "Emergency coordination center" [level=1] [ref=f1e188]
+        - generic [ref=f1e60]: Showing all Tamil Nadu operations - All Tamil Nadu operations
+      - generic [ref=f1e61]: Admin
+    - generic [ref=f1e189]:
+      - generic [ref=f1e190]:
+        - generic [ref=f1e191]:
+          - paragraph [ref=f1e192]: Common operating picture
+          - heading "Tamil Nadu live risk and relief readiness" [level=2] [ref=f1e193]
+          - text: GIS map, resources, alerts, health capacity and field teams across Chennai, Cuddalore and the Nilgiris.
+        - generic [ref=f1e194]:
+          - generic [ref=f1e195]:
+            - generic [ref=f1e201]: People affected
+            - strong [ref=f1e202]: "546"
+          - generic [ref=f1e203]:
+            - generic [ref=f1e207]: Priority index
+            - strong [ref=f1e208]: 71/100
+          - generic [ref=f1e209]:
+            - generic [ref=f1e212]: Readiness
+            - strong [ref=f1e213]: 79%
+      - region "Dashboard focus" [ref=f1e214]:
+        - button "Overview" [active] [ref=f1e215] [cursor=pointer]
+        - button "Response" [ref=f1e219] [cursor=pointer]
+        - button "Health" [ref=f1e225] [cursor=pointer]
+        - button "Logistics" [ref=f1e229] [cursor=pointer]
+      - generic [ref=f1e234]:
+        - region "Active disasters" [ref=f1e235]:
+          - generic [ref=f1e239]:
+            - paragraph [ref=f1e240]: Active disasters
+            - strong [ref=f1e241]: "3"
+            - text: All Tamil Nadu operations
+        - region "Critical rescues" [ref=f1e242]:
+          - generic [ref=f1e247]:
+            - paragraph [ref=f1e248]: Critical rescues
+            - strong [ref=f1e249]: "1"
+            - text: 1 pending requests
+        - region "Ambulances ready" [ref=f1e250]:
+          - generic [ref=f1e257]:
+            - paragraph [ref=f1e258]: Ambulances ready
+            - strong [ref=f1e259]: "2"
+            - text: 2 units assigned/en route
+        - region "Shelter capacity" [ref=f1e260]:
+          - generic [ref=f1e265]:
+            - paragraph [ref=f1e266]: Shelter capacity
+            - strong [ref=f1e267]: "684"
+            - text: 1220 total relief slots
+        - region "Hospital beds" [ref=f1e268]:
+          - generic [ref=f1e274]:
+            - paragraph [ref=f1e275]: Hospital beds
+            - strong [ref=f1e276]: "111"
+            - text: 660 total beds tracked
+      - region "Emergency response stages" [ref=f1e977]:
+        - generic [ref=f1e978]:
+          - generic [ref=f1e979]:
+            - generic [ref=f1e980]:
+              - heading "Reported" [level=2] [ref=f1e981]
+              - generic [ref=f1e982]: Incoming field reports
+            - button "Sort Reported" [ref=f1e983] [cursor=pointer]: "3"
+          - generic [ref=f1e987]:
+            - article [ref=f1e988]:
+              - generic [ref=f1e989]:
+                - generic [ref=f1e990]:
+                  - heading "Flooding near Velachery lake bund" [level=3] [ref=f1e991]
+                  - text: flood
+                - button "More actions for Flooding near Velachery lake bund" [ref=f1e992] [cursor=pointer]
+              - paragraph [ref=f1e997]: Velachery, Chennai. 320 people affected.
+              - generic [ref=f1e998]:
+                - generic [ref=f1e999]: Today 08:20
+                - generic [ref=f1e1002]: 5 updates
+                - generic [ref=f1e1005]: "320"
+              - generic [ref=f1e1011]:
+                - generic [ref=f1e1012]: Critical
+                - strong [ref=f1e1013]: 91/100
+            - article [ref=f1e1014]:
+              - generic [ref=f1e1015]:
+                - generic [ref=f1e1016]:
+                  - heading "Cyclone wind damage at Cuddalore coast" [level=3] [ref=f1e1017]
+                  - text: cyclone
+                - button "More actions for Cyclone wind damage at Cuddalore coast" [ref=f1e1018] [cursor=pointer]
+              - paragraph [ref=f1e1023]: Devanampattinam, Cuddalore. 180 people affected.
+              - generic [ref=f1e1024]:
+                - generic [ref=f1e1025]: Today 09:05
+                - generic [ref=f1e1028]: 5 updates
+                - generic [ref=f1e1031]: "180"
+              - generic [ref=f1e1037]:
+                - generic [ref=f1e1038]: High
+                - strong [ref=f1e1039]: 82/100
+            - article [ref=f1e1040]:
+              - generic [ref=f1e1041]:
+                - generic [ref=f1e1042]:
+                  - heading "Landslide risk on Nilgiris ghat road" [level=3] [ref=f1e1043]
+                  - text: landslide
+                - button "More actions for Landslide risk on Nilgiris ghat road" [ref=f1e1044] [cursor=pointer]
+              - paragraph [ref=f1e1049]: Coonoor Ghat Road, Nilgiris. 46 people affected.
+              - generic [ref=f1e1050]:
+                - generic [ref=f1e1051]: Today 10:10
+                - generic [ref=f1e1054]: 3 updates
+                - generic [ref=f1e1057]: "46"
+              - generic [ref=f1e1063]:
+                - generic [ref=f1e1064]: Medium
+                - strong [ref=f1e1065]: 61/100
+        - generic [ref=f1e1066]:
+          - generic [ref=f1e1067]:
+            - generic [ref=f1e1068]:
+              - heading "Prioritized" [level=2] [ref=f1e1069]
+              - generic [ref=f1e1070]: AI-ranked rescue needs
+            - button "Sort Prioritized" [ref=f1e1071] [cursor=pointer]: "2"
+          - generic [ref=f1e1075]:
+            - article [ref=f1e1076]:
+              - generic [ref=f1e1077]:
+                - generic [ref=f1e1078]:
+                  - heading "R. Murugan" [level=3] [ref=f1e1079]
+                  - text: injured condition
+                - button "More actions for R. Murugan" [ref=f1e1080] [cursor=pointer]
+              - paragraph [ref=f1e1085]: Tree fall injury; needs 108 ambulance and stretcher support.
+              - generic [ref=f1e1086]:
+                - generic [ref=f1e1087]: 19 min ago
+                - generic [ref=f1e1090]: 2 notes
+                - generic [ref=f1e1093]: "1"
+              - generic [ref=f1e1099]:
+                - generic [ref=f1e1100]: High
+                - strong [ref=f1e1101]: 72/100
+            - article [ref=f1e1102]:
+              - generic [ref=f1e1103]:
+                - generic [ref=f1e1104]:
+                  - heading "Meena Kumar" [level=3] [ref=f1e1105]
+                  - text: critical condition
+                - button "More actions for Meena Kumar" [ref=f1e1106] [cursor=pointer]
+              - paragraph [ref=f1e1111]: Child and two adults stranded on first-floor terrace near the canal.
+              - generic [ref=f1e1112]:
+                - generic [ref=f1e1113]: 12 min ago
+                - generic [ref=f1e1116]: 5 notes
+                - generic [ref=f1e1119]: "3"
+              - generic [ref=f1e1125]:
+                - generic [ref=f1e1126]: Critical
+                - strong [ref=f1e1127]: 97/100
+        - generic [ref=f1e1128]:
+          - generic [ref=f1e1129]:
+            - generic [ref=f1e1130]:
+              - heading "Dispatched" [level=2] [ref=f1e1131]
+              - generic [ref=f1e1132]: Teams and vehicles moving
+            - button "Sort Dispatched" [ref=f1e1133] [cursor=pointer]: "2"
+          - generic [ref=f1e1137]:
+            - article [ref=f1e1138]:
+              - generic [ref=f1e1139]:
+                - generic [ref=f1e1140]:
+                  - heading "Greater Chennai Volunteer Team A" [level=3] [ref=f1e1141]
+                  - text: Fathima Banu
+                - button "More actions for Greater Chennai Volunteer Team A" [ref=f1e1142] [cursor=pointer]
+              - paragraph [ref=f1e1147]: Family needs relocation to the Velachery relief camp.
+              - generic [ref=f1e1148]:
+                - generic [ref=f1e1149]: 35 min ago
+                - generic [ref=f1e1152]: ETA live
+                - generic [ref=f1e1155]: "5"
+              - generic [ref=f1e1161]:
+                - generic [ref=f1e1162]: en route
+                - strong [ref=f1e1163]: Medium
+            - article [ref=f1e1164]:
+              - generic [ref=f1e1165]:
+                - generic [ref=f1e1166]:
+                  - heading "TNDRF Boat Unit 2" [level=3] [ref=f1e1167]
+                  - text: Meena Kumar
+                - button "More actions for TNDRF Boat Unit 2" [ref=f1e1168] [cursor=pointer]
+              - paragraph [ref=f1e1173]: Child and two adults stranded on first-floor terrace near the canal.
+              - generic [ref=f1e1174]:
+                - generic [ref=f1e1175]: 12 min ago
+                - generic [ref=f1e1178]: assigned
+                - generic [ref=f1e1181]: "3"
+              - generic [ref=f1e1187]:
+                - generic [ref=f1e1188]: assigned
+                - strong [ref=f1e1189]: Critical
+        - generic [ref=f1e1190]:
+          - generic [ref=f1e1191]:
+            - generic [ref=f1e1192]:
+              - heading "Coordinated" [level=2] [ref=f1e1193]
+              - generic [ref=f1e1194]: Alerts, SitReps and aid
+            - button "Sort Coordinated" [ref=f1e1195] [cursor=pointer]: "2"
+          - generic [ref=f1e1199]:
+            - article [ref=f1e1200]:
+              - generic [ref=f1e1201]:
+                - generic [ref=f1e1202]:
+                  - heading "Ward 176 SitRep" [level=3] [ref=f1e1203]
+                  - text: situation report
+                - button "More actions for Ward 176 SitRep" [ref=f1e1204] [cursor=pointer]
+              - paragraph [ref=f1e1209]: Velachery corridor verified, relief camp route open, hospital handoff ready.
+              - generic [ref=f1e1210]:
+                - generic [ref=f1e1211]: Now
+                - generic [ref=f1e1214]: CAP draft
+                - generic [ref=f1e1217]: 1 ward
+              - generic [ref=f1e1223]:
+                - generic [ref=f1e1224]: Live
+                - strong [ref=f1e1225]: Verified
+            - article [ref=f1e1226]:
+              - generic [ref=f1e1227]:
+                - generic [ref=f1e1228]:
+                  - heading "Mutual-aid request" [level=3] [ref=f1e1229]
+                  - text: resource support
+                - button "More actions for Mutual-aid request" [ref=f1e1230] [cursor=pointer]
+              - paragraph [ref=f1e1235]: Requesting extra boats, tarpaulins and family relief kits from nearby districts.
+              - generic [ref=f1e1236]:
+                - generic [ref=f1e1237]: 15 min
+                - generic [ref=f1e1240]: 2 partners
+                - generic [ref=f1e1243]: 4 assets
+              - generic [ref=f1e1249]:
+                - generic [ref=f1e1250]: Active
+                - strong [ref=f1e1251]: Open
+      - generic [ref=f1e1252]:
+        - generic [ref=f1e1253]:
+          - generic [ref=f1e1254]:
+            - generic [ref=f1e1255]:
+              - paragraph [ref=f1e1256]: Live Tamil Nadu map
+              - heading "Reports, rescues and impact locations" [level=2] [ref=f1e1257]
+            - generic [ref=f1e1258]: Live GIS
+          - generic [ref=f1e1259]:
+            - generic:
+              - generic [ref=f1e1266]:
+                - button "Zoom in" [ref=f1e1267] [cursor=pointer]: +
+                - button "Zoom out" [ref=f1e1268] [cursor=pointer]: −
+              - generic [ref=f1e1269]:
+                - link "Leaflet" [ref=f1e1270] [cursor=pointer]:
+                  - /url: https://leafletjs.com
+                - text: "| © OpenStreetMap contributors"
+        - generic [ref=f1e1275]:
+          - generic [ref=f1e1276]:
+            - generic [ref=f1e1277]:
+              - generic [ref=f1e1278]:
+                - paragraph [ref=f1e1279]: AI allocation
+                - heading "Recommended next dispatch" [level=2] [ref=f1e1280]
+              - generic [ref=f1e1281]: Computed
+            - generic [ref=f1e1282]:
+              - generic [ref=f1e1283]:
+                - generic [ref=f1e1284]: ambulances
+                - strong [ref=f1e1285]: "0"
+              - generic [ref=f1e1286]:
+                - generic [ref=f1e1287]: rescue teams
+                - strong [ref=f1e1288]: "1"
+              - generic [ref=f1e1289]:
+                - generic [ref=f1e1290]: volunteers
+                - strong [ref=f1e1291]: "16"
+              - generic [ref=f1e1292]:
+                - generic [ref=f1e1293]: food packets
+                - strong [ref=f1e1294]: "960"
+              - generic [ref=f1e1295]:
+                - generic [ref=f1e1296]: medicine kits
+                - strong [ref=f1e1297]: "40"
+              - generic [ref=f1e1298]:
+                - generic [ref=f1e1299]: shelter slots
+                - strong [ref=f1e1300]: "320"
+          - generic [ref=f1e1301]:
+            - generic [ref=f1e1303]:
+              - paragraph [ref=f1e1304]: Next best action
+              - heading "Fathima Banu" [level=2] [ref=f1e1305]
+            - generic [ref=f1e1309]:
+              - strong [ref=f1e1310]: Medium priority rescue
+              - generic [ref=f1e1311]: "Family needs relocation to the Velachery relief camp. Assigned unit: Greater Chennai Volunteer Team A"
+            - generic [ref=f1e1315]:
+              - strong [ref=f1e1316]: Coonoor Ghat Road, Nilgiris
+              - generic [ref=f1e1317]: 46 people affected, Medium AI damage estimate
+      - generic [ref=f1e1320]:
+        - paragraph [ref=f1e1321]: Trend analytics
+        - heading "Response trend" [level=2] [ref=f1e1322]
+      - generic [ref=f1e1325]:
+        - generic [ref=f1e1328]:
+          - paragraph [ref=f1e1329]: AI queue
+          - heading "Priority distribution" [level=2] [ref=f1e1330]
+        - generic [ref=f1e1335]:
+          - paragraph [ref=f1e1336]: Hazard mix
+          - heading "Disasters by type" [level=2] [ref=f1e1337]
+        - generic [ref=f1e1340]:
+          - generic [ref=f1e1342]:
+            - paragraph [ref=f1e1343]: Early warning
+            - heading "Readiness pillars" [level=2] [ref=f1e1344]
+          - generic [ref=f1e1345]:
+            - generic [ref=f1e1346]:
+              - generic [ref=f1e1347]:
+                - generic [ref=f1e1348]: Risk knowledge
+                - strong [ref=f1e1353]: 82%
+              - generic "82%" [ref=f1e1354]
+              - paragraph [ref=f1e1356]: Loss history, exposure and vulnerable groups mapped
+            - generic [ref=f1e1357]:
+              - generic [ref=f1e1358]:
+                - generic [ref=f1e1359]: Monitoring
+                - strong [ref=f1e1364]: 76%
+              - generic "76%" [ref=f1e1365]
+              - paragraph [ref=f1e1367]: Weather, field reports and incident sensors tracked
+            - generic [ref=f1e1368]:
+              - generic [ref=f1e1369]:
+                - generic [ref=f1e1370]: Communication
+                - strong [ref=f1e1374]: 88%
+              - generic "88%" [ref=f1e1375]
+              - paragraph [ref=f1e1377]: SMS, siren, radio and volunteer relay prepared
+            - generic [ref=f1e1378]:
+              - generic [ref=f1e1379]:
+                - generic [ref=f1e1380]: Preparedness
+                - strong [ref=f1e1384]: 71%
+              - generic "71%" [ref=f1e1385]
+              - paragraph [ref=f1e1387]: Shelter, hospital and resource readiness reviewed

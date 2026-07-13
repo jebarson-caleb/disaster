@@ -57,6 +57,13 @@ ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LineElem
 const disasterOptions = ['flood', 'earthquake', 'cyclone', 'landslide', 'fire'];
 const severityOptions = ['low', 'medium', 'high', 'critical'];
 const conditionOptions = ['stable', 'injured', 'critical', 'unconscious', 'bleeding'];
+const filterStatusOptions = ['pending', 'assigned', 'en route', 'triage', 'rescued', 'active', 'monitoring'];
+const sortModes = ['priority', 'newest', 'people'];
+const sortLabels = {
+  priority: 'Sort: risk',
+  newest: 'Sort: newest',
+  people: 'Sort: people',
+};
 const dashboardTabs = [
   { id: 'overview', label: 'Overview', icon: Gauge },
   { id: 'response', label: 'Response', icon: Siren },
@@ -74,17 +81,17 @@ const earlyWarningPillars = [
 ];
 
 const resourceInventory = [
-  { name: 'Rescue boats', available: 12, total: 16, unit: 'boats', tone: 'blue' },
-  { name: 'Food packets', available: 2500, total: 4200, unit: 'packs', tone: 'green' },
-  { name: 'Medicine kits', available: 800, total: 1200, unit: 'kits', tone: 'orange' },
-  { name: 'Water cans', available: 1600, total: 2400, unit: 'cans', tone: 'cyan' },
+  { name: 'Rescue boats', available: 14, total: 18, unit: 'boats', tone: 'blue' },
+  { name: 'Rice meal packets', available: 3200, total: 5200, unit: 'packs', tone: 'green' },
+  { name: 'Medicine kits', available: 960, total: 1400, unit: 'kits', tone: 'orange' },
+  { name: 'Drinking water cans', available: 2100, total: 3200, unit: 'cans', tone: 'cyan' },
 ];
 
 const fieldTeams = [
-  { name: 'Boat Rescue Unit 2', status: 'assigned', eta: '12 min', location: 'Riverside Colony', load: 84 },
-  { name: 'Fire Rescue Team 4', status: 'mobilizing', eta: '18 min', location: 'Market Road', load: 62 },
-  { name: 'Volunteer Team A', status: 'en route', eta: '9 min', location: 'North Pier', load: 57 },
-  { name: 'Medical Triage Van', status: 'available', eta: 'ready', location: 'City Emergency Hospital', load: 31 },
+  { name: 'TNDRF Boat Unit 2', status: 'assigned', eta: '12 min', location: 'Velachery lake bund', load: 84 },
+  { name: 'Tamil Nadu Fire Rescue Team 4', status: 'mobilizing', eta: '18 min', location: 'Cuddalore coast road', load: 62 },
+  { name: 'Greater Chennai Volunteer Team A', status: 'en route', eta: '9 min', location: 'Velachery relief camp', load: 57 },
+  { name: '108 Ambulance Triage Van', status: 'available', eta: 'ready', location: 'Rajiv Gandhi Govt General Hospital', load: 31 },
 ];
 
 const standardsFeatures = [
@@ -105,8 +112,8 @@ const responseTrend = [
 ];
 
 const initialAlerts = [
-  { id: 1, audience: 'Ward 14 - Riverside', channel: 'SMS + radio', message: 'Move to Govt HSS Relief Camp. Avoid low-lying road near canal.', time: '8 min ago' },
-  { id: 2, audience: 'Hospital network', channel: 'Ops dashboard', message: 'Prepare 25 emergency beds for flood response corridor.', time: '24 min ago' },
+  { id: 1, audience: 'Ward 176 - Velachery', channel: 'SMS + radio', message: 'Move to Velachery Govt School Relief Camp. Avoid the lake bund service road.', time: '8 min ago' },
+  { id: 2, audience: 'Chennai hospital network', channel: 'Ops dashboard', message: 'Prepare 35 emergency beds for flood and cyclone response corridors.', time: '24 min ago' },
 ];
 
 const roleNavigation = {
@@ -176,22 +183,28 @@ export default function App() {
   const [activeRole, setActiveRole] = useState('Citizen');
   const [activeView, setActiveView] = useState('command');
   const [dashboardMode, setDashboardMode] = useState('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState('priority');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({ type: 'all', severity: 'all', status: 'all' });
+  const [selectedRescueId, setSelectedRescueId] = useState(null);
+  const [operatorNotice, setOperatorNotice] = useState('Tamil Nadu emergency demo data loaded');
   const [disasters, setDisasters] = useState(initialDisasters);
   const [rescues, setRescues] = useState(initialRescues);
   const [facilities, setFacilities] = useState(initialFacilities);
   const [alerts, setAlerts] = useState(initialAlerts);
   const [alertDraft, setAlertDraft] = useState({
-    audience: 'Coastal wards',
+    audience: 'Chennai Zone 13 - Adyar / Velachery',
     channel: 'SMS + siren + volunteer relay',
-    message: 'Heavy rainfall expected. Move vulnerable residents to the nearest open shelter.',
+    message: 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.',
   });
   const [incidentDraft, setIncidentDraft] = useState({
     title: '',
     disaster_type: 'flood',
     address: '',
     description: '',
-    latitude: 9.9312,
-    longitude: 76.2673,
+    latitude: 12.9798,
+    longitude: 80.2209,
     people_affected: 25,
     severity_hint: 'medium',
   });
@@ -203,14 +216,14 @@ export default function App() {
     condition: 'injured',
     trapped: false,
     vulnerable_people: 0,
-    latitude: 9.932,
-    longitude: 76.269,
+    latitude: 12.9806,
+    longitude: 80.2194,
     notes: '',
   });
 
   const metrics = useMemo(() => {
     const pending = rescues.filter((item) => item.status === 'pending').length;
-    const assigned = rescues.filter((item) => item.status === 'assigned' || item.status === 'en route').length;
+    const assigned = rescues.filter((item) => ['assigned', 'en route', 'triage'].includes(item.status)).length;
     const critical = rescues.filter((item) => item.priority_label === 'Critical').length;
     const beds = facilities.hospitals.reduce((sum, item) => sum + item.available_beds, 0);
     const totalBeds = facilities.hospitals.reduce((sum, item) => sum + item.total_beds, 0);
@@ -280,8 +293,18 @@ export default function App() {
     [],
   );
 
-  const sortedRescues = [...rescues].sort((a, b) => b.priority_score - a.priority_score);
-  const selectedDisaster = disasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters[0];
+  const disasterLookup = useMemo(() => new Map(disasters.map((item) => [Number(item.id), item])), [disasters]);
+  const filteredDisasters = useMemo(
+    () => filterAndSortDisasters(disasters, { searchQuery, filters, sortMode }),
+    [disasters, searchQuery, filters, sortMode],
+  );
+  const sortedRescues = useMemo(
+    () => filterAndSortRescues(rescues, disasterLookup, { searchQuery, filters, sortMode }),
+    [rescues, disasterLookup, searchQuery, filters, sortMode],
+  );
+  const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
+  const filterSummary = searchQuery.trim() || activeFilterCount ? `${filteredDisasters.length} reports, ${sortedRescues.length} rescues shown` : 'All Tamil Nadu operations';
+  const selectedDisaster = filteredDisasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters[0];
   const allocation = allocateResources({
     severity: sortedRescues[0]?.priority_label || 'Medium',
     people_count: selectedDisaster?.people_affected || 1,
@@ -289,7 +312,6 @@ export default function App() {
   });
   const activeTopbar = roleTopbar[activeRole] || roleTopbar.Admin;
   const activeNavigation = roleNavigation[activeRole] || roleNavigation.Admin;
-  const PrimaryIcon = activeTopbar.icon;
   const visibleRescues = rescueItemsForRole(activeRole, sortedRescues);
 
   useEffect(() => {
@@ -314,6 +336,7 @@ export default function App() {
     };
     setDisasters([next, ...disasters]);
     setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: 25 });
+    setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the Tamil Nadu command view`);
     setActiveView('command');
   }
 
@@ -337,6 +360,8 @@ export default function App() {
     };
     setRescues([next, ...rescues]);
     setRescueDraft({ ...rescueDraft, victim_name: '', notes: '', trapped: false });
+    setSelectedRescueId(next.id);
+    setOperatorNotice(`${priority.label} rescue request created for ${next.victim_name}`);
     setActiveView('rescue');
   }
 
@@ -345,38 +370,120 @@ export default function App() {
     const next = { id: Date.now(), ...alertDraft, time: 'Just now' };
     setAlerts([next, ...alerts]);
     setAlertDraft({ ...alertDraft, message: '' });
+    setOperatorNotice(`Alert sent to ${next.audience} by ${next.channel}`);
   }
 
-  function assignRescue(id) {
-    setRescues((items) =>
-      items.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: 'assigned',
-              assigned_unit: item.priority_label === 'Critical' ? 'Rapid Rescue Unit' : 'Volunteer Team',
-            }
-          : item,
-      ),
-    );
+  function handleRescueAction(id, role = activeRole) {
+    const rescue = rescues.find((item) => item.id === id);
+    if (!rescue) return;
+    setSelectedRescueId(id);
+
+    if (assignCapableRoles.has(role)) {
+      const disaster = disasterLookup.get(Number(rescue.disaster_id));
+      const nextStatus = nextRescueStatus(rescue.status);
+      if (!nextStatus) {
+        setOperatorNotice(`${rescue.victim_name} is already marked rescued`);
+        return;
+      }
+      const unit = rescue.assigned_unit || recommendedUnitForRescue(rescue, disaster, role);
+      setRescues((items) =>
+        items.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: nextStatus,
+                assigned_unit: unit,
+              }
+            : item,
+        ),
+      );
+      setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} with ${unit}`);
+      return;
+    }
+
+    if (role === 'Hospital') {
+      setRescues((items) =>
+        items.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: item.status === 'rescued' ? item.status : 'triage',
+                assigned_unit: item.assigned_unit || 'Rajiv Gandhi Govt General Hospital triage desk',
+              }
+            : item,
+        ),
+      );
+      setOperatorNotice(`${rescue.victim_name} accepted for hospital triage`);
+      return;
+    }
+
+    if (role === 'Volunteer') {
+      setRescues((items) =>
+        items.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: item.status === 'rescued' ? item.status : 'en route',
+                assigned_unit: item.assigned_unit || 'Greater Chennai Volunteer Team A',
+              }
+            : item,
+        ),
+      );
+      setOperatorNotice(`Volunteer check-in recorded for ${rescue.victim_name}`);
+      return;
+    }
+
+    setOperatorNotice(`Showing live tracking for ${rescue.victim_name}: ${rescue.status}`);
   }
 
   function updateHospital(id, delta) {
     setFacilities((current) => ({
       ...current,
       hospitals: current.hospitals.map((item) =>
-        item.id === id ? { ...item, available_beds: Math.max(0, item.available_beds + delta) } : item,
+        item.id === id ? { ...item, available_beds: clampNumber(item.available_beds + delta, 0, item.total_beds) } : item,
       ),
     }));
+    const hospital = facilities.hospitals.find((item) => item.id === id);
+    if (hospital) {
+      setOperatorNotice(`${hospital.name} capacity ${delta > 0 ? 'increased' : 'reduced'} by ${Math.abs(delta)} beds`);
+    }
   }
 
   function updateShelter(id, delta) {
     setFacilities((current) => ({
       ...current,
       shelters: current.shelters.map((item) =>
-        item.id === id ? { ...item, available_capacity: Math.max(0, item.available_capacity + delta) } : item,
+        item.id === id ? { ...item, available_capacity: clampNumber(item.available_capacity + delta, 0, item.total_capacity) } : item,
       ),
     }));
+    const shelter = facilities.shelters.find((item) => item.id === id);
+    if (shelter) {
+      setOperatorNotice(`${shelter.name} slots ${delta > 0 ? 'opened' : 'filled'} by ${Math.abs(delta)}`);
+    }
+  }
+
+  function updateAmbulanceStatus(id) {
+    const ambulance = facilities.ambulances.find((item) => item.id === id);
+    if (!ambulance) return;
+    const nextStatus = nextAmbulanceStatus(ambulance.status);
+    setFacilities((current) => ({
+      ...current,
+      ambulances: current.ambulances.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
+    }));
+    setOperatorNotice(`${ambulance.vehicle_number} marked ${nextStatus}`);
+  }
+
+  function cycleSortMode() {
+    const currentIndex = sortModes.indexOf(sortMode);
+    const nextMode = sortModes[(currentIndex + 1) % sortModes.length];
+    setSortMode(nextMode);
+    setOperatorNotice(sortLabels[nextMode]);
+  }
+
+  function clearOperationalFilters() {
+    setSearchQuery('');
+    setFilters({ type: 'all', severity: 'all', status: 'all' });
+    setOperatorNotice('Showing all Tamil Nadu operations');
   }
 
   return (
@@ -395,7 +502,16 @@ export default function App() {
         <label className="field-label" htmlFor="role-select">
           Active role
         </label>
-        <select id="role-select" className="form-select" value={activeRole} onChange={(event) => setActiveRole(event.target.value)}>
+        <select
+          id="role-select"
+          className="form-select"
+          value={activeRole}
+          onChange={(event) => {
+            setActiveRole(event.target.value);
+            setActiveView('command');
+            setOperatorNotice(`${event.target.value} role selected`);
+          }}
+        >
           {roles.map((role) => (
             <option key={role}>{role}</option>
           ))}
@@ -425,32 +541,77 @@ export default function App() {
         <header className="topbar">
           <div className="search-shell">
             <Search size={18} />
-            <input aria-label="Search operations" placeholder="Search incident, shelter, patient..." />
+            <input
+              aria-label="Search operations"
+              placeholder="Search Chennai incident, shelter, patient..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
           </div>
           <div className="topbar-tools">
-            <button type="button">
+            <button type="button" onClick={cycleSortMode}>
               <ArrowUpDown size={16} />
-              Sort by
+              {sortLabels[sortMode]}
             </button>
-            <button type="button">
+            <button type="button" className={showFilters ? 'active' : ''} onClick={() => setShowFilters((value) => !value)}>
               <SlidersHorizontal size={16} />
-              Filters
+              Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
             </button>
-            <button type="button">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('command');
+                setOperatorNotice(`${activeRole} workspace opened`);
+              }}
+            >
               <UserRound size={16} />
               {activeRole}
             </button>
-            <button className="primary-action" onClick={() => setActiveView(activeTopbar.view)}>
+            <button
+              type="button"
+              className="primary-action"
+              onClick={() => {
+                setActiveView(activeTopbar.view);
+                setOperatorNotice(`${activeTopbar.action} opened`);
+              }}
+            >
               <Plus size={17} />
               {activeTopbar.action}
             </button>
           </div>
         </header>
 
+        {showFilters && (
+          <section className="filter-panel" aria-label="Operational filters">
+            <Select
+              label="Disaster type"
+              value={filters.type}
+              options={[{ label: 'All types', value: 'all' }, ...disasterOptions.map((type) => ({ label: type, value: type }))]}
+              onChange={(value) => setFilters((current) => ({ ...current, type: value }))}
+            />
+            <Select
+              label="Risk level"
+              value={filters.severity}
+              options={[{ label: 'All levels', value: 'all' }, ...severityOptions.map((level) => ({ label: level, value: level }))]}
+              onChange={(value) => setFilters((current) => ({ ...current, severity: value }))}
+            />
+            <Select
+              label="Status"
+              value={filters.status}
+              options={[{ label: 'All statuses', value: 'all' }, ...filterStatusOptions.map((status) => ({ label: status, value: status }))]}
+              onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
+            />
+            <button type="button" className="compact-button secondary-button" onClick={clearOperationalFilters}>
+              Clear
+            </button>
+          </section>
+        )}
+
         <section className="page-heading">
           <div>
             <p>{activeTopbar.eyebrow}</p>
             <h1>{activeTopbar.title}</h1>
+            <span className="operator-notice">{operatorNotice} - {filterSummary}</span>
           </div>
           <StatusPill value={activeRole} />
         </section>
@@ -461,8 +622,9 @@ export default function App() {
               {activeRole === 'Admin' ? (
                 <CommandView
                   metrics={metrics}
-                  disasters={disasters}
+                  disasters={filteredDisasters}
                   rescues={sortedRescues}
+                  facilities={facilities}
                   priorityChart={priorityChart}
                   disasterChart={disasterChart}
                   trendChart={trendChart}
@@ -474,12 +636,13 @@ export default function App() {
                   setAlertDraft={setAlertDraft}
                   sendAlert={sendAlert}
                   reduceMotion={reduceMotion}
+                  filterSummary={filterSummary}
                 />
               ) : (
                 <RoleDashboard
                   role={activeRole}
                   metrics={metrics}
-                  disasters={disasters}
+                  disasters={filteredDisasters}
                   rescues={visibleRescues}
                   facilities={facilities}
                   alerts={alerts}
@@ -503,12 +666,25 @@ export default function App() {
           )}
           {activeView === 'rescue' && (
             <MotionPage key="rescue" reduceMotion={reduceMotion}>
-              <RescueView role={activeRole} rescues={visibleRescues} disasters={disasters} onAssign={assignRescue} />
+              <RescueView
+                role={activeRole}
+                rescues={visibleRescues}
+                disasters={disasters}
+                selectedRescueId={selectedRescueId}
+                onAction={handleRescueAction}
+                onSelect={setSelectedRescueId}
+              />
             </MotionPage>
           )}
           {activeView === 'facilities' && (
             <MotionPage key="facilities" reduceMotion={reduceMotion}>
-              <FacilitiesView role={activeRole} facilities={facilities} updateHospital={updateHospital} updateShelter={updateShelter} />
+              <FacilitiesView
+                role={activeRole}
+                facilities={facilities}
+                updateHospital={updateHospital}
+                updateShelter={updateShelter}
+                updateAmbulanceStatus={updateAmbulanceStatus}
+              />
             </MotionPage>
           )}
         </AnimatePresence>
@@ -519,6 +695,133 @@ export default function App() {
 
 function MotionPage({ children, reduceMotion }) {
   return <div className="motion-page">{children}</div>;
+}
+
+function filterAndSortDisasters(disasters, { searchQuery, filters, sortMode }) {
+  return sortOperationalItems(
+    disasters.filter((item) => {
+      const matchesType = filters.type === 'all' || item.disaster_type === filters.type;
+      const matchesSeverity = filters.severity === 'all' || normalizeValue(item.label) === filters.severity;
+      const matchesStatus = filters.status === 'all' || normalizeValue(item.status) === filters.status;
+      const matchesSearch = matchesQuery(searchQuery, [item.title, item.address, item.description, item.disaster_type, item.label, item.status]);
+      return matchesType && matchesSeverity && matchesStatus && matchesSearch;
+    }),
+    sortMode,
+    'disaster',
+  );
+}
+
+function filterAndSortRescues(rescues, disasterLookup, { searchQuery, filters, sortMode }) {
+  return sortOperationalItems(
+    rescues.filter((item) => {
+      const disaster = disasterLookup.get(Number(item.disaster_id));
+      const matchesType = filters.type === 'all' || disaster?.disaster_type === filters.type;
+      const matchesSeverity = filters.severity === 'all' || normalizeValue(item.priority_label) === filters.severity;
+      const matchesStatus = filters.status === 'all' || normalizeValue(item.status) === filters.status;
+      const matchesSearch = matchesQuery(searchQuery, [
+        item.victim_name,
+        item.condition,
+        item.status,
+        item.priority_label,
+        item.assigned_unit,
+        item.notes,
+        disaster?.title,
+        disaster?.address,
+      ]);
+      return matchesType && matchesSeverity && matchesStatus && matchesSearch;
+    }),
+    sortMode,
+    'rescue',
+  );
+}
+
+function sortOperationalItems(items, sortMode, kind) {
+  return [...items].sort((a, b) => {
+    if (sortMode === 'newest') return Number(b.id) - Number(a.id);
+    if (sortMode === 'people') {
+      const left = kind === 'disaster' ? Number(a.people_affected || 0) : Number(a.people_count || 0);
+      const right = kind === 'disaster' ? Number(b.people_affected || 0) : Number(b.people_count || 0);
+      return right - left;
+    }
+    const left = kind === 'disaster' ? Number(a.score || 0) : Number(a.priority_score || 0);
+    const right = kind === 'disaster' ? Number(b.score || 0) : Number(b.priority_score || 0);
+    return right - left;
+  });
+}
+
+function matchesQuery(searchQuery, fields) {
+  const query = normalizeValue(searchQuery);
+  if (!query) return true;
+  return fields.some((field) => normalizeValue(field).includes(query));
+}
+
+function normalizeValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function sortBoardItems(items, direction) {
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => (boardScoreValue(a.score) - boardScoreValue(b.score)) * sign);
+}
+
+function boardScoreValue(value) {
+  const parsed = Number.parseInt(String(value).replace(/\D/g, ''), 10);
+  if (Number.isFinite(parsed)) return parsed;
+  const normalized = normalizeValue(value);
+  if (normalized.includes('critical')) return 100;
+  if (normalized.includes('high')) return 80;
+  if (normalized.includes('medium')) return 60;
+  if (normalized.includes('low')) return 40;
+  if (normalized.includes('verified')) return 30;
+  return 0;
+}
+
+function nextRescueStatus(status) {
+  const normalized = normalizeValue(status);
+  if (normalized === 'pending') return 'assigned';
+  if (normalized === 'assigned' || normalized === 'triage') return 'en route';
+  if (normalized === 'en route') return 'rescued';
+  return null;
+}
+
+function recommendedUnitForRescue(rescue, disaster, role) {
+  if (role === 'Ambulance' || rescue.condition === 'critical' || rescue.priority_label === 'Critical') return '108 Ambulance TN-01-ER-108';
+  if (disaster?.disaster_type === 'flood' || disaster?.disaster_type === 'cyclone') return 'TNDRF Boat Unit 2';
+  if (disaster?.disaster_type === 'fire') return 'Tamil Nadu Fire Rescue Team 4';
+  if (role === 'NGO') return 'Greater Chennai Volunteer Team A';
+  return 'District Rescue Coordination Team';
+}
+
+function nextAmbulanceStatus(status) {
+  const order = ['available', 'dispatched', 'maintenance'];
+  const currentIndex = order.indexOf(normalizeValue(status));
+  return order[(currentIndex + 1) % order.length];
+}
+
+function rescueActionLabel(role, rescue, canAssign) {
+  if (rescue.status === 'rescued') return 'Done';
+  if (canAssign) {
+    if (rescue.status === 'pending') return 'Assign';
+    if (rescue.status === 'assigned' || rescue.status === 'triage') return 'Send en route';
+    if (rescue.status === 'en route') return 'Mark rescued';
+  }
+  if (role === 'Hospital') return rescue.status === 'triage' ? 'Triaged' : 'Triage';
+  if (role === 'Volunteer') return rescue.status === 'en route' ? 'Checked in' : 'Check in';
+  if (role === 'Citizen') return 'Track';
+  return 'View';
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value)));
+}
+
+function EmptyState({ title, detail }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      <span>{detail}</span>
+    </div>
+  );
 }
 
 function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, setActiveView }) {
@@ -770,7 +1073,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       title: 'Know your task, stay safe and check in',
       summary: 'Focused on assigned work, safety briefing, check-in status and nearby relief locations.',
       metrics: [
-        { label: 'Assigned task', value: '1', detail: 'Volunteer Team A relocation support' },
+        { label: 'Assigned task', value: '1', detail: 'Greater Chennai Volunteer Team A relocation support' },
         { label: 'Safety briefing', value: 'Due', detail: 'Floodwater and PPE reminder' },
         { label: 'Nearest shelter', value: firstShelter?.available_capacity || 0, detail: firstShelter?.name || 'Open shelter' },
         { label: 'Check-in', value: 'Ready', detail: 'No overdue check-in' },
@@ -784,7 +1087,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       ],
       signals: [
         { label: 'PPE status', value: 'Packed', detail: 'Gloves, mask, torch, water', icon: ClipboardList },
-        { label: 'Task area', value: 'North Pier', detail: 'Volunteer Team A route', icon: Navigation },
+        { label: 'Task area', value: 'Velachery', detail: 'Greater Chennai Volunteer Team A route', icon: Navigation },
         { label: 'Buddy system', value: 'Required', detail: 'Do not deploy alone', icon: Users },
       ],
       actions: [
@@ -842,7 +1145,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       ],
       signals: [
         { label: 'Scene hazard', value: topRescue?.priority_label || 'Medium', detail: activeDisaster?.title || 'Active incident', icon: AlertTriangle },
-        { label: 'Team ETA', value: '18 min', detail: 'Fire Rescue Team 4 mobilizing', icon: Navigation },
+        { label: 'Team ETA', value: '18 min', detail: 'Tamil Nadu Fire Rescue Team 4 mobilizing', icon: Navigation },
         { label: 'Equipment', value: 'Ready', detail: 'Rescue kit and PPE staged', icon: Package },
       ],
       actions: [
@@ -869,6 +1172,7 @@ function CommandView({
   metrics,
   disasters,
   rescues,
+  facilities,
   priorityChart,
   disasterChart,
   trendChart,
@@ -880,6 +1184,7 @@ function CommandView({
   setAlertDraft,
   sendAlert,
   reduceMotion,
+  filterSummary,
 }) {
   const chartOptions = {
     maintainAspectRatio: false,
@@ -892,8 +1197,8 @@ function CommandView({
       <section className="command-hero">
         <div>
           <p className="eyebrow">Common operating picture</p>
-          <h2>Live risk and relief readiness</h2>
-          <span>GIS map, resources, alerts, health capacity and field teams.</span>
+          <h2>Tamil Nadu live risk and relief readiness</h2>
+          <span>GIS map, resources, alerts, health capacity and field teams across Chennai, Cuddalore and the Nilgiris.</span>
         </div>
         <div className="hero-score-grid">
           <HeroScore label="People affected" value={metrics.affectedPeople} icon={Users} />
@@ -911,114 +1216,249 @@ function CommandView({
         ))}
       </section>
 
-      <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
-
       <section className="metrics-grid metrics-grid-5">
-        <MetricTile icon={Activity} label="Active disasters" value={disasters.length} detail="Monitored hazard zones" />
+        <MetricTile icon={Activity} label="Active disasters" value={disasters.length} detail={filterSummary} />
         <MetricTile icon={HeartPulse} label="Critical rescues" value={metrics.critical} detail={`${metrics.pending} pending requests`} />
         <MetricTile icon={Ambulance} label="Ambulances ready" value={metrics.availableAmbulances} detail={`${metrics.assigned} units assigned/en route`} />
         <MetricTile icon={Home} label="Shelter capacity" value={metrics.shelterCapacity} detail={`${metrics.totalShelterCapacity} total relief slots`} />
         <MetricTile icon={Building2} label="Hospital beds" value={metrics.beds} detail={`${metrics.totalBeds} total beds tracked`} />
       </section>
 
-      <section className="main-grid command-grid">
-        <motion.div className="panel map-panel" layout transition={reduceMotion ? quickFade : softSpring}>
-          <div className="panel-header">
-            <div>
-              <p>Live incident map</p>
-              <h2>Reports, rescues and impact locations</h2>
+      {dashboardMode === 'overview' && (
+        <>
+          <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
+          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+          <section className="analytics-wall">
+            <PanelTitle eyebrow="Trend analytics" title="Response trend" />
+            <div className="chart-box chart-box-wide">
+              <Line data={trendChart} options={chartOptions} />
             </div>
-            <StatusPill value="Live GIS" />
-          </div>
-          <MapContainer center={[9.95, 76.35]} zoom={9} scrollWheelZoom={false} className="incident-map">
-            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {disasters.map((item) => (
-              <CircleMarker key={`d-${item.id}`} center={[item.latitude, item.longitude]} radius={12} pathOptions={{ color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.75 }}>
-                <Popup>
-                  <strong>{item.title}</strong>
-                  <br />
-                  {item.address}
-                  <br />
-                  AI damage: {item.label}
-                </Popup>
-              </CircleMarker>
-            ))}
-            {rescues.map((item) => (
-              <CircleMarker key={`r-${item.id}`} center={[item.latitude, item.longitude]} radius={7} pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.85 }}>
-                <Popup>
-                  <strong>{item.victim_name}</strong>
-                  <br />
-                  Priority: {item.priority_label}
-                </Popup>
-              </CircleMarker>
-            ))}
-          </MapContainer>
-        </motion.div>
+          </section>
+          <section className="split-grid split-grid-3">
+            <div className="panel">
+              <PanelTitle eyebrow="AI queue" title="Priority distribution" />
+              <div className="chart-box">
+                <Doughnut data={priorityChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+              </div>
+            </div>
+            <div className="panel">
+              <PanelTitle eyebrow="Hazard mix" title="Disasters by type" />
+              <div className="chart-box">
+                <Bar data={disasterChart} options={chartOptions} />
+              </div>
+            </div>
+            <EarlyWarningPanel />
+          </section>
+        </>
+      )}
 
-        <DecisionStack allocation={allocation} rescues={rescues} disasters={disasters} />
-      </section>
+      {dashboardMode === 'response' && (
+        <>
+          <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
+          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+          <section className="split-grid split-grid-3">
+            <FieldTeamsPanel />
+            <StandardsPanel />
+            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
+          </section>
+        </>
+      )}
 
-      <section className="analytics-wall">
-        <PanelTitle eyebrow="Trend analytics" title="Response trend" />
-        <div className="chart-box chart-box-wide">
-          <Line data={trendChart} options={chartOptions} />
-        </div>
-      </section>
+      {dashboardMode === 'health' && (
+        <>
+          <section className="split-grid split-grid-3">
+            <FacilityCapacityPanel facilities={facilities} />
+            <TriagePanel rescues={rescues} disasters={disasters} />
+            <EarlyWarningPanel />
+          </section>
+          <section className="analytics-wall">
+            <PanelTitle eyebrow="Health trend" title="Emergency response trend" />
+            <div className="chart-box chart-box-wide">
+              <Line data={trendChart} options={chartOptions} />
+            </div>
+          </section>
+        </>
+      )}
 
-      <section className="split-grid split-grid-3">
-        <div className="panel">
-          <PanelTitle eyebrow="AI queue" title="Priority distribution" />
-          <div className="chart-box">
-            <Doughnut data={priorityChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
-          </div>
-        </div>
-        <div className="panel">
-          <PanelTitle eyebrow="Hazard mix" title="Disasters by type" />
-          <div className="chart-box">
-            <Bar data={disasterChart} options={chartOptions} />
-          </div>
-        </div>
-        <EarlyWarningPanel />
-      </section>
-
-      <section className="operations-grid">
-        <ResourceReadinessPanel />
-        <FieldTeamsPanel />
-        <StandardsPanel />
-        <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
-      </section>
+      {dashboardMode === 'logistics' && (
+        <>
+          <section className="operations-grid">
+            <ResourceReadinessPanel />
+            <FieldTeamsPanel />
+            <StandardsPanel />
+            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
+          </section>
+          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+        </>
+      )}
     </div>
+  );
+}
+
+function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
+  return (
+    <section className="main-grid command-grid">
+      <motion.div className="panel map-panel" layout transition={reduceMotion ? quickFade : softSpring}>
+        <div className="panel-header">
+          <div>
+            <p>Live Tamil Nadu map</p>
+            <h2>Reports, rescues and impact locations</h2>
+          </div>
+          <StatusPill value="Live GIS" />
+        </div>
+        <MapContainer center={[11.1271, 78.6569]} zoom={7} scrollWheelZoom={false} className="incident-map">
+          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {disasters.map((item) => (
+            <CircleMarker key={`d-${item.id}`} center={[item.latitude, item.longitude]} radius={12} pathOptions={{ color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.75 }}>
+              <Popup>
+                <strong>{item.title}</strong>
+                <br />
+                {item.address}
+                <br />
+                AI damage: {item.label}
+              </Popup>
+            </CircleMarker>
+          ))}
+          {rescues.map((item) => (
+            <CircleMarker key={`r-${item.id}`} center={[item.latitude, item.longitude]} radius={7} pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.85 }}>
+              <Popup>
+                <strong>{item.victim_name}</strong>
+                <br />
+                Priority: {item.priority_label}
+              </Popup>
+            </CircleMarker>
+          ))}
+        </MapContainer>
+        {!disasters.length && !rescues.length && <EmptyState title="No map results" detail="Clear search or filters to restore Tamil Nadu operations." />}
+      </motion.div>
+
+      <DecisionStack allocation={allocation} rescues={rescues} disasters={disasters} />
+    </section>
+  );
+}
+
+function FacilityCapacityPanel({ facilities }) {
+  return (
+    <section className="panel">
+      <PanelTitle eyebrow="Health capacity" title="Hospitals and relief camps" />
+      <div className="facility-snapshot-list">
+        {facilities.hospitals.map((item) => {
+          const percent = Math.round((item.available_beds / item.total_beds) * 100);
+          return (
+            <div className="facility-snapshot" key={item.id}>
+              <Building2 size={17} />
+              <div>
+                <strong>{item.name}</strong>
+                <span>{item.available_beds}/{item.total_beds} beds, ICU {item.icu_beds}</span>
+                <ProgressBar value={percent} />
+              </div>
+            </div>
+          );
+        })}
+        {facilities.shelters.map((item) => {
+          const percent = Math.round((item.available_capacity / item.total_capacity) * 100);
+          return (
+            <div className="facility-snapshot" key={`s-${item.id}`}>
+              <Home size={17} />
+              <div>
+                <strong>{item.name}</strong>
+                <span>{item.available_capacity}/{item.total_capacity} relief slots</span>
+                <ProgressBar value={percent} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TriagePanel({ rescues, disasters }) {
+  const triageItems = rescues.filter((item) => ['Critical', 'High'].includes(item.priority_label)).slice(0, 5);
+  return (
+    <section className="panel">
+      <PanelTitle eyebrow="Clinical triage" title="Incoming high-risk rescues" />
+      <div className="role-task-list">
+        {triageItems.map((item) => (
+          <div className="role-task" key={item.id}>
+            <StatusPill value={item.priority_label} />
+            <div>
+              <strong>{item.victim_name}</strong>
+              <span>{disasters.find((disaster) => disaster.id === Number(item.disaster_id))?.title || 'Linked incident'} - {item.notes}</span>
+            </div>
+          </div>
+        ))}
+        {!triageItems.length && <EmptyState title="No high-risk rescues" detail="Current filters do not include Critical or High rescue requests." />}
+      </div>
+    </section>
   );
 }
 
 function ResponseBoard({ disasters, rescues, reduceMotion }) {
   const columns = getResponseBoardColumns(disasters, rescues);
+  const [sortConfig, setSortConfig] = useState({ columnId: 'reported', direction: 'desc' });
+  const [inspectedItem, setInspectedItem] = useState(null);
+
+  function toggleColumnSort(columnId) {
+    setSortConfig((current) => ({
+      columnId,
+      direction: current.columnId === columnId && current.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  }
+
   return (
-    <section className="response-board" aria-label="Emergency response stages">
-      {columns.map((column) => (
-        <div className="response-column" key={column.id}>
-          <div className="response-column-header">
-            <div>
-              <h2>{column.title}</h2>
-              <span>{column.subtitle}</span>
+    <>
+      <section className="response-board" aria-label="Emergency response stages">
+        {columns.map((column) => {
+          const items = sortConfig.columnId === column.id ? sortBoardItems(column.items, sortConfig.direction) : column.items;
+          return (
+            <div className="response-column" key={column.id}>
+              <div className="response-column-header">
+                <div>
+                  <h2>{column.title}</h2>
+                  <span>{column.subtitle}</span>
+                </div>
+                <button
+                  type="button"
+                  className={sortConfig.columnId === column.id ? 'active' : ''}
+                  aria-label={`Sort ${column.title}`}
+                  onClick={() => toggleColumnSort(column.id)}
+                >
+                  {column.items.length}
+                  <ArrowUpDown size={13} />
+                </button>
+              </div>
+              <div className="response-card-list">
+                {items.map((item) => (
+                  <ResponseCard key={item.id} item={item} reduceMotion={reduceMotion} onInspect={setInspectedItem} />
+                ))}
+                {!items.length && <EmptyState title="Nothing here" detail="No records match this stage with the current filters." />}
+              </div>
             </div>
-            <button type="button" aria-label={`Sort ${column.title}`}>
-              {column.items.length}
-              <ArrowUpDown size={13} />
+          );
+        })}
+      </section>
+      {inspectedItem && (
+        <section className="board-inspector" aria-live="polite">
+          <div>
+            <p className="eyebrow">Focused record</p>
+            <h2>{inspectedItem.title}</h2>
+            <span>{inspectedItem.description}</span>
+          </div>
+          <div className="board-inspector-meta">
+            <StatusPill value={inspectedItem.status} />
+            <strong>{inspectedItem.score}</strong>
+            <button type="button" className="compact-button secondary-button" onClick={() => setInspectedItem(null)}>
+              Close
             </button>
           </div>
-          <div className="response-card-list">
-            {column.items.map((item) => (
-              <ResponseCard key={item.id} item={item} reduceMotion={reduceMotion} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </section>
+        </section>
+      )}
+    </>
   );
 }
 
-function ResponseCard({ item, reduceMotion }) {
+function ResponseCard({ item, reduceMotion, onInspect }) {
   return (
     <motion.article
       className={`response-card ${item.dark ? 'dark-card' : ''}`}
@@ -1031,7 +1471,7 @@ function ResponseCard({ item, reduceMotion }) {
           <h3>{item.title}</h3>
           <span>{item.kicker}</span>
         </div>
-        <button type="button" aria-label={`More actions for ${item.title}`}>
+        <button type="button" aria-label={`More actions for ${item.title}`} onClick={() => onInspect(item)}>
           <MoreVertical size={16} />
         </button>
       </div>
@@ -1088,7 +1528,7 @@ function getResponseBoardColumns(disasters, rescues) {
     }));
 
   const dispatchedCards = rescues
-    .filter((item) => ['assigned', 'en route'].includes(item.status))
+    .filter((item) => ['assigned', 'en route', 'triage'].includes(item.status))
     .slice(0, 3)
     .map((item) => ({
       id: `dispatch-${item.id}`,
@@ -1096,7 +1536,7 @@ function getResponseBoardColumns(disasters, rescues) {
       kicker: item.victim_name,
       description: item.notes,
       time: item.created_at,
-      updates: item.status === 'en route' ? 'ETA live' : 'assigned',
+      updates: item.status === 'en route' ? 'ETA live' : item.status,
       people: item.people_count,
       status: item.status,
       score: item.priority_label,
@@ -1105,9 +1545,9 @@ function getResponseBoardColumns(disasters, rescues) {
   const closedCards = [
     {
       id: 'closed-sitrep',
-      title: 'Ward 14 SitRep',
+      title: 'Ward 176 SitRep',
       kicker: 'situation report',
-      description: 'Road corridor verified, shelter route open, hospital handoff ready.',
+      description: 'Velachery corridor verified, relief camp route open, hospital handoff ready.',
       time: 'Now',
       updates: 'CAP draft',
       people: '1 ward',
@@ -1118,7 +1558,7 @@ function getResponseBoardColumns(disasters, rescues) {
       id: 'closed-mutual-aid',
       title: 'Mutual-aid request',
       kicker: 'resource support',
-      description: 'Requesting additional boats and family relief kits from partner agencies.',
+      description: 'Requesting extra boats, tarpaulins and family relief kits from nearby districts.',
       time: '15 min',
       updates: '2 partners',
       people: '4 assets',
@@ -1347,8 +1787,8 @@ function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, di
         <Input label="Address" value={draft.address} onChange={(value) => setDraft({ ...draft, address: value })} required />
         <Textarea label="Description" value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} required />
         <div className="form-row">
-          <Input label="Latitude" type="number" value={draft.latitude} onChange={(value) => setDraft({ ...draft, latitude: value })} />
-          <Input label="Longitude" type="number" value={draft.longitude} onChange={(value) => setDraft({ ...draft, longitude: value })} />
+          <Input label="Latitude" type="number" step="any" value={draft.latitude} onChange={(value) => setDraft({ ...draft, latitude: value })} />
+          <Input label="Longitude" type="number" step="any" value={draft.longitude} onChange={(value) => setDraft({ ...draft, longitude: value })} />
           <Input label="People affected" type="number" value={draft.people_affected} onChange={(value) => setDraft({ ...draft, people_affected: value })} />
         </div>
         <button className="primary-action" type="submit">
@@ -1374,7 +1814,11 @@ function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, di
           <input type="checkbox" checked={rescueDraft.trapped} onChange={(event) => setRescueDraft({ ...rescueDraft, trapped: event.target.checked })} />
           Victim is trapped
         </label>
-        <Input label="Vulnerable people" type="number" value={rescueDraft.vulnerable_people} onChange={(value) => setRescueDraft({ ...rescueDraft, vulnerable_people: value })} />
+        <div className="form-row">
+          <Input label="Vulnerable people" type="number" value={rescueDraft.vulnerable_people} onChange={(value) => setRescueDraft({ ...rescueDraft, vulnerable_people: value })} />
+          <Input label="Latitude" type="number" step="any" value={rescueDraft.latitude} onChange={(value) => setRescueDraft({ ...rescueDraft, latitude: value })} />
+          <Input label="Longitude" type="number" step="any" value={rescueDraft.longitude} onChange={(value) => setRescueDraft({ ...rescueDraft, longitude: value })} />
+        </div>
         <Textarea label="Notes" value={rescueDraft.notes} onChange={(value) => setRescueDraft({ ...rescueDraft, notes: value })} />
         <button className="primary-action" type="submit">
           <HeartPulse size={18} /> Submit rescue request
@@ -1384,11 +1828,11 @@ function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, di
   );
 }
 
-function RescueView({ role, rescues, disasters, onAssign }) {
+function RescueView({ role, rescues, disasters, selectedRescueId, onAction, onSelect }) {
   const canAssign = assignCapableRoles.has(role);
   const title = role === 'Citizen' ? 'My rescue tracking' : role === 'Hospital' ? 'Incoming triage requests' : role === 'Volunteer' ? 'Volunteer tasks' : 'Rescue requests';
   const eyebrow = role === 'Citizen' ? 'Live status' : role === 'Hospital' ? 'Hospital triage' : role === 'Volunteer' ? 'Assignment queue' : 'AI ranked queue';
-  const actionLabel = canAssign ? 'Assign' : role === 'Citizen' ? 'Track' : role === 'Hospital' ? 'Triage' : role === 'Volunteer' ? 'Check in' : 'View';
+  const selectedRescue = rescues.find((item) => item.id === selectedRescueId) || rescues[0];
 
   return (
     <section className="panel">
@@ -1413,7 +1857,7 @@ function RescueView({ role, rescues, disasters, onAssign }) {
           </thead>
           <tbody>
             {rescues.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} className={selectedRescue?.id === item.id ? 'selected-row' : ''} onClick={() => onSelect(item.id)}>
                 <td>
                   <strong>{item.victim_name}</strong>
                   <span>{item.people_count} people - age {item.victim_age}</span>
@@ -1428,20 +1872,49 @@ function RescueView({ role, rescues, disasters, onAssign }) {
                 </td>
                 <td>{item.assigned_unit || 'Unassigned'}</td>
                 <td>
-                  <button className="compact-button" disabled={canAssign && item.status === 'assigned'} onClick={() => canAssign && onAssign(item.id)}>
-                    {actionLabel}
+                  <button
+                    type="button"
+                    className="compact-button"
+                    disabled={item.status === 'rescued'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onAction(item.id, role);
+                    }}
+                  >
+                    {rescueActionLabel(role, item, canAssign)}
                   </button>
                 </td>
               </tr>
             ))}
+            {!rescues.length && (
+              <tr>
+                <td colSpan="6">
+                  <EmptyState title="No rescue requests" detail="Clear search or filters, or submit a rescue request from the report screen." />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      {selectedRescue && (
+        <section className="rescue-detail-strip" aria-live="polite">
+          <div>
+            <p className="eyebrow">Selected request</p>
+            <h3>{selectedRescue.victim_name}</h3>
+            <span>{selectedRescue.notes || 'No notes provided.'}</span>
+          </div>
+          <div className="rescue-detail-meta">
+            <StatusPill value={selectedRescue.priority_label} />
+            <StatusPill value={selectedRescue.status} />
+            <strong>{selectedRescue.assigned_unit || 'Awaiting unit'}</strong>
+          </div>
+        </section>
+      )}
     </section>
   );
 }
 
-function FacilitiesView({ role, facilities, updateHospital, updateShelter }) {
+function FacilitiesView({ role, facilities, updateHospital, updateShelter, updateAmbulanceStatus }) {
   const showHospitals = ['Admin', 'Hospital', 'Ambulance', 'Police', 'Fire Service'].includes(role);
   const showShelters = ['Admin', 'Shelter', 'NGO', 'Citizen', 'Volunteer'].includes(role);
   const showAmbulances = ['Admin', 'Ambulance', 'Hospital', 'Police', 'Fire Service'].includes(role);
@@ -1458,9 +1931,9 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter }) {
                   <span>{item.available_beds}/{item.total_beds} beds - ICU {item.icu_beds}</span>
                 </div>
                 <div className="stepper">
-                  <button onClick={() => updateHospital(item.id, -5)}>-</button>
+                  <button type="button" onClick={() => updateHospital(item.id, -5)}>-</button>
                   <strong>{item.available_beds}</strong>
-                  <button onClick={() => updateHospital(item.id, 5)}>+</button>
+                  <button type="button" onClick={() => updateHospital(item.id, 5)}>+</button>
                 </div>
               </div>
             ))}
@@ -1475,9 +1948,9 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter }) {
                   <span>{item.available_capacity}/{item.total_capacity} slots - {item.medical_support ? 'medical support' : 'basic support'}</span>
                 </div>
                 <div className="stepper">
-                  <button onClick={() => updateShelter(item.id, -10)}>-</button>
+                  <button type="button" onClick={() => updateShelter(item.id, -10)}>-</button>
                   <strong>{item.available_capacity}</strong>
-                  <button onClick={() => updateShelter(item.id, 10)}>+</button>
+                  <button type="button" onClick={() => updateShelter(item.id, 10)}>+</button>
                 </div>
               </div>
             ))}
@@ -1491,7 +1964,12 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter }) {
                   <strong>{item.vehicle_number}</strong>
                   <span>{item.driver_name}</span>
                 </div>
-                <StatusPill value={item.status} />
+                <div className="facility-actions">
+                  <StatusPill value={item.status} />
+                  <button type="button" className="compact-button secondary-button" onClick={() => updateAmbulanceStatus(item.id)}>
+                    Next status
+                  </button>
+                </div>
               </div>
             ))}
           </FacilityPanel>
@@ -1515,11 +1993,11 @@ function FacilityPanel({ title, icon: Icon, children }) {
   );
 }
 
-function Input({ label, value, onChange, type = 'text', required = false }) {
+function Input({ label, value, onChange, type = 'text', required = false, step }) {
   return (
     <label className="form-field">
       <span>{label}</span>
-      <input className="form-control" type={type} value={value} required={required} onChange={(event) => onChange(event.target.value)} />
+      <input className="form-control" type={type} step={step} value={value} required={required} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

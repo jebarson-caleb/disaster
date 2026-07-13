@@ -6,10 +6,28 @@ seed(42)
 roles = ["Citizen", "NGO", "Volunteer", "Police", "Hospital", "Fire Service", "Shelter", "Ambulance", "Admin"]
 types = ["flood", "earthquake", "cyclone", "landslide", "fire"]
 conditions = ["stable", "injured", "critical", "unconscious", "bleeding"]
+districts = [
+    "Chennai Ward",
+    "Cuddalore Coastal Zone",
+    "Nagapattinam Block",
+    "Thanjavur Delta Ward",
+    "Nilgiris Ghat Road",
+    "Madurai Urban Ward",
+    "Tiruchirappalli Zone",
+    "Kanyakumari Coast",
+]
 
 
 def sql(value):
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def tn_lat():
+    return 8.1 + random() * 5.4
+
+
+def tn_lng():
+    return 76.2 + random() * 4.2
 
 
 lines = ["USE disaster_response;", "START TRANSACTION;"]
@@ -23,11 +41,11 @@ for i in range(1, 2501):
 
 for i in range(1, 501):
     dtype = choice(types)
-    lat = 8.5 + random() * 4
-    lng = 75.5 + random() * 3
+    lat = tn_lat()
+    lng = tn_lng()
     lines.append(
         "INSERT INTO disasters (title, disaster_type, description, address, latitude, longitude, people_affected, severity_hint, reported_by_id) VALUES "
-        f"({sql(f'{dtype.title()} incident #{i}')}, {sql(dtype)}, 'Generated capstone dataset incident.', {sql(f'Ward {randint(1, 80)}')}, "
+        f"({sql(f'{dtype.title()} incident #{i}')}, {sql(dtype)}, 'Generated Tamil Nadu capstone dataset incident.', {sql(f'{choice(districts)} {randint(1, 80)}')}, "
         f"{lat:.7f}, {lng:.7f}, {randint(5, 900)}, {sql(choice(['low', 'medium', 'high', 'critical']))}, {randint(1, 2500)});"
     )
 
@@ -37,29 +55,29 @@ for i in range(1, 1401):
     lines.append(
         "INSERT INTO rescue_requests (disaster_id, requester_id, victim_name, victim_age, people_count, condition_label, trapped, vulnerable_people, latitude, longitude, status, priority_score, priority_label, notes) VALUES "
         f"({randint(1, 500)}, {randint(1, 2500)}, {sql(f'Victim {i}')}, {randint(1, 86)}, {randint(1, 9)}, {sql(choice(conditions))}, "
-        f"{choice(['TRUE', 'FALSE'])}, {randint(0, 3)}, {8.5 + random() * 4:.7f}, {75.5 + random() * 3:.7f}, "
+        f"{choice(['TRUE', 'FALSE'])}, {randint(0, 3)}, {tn_lat():.7f}, {tn_lng():.7f}, "
         f"{sql(choice(['pending', 'assigned', 'en route', 'rescued']))}, {score}, {sql(label)}, 'Generated rescue request.');"
     )
 
 for i in range(1, 201):
     lines.append(
         "INSERT INTO hospitals (name, address, latitude, longitude, total_beds, available_beds, icu_beds, emergency_capacity, contact_phone) VALUES "
-        f"({sql(f'Hospital {i}')}, {sql(f'Medical Road {i}')}, {8.5 + random() * 4:.7f}, {75.5 + random() * 3:.7f}, "
+        f"({sql(f'Tamil Nadu Hospital {i}')}, {sql(f'{choice(districts)} Medical Road {i}')}, {tn_lat():.7f}, {tn_lng():.7f}, "
         f"{randint(50, 500)}, {randint(0, 160)}, {randint(0, 40)}, {randint(5, 80)}, {sql(8300000000 + i)});"
     )
 
 for i in range(1, 251):
     lines.append(
         "INSERT INTO shelters (name, address, latitude, longitude, total_capacity, available_capacity, food_available, medical_support, contact_phone) VALUES "
-        f"({sql(f'Relief Shelter {i}')}, {sql(f'School Zone {i}')}, {8.5 + random() * 4:.7f}, {75.5 + random() * 3:.7f}, "
+        f"({sql(f'Tamil Nadu Relief Shelter {i}')}, {sql(f'{choice(districts)} School Zone {i}')}, {tn_lat():.7f}, {tn_lng():.7f}, "
         f"{randint(100, 1200)}, {randint(0, 700)}, TRUE, {choice(['TRUE', 'FALSE'])}, {sql(8400000000 + i)});"
     )
 
 for i in range(1, 251):
     lines.append(
         "INSERT INTO ambulances (vehicle_number, driver_name, phone, latitude, longitude, status) VALUES "
-        f"({sql(f'KL-{randint(1, 14):02d}-ER-{1000 + i}')}, {sql(f'Driver {i}')}, {sql(8500000000 + i)}, "
-        f"{8.5 + random() * 4:.7f}, {75.5 + random() * 3:.7f}, {sql(choice(['available', 'dispatched', 'maintenance']))});"
+        f"({sql(f'TN-{randint(1, 99):02d}-ER-{1000 + i}')}, {sql(f'Driver {i}')}, {sql(8500000000 + i)}, "
+        f"{tn_lat():.7f}, {tn_lng():.7f}, {sql(choice(['available', 'dispatched', 'maintenance']))});"
     )
 
 lines.append("COMMIT;")

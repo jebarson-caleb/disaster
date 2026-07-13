@@ -1,0 +1,132 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e9]:
+      - strong [ref=f1e10]: ResQ Command
+      - text: Disaster response platform
+    - generic [ref=f1e11]: Active role
+    - combobox "Active role" [ref=f1e12]:
+      - option "Admin" [selected]
+      - option "Citizen"
+      - option "Hospital"
+      - option "Shelter"
+      - option "Ambulance"
+      - option "NGO"
+      - option "Volunteer"
+      - option "Police"
+      - option "Fire Service"
+    - navigation "Main views" [ref=f1e13]:
+      - button "Command" [ref=f1e171] [cursor=pointer]
+      - button "Report Disaster" [ref=f1e179] [cursor=pointer]
+      - button "Rescue Queue" [active] [ref=f1e180] [cursor=pointer]
+      - button "Facilities" [ref=f1e181] [cursor=pointer]
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: Early warning readiness
+      - strong [ref=f1e28]: 79%
+      - generic "79%" [ref=f1e29]
+    - generic [ref=f1e31]: All dashboards, queues, and facilities are visible.
+  - generic [ref=f1e36]:
+    - generic [ref=f1e37]:
+      - textbox "Search operations" [ref=f1e42]:
+        - /placeholder: Search Chennai incident, shelter, patient...
+      - generic [ref=f1e43]:
+        - 'button "Sort: newest" [ref=f1e688] [cursor=pointer]'
+        - button "Filters" [ref=f1e706] [cursor=pointer]
+        - button "Admin" [ref=f1e186] [cursor=pointer]
+        - button "Review priority queue" [ref=f1e187] [cursor=pointer]
+    - region "Operational filters" [ref=f1e690]:
+      - generic [ref=f1e691]:
+        - generic [ref=f1e692]: Disaster type
+        - combobox "Disaster type" [ref=f1e693]:
+          - option "All types" [selected]
+          - option "flood"
+          - option "earthquake"
+          - option "cyclone"
+          - option "landslide"
+          - option "fire"
+      - generic [ref=f1e694]:
+        - generic [ref=f1e695]: Risk level
+        - combobox "Risk level" [ref=f1e696]:
+          - option "All levels" [selected]
+          - option "low"
+          - option "medium"
+          - option "high"
+          - option "critical"
+      - generic [ref=f1e697]:
+        - generic [ref=f1e698]: Status
+        - combobox "Status" [ref=f1e699]:
+          - option "All statuses" [selected]
+          - option "pending"
+          - option "assigned"
+          - option "en route"
+          - option "triage"
+          - option "rescued"
+          - option "active"
+          - option "monitoring"
+      - button "Clear" [ref=f1e700] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Operational dashboard
+        - heading "Emergency coordination center" [level=1] [ref=f1e188]
+        - generic [ref=f1e60]: Showing all Tamil Nadu operations - All Tamil Nadu operations
+      - generic [ref=f1e61]: Admin
+    - generic [ref=f1e1397]:
+      - generic [ref=f1e1398]:
+        - generic [ref=f1e1399]:
+          - paragraph [ref=f1e1400]: AI ranked queue
+          - heading "Rescue requests" [level=2] [ref=f1e1401]
+        - generic [ref=f1e1402]: 3 active
+      - table [ref=f1e1404]:
+        - rowgroup [ref=f1e1405]:
+          - row [ref=f1e1406]:
+            - columnheader "Victim" [ref=f1e1407]
+            - columnheader "Incident" [ref=f1e1408]
+            - columnheader "Risk" [ref=f1e1409]
+            - columnheader "Status" [ref=f1e1410]
+            - columnheader "Assigned unit" [ref=f1e1411]
+            - columnheader [ref=f1e1412]
+        - rowgroup [ref=f1e1413]:
+          - row [ref=f1e1414] [cursor=pointer]:
+            - cell "Fathima Banu 5 people - age 31" [ref=f1e1415]:
+              - strong [ref=f1e1416]: Fathima Banu
+              - generic [ref=f1e1417]: 5 people - age 31
+            - cell "Flooding near Velachery lake bund" [ref=f1e1418]
+            - cell "Medium 43/100" [ref=f1e1419]:
+              - generic [ref=f1e1420]: Medium
+              - generic [ref=f1e1421]: 43/100
+            - cell "en route" [ref=f1e1422]
+            - cell "Greater Chennai Volunteer Team A" [ref=f1e1424]
+            - cell [ref=f1e1425]:
+              - button "Mark rescued" [ref=f1e1426]
+          - row [ref=f1e1427] [cursor=pointer]:
+            - cell "R. Murugan 1 people - age 72" [ref=f1e1428]:
+              - strong [ref=f1e1429]: R. Murugan
+              - generic [ref=f1e1430]: 1 people - age 72
+            - cell "Cyclone wind damage at Cuddalore coast" [ref=f1e1431]
+            - cell "High 72/100" [ref=f1e1432]:
+              - generic [ref=f1e1433]: High
+              - generic [ref=f1e1434]: 72/100
+            - cell "pending" [ref=f1e1435]
+            - cell "Unassigned" [ref=f1e1437]
+            - cell [ref=f1e1438]:
+              - button "Assign" [ref=f1e1439]
+          - row [ref=f1e1440] [cursor=pointer]:
+            - cell "Meena Kumar 3 people - age 8" [ref=f1e1441]:
+              - strong [ref=f1e1442]: Meena Kumar
+              - generic [ref=f1e1443]: 3 people - age 8
+            - cell "Flooding near Velachery lake bund" [ref=f1e1444]
+            - cell "Critical 97/100" [ref=f1e1445]:
+              - generic [ref=f1e1446]: Critical
+              - generic [ref=f1e1447]: 97/100
+            - cell "assigned" [ref=f1e1448]
+            - cell "TNDRF Boat Unit 2" [ref=f1e1450]
+            - cell [ref=f1e1451]:
+              - button "Send en route" [ref=f1e1452]
+      - generic [ref=f1e1453]:
+        - generic [ref=f1e1454]:
+          - paragraph [ref=f1e1455]: Selected request
+          - heading "Fathima Banu" [level=3] [ref=f1e1456]
+          - text: Family needs relocation to the Velachery relief camp.
+        - generic [ref=f1e1457]:
+          - generic [ref=f1e1458]: Medium
+          - generic [ref=f1e1459]: en route
+          - strong [ref=f1e1460]: Greater Chennai Volunteer Team A

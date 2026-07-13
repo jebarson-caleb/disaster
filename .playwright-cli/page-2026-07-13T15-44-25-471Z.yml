@@ -1,0 +1,150 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e9]:
+      - strong [ref=f1e10]: ResQ Command
+      - text: Disaster response platform
+    - generic [ref=f1e11]: Active role
+    - combobox "Active role" [ref=f1e12]:
+      - option "Admin" [selected]
+      - option "Citizen"
+      - option "Hospital"
+      - option "Shelter"
+      - option "Ambulance"
+      - option "NGO"
+      - option "Volunteer"
+      - option "Police"
+      - option "Fire Service"
+    - navigation "Main views" [ref=f1e13]:
+      - button "Command" [ref=f1e171] [cursor=pointer]
+      - button "Report Disaster" [ref=f1e179] [cursor=pointer]
+      - button "Rescue Queue" [ref=f1e180] [cursor=pointer]
+      - button "Facilities" [ref=f1e181] [cursor=pointer]
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: Early warning readiness
+      - strong [ref=f1e28]: 79%
+      - generic "79%" [ref=f1e29]
+    - generic [ref=f1e31]: All dashboards, queues, and facilities are visible.
+  - generic [ref=f1e36]:
+    - generic [ref=f1e37]:
+      - textbox "Search operations" [ref=f1e42]:
+        - /placeholder: Search Chennai incident, shelter, patient...
+      - generic [ref=f1e43]:
+        - 'button "Sort: newest" [ref=f1e688] [cursor=pointer]'
+        - button "Filters" [ref=f1e706] [cursor=pointer]
+        - button "Admin" [ref=f1e186] [cursor=pointer]
+        - button "Review priority queue" [ref=f1e187] [cursor=pointer]
+    - region "Operational filters" [ref=f1e690]:
+      - generic [ref=f1e691]:
+        - generic [ref=f1e692]: Disaster type
+        - combobox "Disaster type" [ref=f1e693]:
+          - option "All types" [selected]
+          - option "flood"
+          - option "earthquake"
+          - option "cyclone"
+          - option "landslide"
+          - option "fire"
+      - generic [ref=f1e694]:
+        - generic [ref=f1e695]: Risk level
+        - combobox "Risk level" [ref=f1e696]:
+          - option "All levels" [selected]
+          - option "low"
+          - option "medium"
+          - option "high"
+          - option "critical"
+      - generic [ref=f1e697]:
+        - generic [ref=f1e698]: Status
+        - combobox "Status" [ref=f1e699]:
+          - option "All statuses" [selected]
+          - option "pending"
+          - option "assigned"
+          - option "en route"
+          - option "triage"
+          - option "rescued"
+          - option "active"
+          - option "monitoring"
+      - button "Clear" [ref=f1e700] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Operational dashboard
+        - heading "Emergency coordination center" [level=1] [ref=f1e188]
+        - generic [ref=f1e60]: Rajiv Gandhi Govt General Hospital capacity increased by 5 beds - All Tamil Nadu operations
+      - generic [ref=f1e61]: Admin
+    - generic [ref=f1e1469]:
+      - generic [ref=f1e1470]:
+        - heading "Hospitals" [level=2] [ref=f1e1477]
+        - generic [ref=f1e1478]:
+          - generic [ref=f1e1479]:
+            - generic [ref=f1e1480]:
+              - strong [ref=f1e1481]: Rajiv Gandhi Govt General Hospital
+              - generic [ref=f1e1482]: 57/220 beds - ICU 10
+            - generic [ref=f1e1483]:
+              - button "-" [ref=f1e1484] [cursor=pointer]
+              - strong [ref=f1e1485]: "57"
+              - button "+" [active] [ref=f1e1486] [cursor=pointer]
+          - generic [ref=f1e1487]:
+            - generic [ref=f1e1488]:
+              - strong [ref=f1e1489]: Stanley Medical College Hospital
+              - generic [ref=f1e1490]: 31/260 beds - ICU 6
+            - generic [ref=f1e1491]:
+              - button "-" [ref=f1e1492] [cursor=pointer]
+              - strong [ref=f1e1493]: "31"
+              - button "+" [ref=f1e1494] [cursor=pointer]
+          - generic [ref=f1e1495]:
+            - generic [ref=f1e1496]:
+              - strong [ref=f1e1497]: Cuddalore Govt Medical College Hospital
+              - generic [ref=f1e1498]: 28/180 beds - ICU 4
+            - generic [ref=f1e1499]:
+              - button "-" [ref=f1e1500] [cursor=pointer]
+              - strong [ref=f1e1501]: "28"
+              - button "+" [ref=f1e1502] [cursor=pointer]
+      - generic [ref=f1e1503]:
+        - heading "Shelters" [level=2] [ref=f1e1509]
+        - generic [ref=f1e1510]:
+          - generic [ref=f1e1511]:
+            - generic [ref=f1e1512]:
+              - strong [ref=f1e1513]: Velachery Govt School Relief Camp
+              - generic [ref=f1e1514]: 420/700 slots - medical support
+            - generic [ref=f1e1515]:
+              - button "-" [ref=f1e1516] [cursor=pointer]
+              - strong [ref=f1e1517]: "420"
+              - button "+" [ref=f1e1518] [cursor=pointer]
+          - generic [ref=f1e1519]:
+            - generic [ref=f1e1520]:
+              - strong [ref=f1e1521]: Cuddalore Cyclone Shelter
+              - generic [ref=f1e1522]: 190/360 slots - medical support
+            - generic [ref=f1e1523]:
+              - button "-" [ref=f1e1524] [cursor=pointer]
+              - strong [ref=f1e1525]: "190"
+              - button "+" [ref=f1e1526] [cursor=pointer]
+          - generic [ref=f1e1527]:
+            - generic [ref=f1e1528]:
+              - strong [ref=f1e1529]: Coonoor Community Hall Camp
+              - generic [ref=f1e1530]: 74/160 slots - basic support
+            - generic [ref=f1e1531]:
+              - button "-" [ref=f1e1532] [cursor=pointer]
+              - strong [ref=f1e1533]: "74"
+              - button "+" [ref=f1e1534] [cursor=pointer]
+      - generic [ref=f1e1535]:
+        - heading "Ambulances" [level=2] [ref=f1e1543]
+        - generic [ref=f1e1544]:
+          - generic [ref=f1e1545]:
+            - generic [ref=f1e1546]:
+              - strong [ref=f1e1547]: TN-01-ER-108
+              - generic [ref=f1e1548]: Karthik Raj
+            - generic [ref=f1e1549]:
+              - generic [ref=f1e1550]: available
+              - button "Next status" [ref=f1e1551] [cursor=pointer]
+          - generic [ref=f1e1552]:
+            - generic [ref=f1e1553]:
+              - strong [ref=f1e1554]: TN-31-ER-214
+              - generic [ref=f1e1555]: Ameena Begum
+            - generic [ref=f1e1556]:
+              - generic [ref=f1e1557]: dispatched
+              - button "Next status" [ref=f1e1558] [cursor=pointer]
+          - generic [ref=f1e1559]:
+            - generic [ref=f1e1560]:
+              - strong [ref=f1e1561]: TN-38-ER-443
+              - generic [ref=f1e1562]: Prakash Selvam
+            - generic [ref=f1e1563]:
+              - generic [ref=f1e1564]: available
+              - button "Next status" [ref=f1e1565] [cursor=pointer]

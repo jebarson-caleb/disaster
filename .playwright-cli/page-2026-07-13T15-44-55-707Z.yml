@@ -1,0 +1,157 @@
+- main [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e9]:
+      - strong [ref=f1e10]: ResQ Command
+      - text: Disaster response platform
+    - generic [ref=f1e11]: Active role
+    - combobox "Active role" [ref=f1e12]:
+      - option "Admin" [selected]
+      - option "Citizen"
+      - option "Hospital"
+      - option "Shelter"
+      - option "Ambulance"
+      - option "NGO"
+      - option "Volunteer"
+      - option "Police"
+      - option "Fire Service"
+    - navigation "Main views" [ref=f1e13]:
+      - button "Command" [ref=f1e171] [cursor=pointer]
+      - button "Report Disaster" [ref=f1e179] [cursor=pointer]
+      - button "Rescue Queue" [ref=f1e180] [cursor=pointer]
+      - button "Facilities" [ref=f1e181] [cursor=pointer]
+    - generic [ref=f1e26]:
+      - generic [ref=f1e27]: Early warning readiness
+      - strong [ref=f1e28]: 79%
+      - generic "79%" [ref=f1e29]
+    - generic [ref=f1e31]: All dashboards, queues, and facilities are visible.
+  - generic [ref=f1e36]:
+    - generic [ref=f1e37]:
+      - textbox "Search operations" [ref=f1e42]:
+        - /placeholder: Search Chennai incident, shelter, patient...
+      - generic [ref=f1e43]:
+        - 'button "Sort: newest" [ref=f1e688] [cursor=pointer]'
+        - button "Filters" [ref=f1e706] [cursor=pointer]
+        - button "Admin" [ref=f1e186] [cursor=pointer]
+        - button "Review priority queue" [ref=f1e187] [cursor=pointer]
+    - region "Operational filters" [ref=f1e690]:
+      - generic [ref=f1e691]:
+        - generic [ref=f1e692]: Disaster type
+        - combobox "Disaster type" [ref=f1e693]:
+          - option "All types" [selected]
+          - option "flood"
+          - option "earthquake"
+          - option "cyclone"
+          - option "landslide"
+          - option "fire"
+      - generic [ref=f1e694]:
+        - generic [ref=f1e695]: Risk level
+        - combobox "Risk level" [ref=f1e696]:
+          - option "All levels" [selected]
+          - option "low"
+          - option "medium"
+          - option "high"
+          - option "critical"
+      - generic [ref=f1e697]:
+        - generic [ref=f1e698]: Status
+        - combobox "Status" [ref=f1e699]:
+          - option "All statuses" [selected]
+          - option "pending"
+          - option "assigned"
+          - option "en route"
+          - option "triage"
+          - option "rescued"
+          - option "active"
+          - option "monitoring"
+      - button "Clear" [ref=f1e700] [cursor=pointer]
+    - generic [ref=f1e56]:
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Operational dashboard
+        - heading "Emergency coordination center" [level=1] [ref=f1e188]
+        - generic [ref=f1e60]: TN-01-ER-108 marked dispatched - All Tamil Nadu operations
+      - generic [ref=f1e61]: Admin
+    - generic [ref=f1e1567]:
+      - generic [ref=f1e1568]:
+        - generic [ref=f1e1570]:
+          - paragraph [ref=f1e1571]: Citizen report
+          - heading "Report a disaster" [level=2] [ref=f1e1572]
+        - generic [ref=f1e1573]:
+          - generic [ref=f1e1574]: Title
+          - textbox "Title" [active] [ref=f1e1575]: Market fire near Madurai bus stand
+        - generic [ref=f1e1576]:
+          - generic [ref=f1e1577]:
+            - generic [ref=f1e1578]: Type
+            - combobox "Type" [ref=f1e1579]:
+              - option "flood"
+              - option "earthquake"
+              - option "cyclone"
+              - option "landslide"
+              - option "fire" [selected]
+          - generic [ref=f1e1580]:
+            - generic [ref=f1e1581]: Severity hint
+            - combobox "Severity hint" [ref=f1e1582]:
+              - option "low"
+              - option "medium"
+              - option "high" [selected]
+              - option "critical"
+        - generic [ref=f1e1583]:
+          - generic [ref=f1e1584]: Address
+          - textbox "Address" [ref=f1e1585]
+        - generic [ref=f1e1586]:
+          - generic [ref=f1e1587]: Description
+          - textbox "Description" [ref=f1e1588]
+        - generic [ref=f1e1589]:
+          - generic [ref=f1e1590]:
+            - generic [ref=f1e1591]: Latitude
+            - spinbutton "Latitude" [ref=f1e1592]: "12.9798"
+          - generic [ref=f1e1593]:
+            - generic [ref=f1e1594]: Longitude
+            - spinbutton "Longitude" [ref=f1e1595]: "80.2209"
+          - generic [ref=f1e1596]:
+            - generic [ref=f1e1597]: People affected
+            - spinbutton "People affected" [ref=f1e1598]: "25"
+        - button "Submit disaster report" [ref=f1e1599] [cursor=pointer]
+      - generic [ref=f1e1603]:
+        - generic [ref=f1e1605]:
+          - paragraph [ref=f1e1606]: Emergency request
+          - heading "Request rescue" [level=2] [ref=f1e1607]
+        - generic [ref=f1e1608]:
+          - generic [ref=f1e1609]: Linked disaster
+          - combobox "Linked disaster" [ref=f1e1610]:
+            - option "Flooding near Velachery lake bund" [selected]
+            - option "Cyclone wind damage at Cuddalore coast"
+            - option "Landslide risk on Nilgiris ghat road"
+        - generic [ref=f1e1611]:
+          - generic [ref=f1e1612]: Victim name
+          - textbox "Victim name" [ref=f1e1613]
+        - generic [ref=f1e1614]:
+          - generic [ref=f1e1615]:
+            - generic [ref=f1e1616]: Age
+            - spinbutton "Age" [ref=f1e1617]: "30"
+          - generic [ref=f1e1618]:
+            - generic [ref=f1e1619]: People count
+            - spinbutton "People count" [ref=f1e1620]: "1"
+          - generic [ref=f1e1621]:
+            - generic [ref=f1e1622]: Condition
+            - combobox "Condition" [ref=f1e1623]:
+              - option "stable"
+              - option "injured" [selected]
+              - option "critical"
+              - option "unconscious"
+              - option "bleeding"
+        - generic [ref=f1e1624]:
+          - checkbox "Victim is trapped" [ref=f1e1625]
+          - text: Victim is trapped
+        - generic [ref=f1e1626]:
+          - generic [ref=f1e1627]:
+            - generic [ref=f1e1628]: Vulnerable people
+            - spinbutton "Vulnerable people" [ref=f1e1629]: "0"
+          - generic [ref=f1e1630]:
+            - generic [ref=f1e1631]: Latitude
+            - spinbutton "Latitude" [ref=f1e1632]: "12.9806"
+          - generic [ref=f1e1633]:
+            - generic [ref=f1e1634]: Longitude
+            - spinbutton "Longitude" [ref=f1e1635]: "80.2194"
+        - generic [ref=f1e1636]:
+          - generic [ref=f1e1637]: Notes
+          - textbox "Notes" [ref=f1e1638]
+        - button "Submit rescue request" [ref=f1e1639] [cursor=pointer]

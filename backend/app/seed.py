@@ -15,7 +15,7 @@ def seed_demo_data():
         password_hash=hash_password("password123"),
     )
     citizen = User(
-        name="Asha Nair",
+        name="Kavya Raman",
         email="citizen@rescue.local",
         phone="9000000001",
         role="Citizen",
@@ -32,57 +32,57 @@ def seed_demo_data():
     db.session.flush()
 
     disaster = Disaster(
-        title="Flooding near Riverside Colony",
+        title="Flooding near Velachery lake bund",
         disaster_type="flood",
-        description="Water level rising rapidly near low-lying homes.",
-        address="Riverside Colony, Kochi",
-        latitude=9.9312,
-        longitude=76.2673,
-        people_affected=240,
+        description="Water level rising rapidly near low-lying streets and canals.",
+        address="Velachery, Chennai",
+        latitude=12.9798,
+        longitude=80.2209,
+        people_affected=320,
         severity_hint="high",
         reported_by_id=citizen.id,
     )
     hospital = Hospital(
-        name="City Emergency Hospital",
-        address="MG Road, Kochi",
-        latitude=9.9668,
-        longitude=76.2870,
-        total_beds=180,
-        available_beds=42,
-        icu_beds=8,
-        emergency_capacity=30,
-        contact_phone="0484000001",
+        name="Rajiv Gandhi Govt General Hospital",
+        address="Park Town, Chennai",
+        latitude=13.0816,
+        longitude=80.2761,
+        total_beds=220,
+        available_beds=52,
+        icu_beds=10,
+        emergency_capacity=36,
+        contact_phone="0440000001",
     )
     shelter = Shelter(
-        name="Govt Higher Secondary Relief Camp",
-        address="Panampilly Nagar, Kochi",
-        latitude=9.9515,
-        longitude=76.2998,
-        total_capacity=600,
-        available_capacity=310,
+        name="Velachery Govt School Relief Camp",
+        address="Velachery, Chennai",
+        latitude=12.9822,
+        longitude=80.2218,
+        total_capacity=700,
+        available_capacity=420,
         food_available=True,
         medical_support=True,
-        contact_phone="0484000002",
+        contact_phone="0440000002",
     )
     ambulance = Ambulance(
-        vehicle_number="KL-07-ER-108",
-        driver_name="Nikhil Das",
+        vehicle_number="TN-01-ER-108",
+        driver_name="Karthik Raj",
         phone="9000000108",
-        latitude=9.9668,
-        longitude=76.2870,
+        latitude=13.0816,
+        longitude=80.2761,
         status="available",
     )
     volunteer = Volunteer(
         user_id=volunteer_user.id,
         skills="first aid, evacuation, logistics",
         availability_status="available",
-        latitude=9.952,
-        longitude=76.29,
+        latitude=12.982,
+        longitude=80.222,
     )
     resources = [
-        Resource(name="Food Packets", category="food", unit="packet", available_quantity=2500, storage_location="Central Warehouse"),
-        Resource(name="ORS Sachets", category="medicine", unit="box", available_quantity=800, storage_location="Medical Depot"),
-        Resource(name="Rescue Boats", category="rescue", unit="boat", available_quantity=12, storage_location="Fire Station Dock"),
+        Resource(name="Rice Meal Packets", category="food", unit="packet", available_quantity=3200, storage_location="Chennai Corporation Warehouse"),
+        Resource(name="ORS Sachets", category="medicine", unit="box", available_quantity=960, storage_location="Rajiv Gandhi Medical Depot"),
+        Resource(name="Rescue Boats", category="rescue", unit="boat", available_quantity=14, storage_location="TNDRF Boat Yard"),
     ]
     db.session.add_all([disaster, hospital, shelter, ambulance, volunteer, *resources])
     db.session.commit()
