@@ -1,10 +1,55 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
-from ..auth import login_required
-from ..models import Ambulance, Disaster, Hospital, RescueRequest, Resource, Shelter, Volunteer
+from ..auth import hash_password, login_required
+from ..extensions import db
+from ..models import Ambulance, Disaster, Hospital, RescueRequest, Resource, RoleProfile, Shelter, User, Volunteer
+from .auth import VALID_ROLES
 
 admin_bp = Blueprint("admin", __name__)
+
+
+@admin_bp.post("/users")
+@login_required(roles=["Admin"])
+def provision_user():
+    data = request.get_json() or {}
+    required = ["name", "email", "phone", "role", "password"]
+    missing = [field for field in required if not data.get(field)]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+    if data["role"] not in VALID_ROLES:
+        return jsonify({"error": "Invalid role"}), 400
+    email = str(data["email"]).strip().lower()
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        return jsonify({"error": "A valid email address is required"}), 400
+    if len(str(data["password"])) < 8:
+        return jsonify({"error": "Password must contain at least 8 characters"}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"error": "Email already registered"}), 409
+
+    user = User(
+        name=str(data["name"]).strip(),
+        email=email,
+        phone=str(data["phone"]).strip(),
+        role=data["role"],
+        password_hash=hash_password(data["password"]),
+    )
+    db.session.add(user)
+    db.session.flush()
+    db.session.add(
+        RoleProfile(
+            user_id=user.id,
+            organization_name=data.get("organization_name"),
+            address=data.get("address"),
+            latitude=data.get("latitude"),
+            longitude=data.get("longitude"),
+            verification_status="verified",
+        )
+    )
+    db.session.commit()
+    output = user.to_dict()
+    output.pop("password_hash", None)
+    return jsonify({"user": output}), 201
 
 
 @admin_bp.get("/dashboard")

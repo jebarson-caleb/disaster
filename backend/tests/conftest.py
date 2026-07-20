@@ -2,6 +2,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
+from app.seed import seed_demo_data
 
 
 class TestConfig:
@@ -12,6 +13,7 @@ class TestConfig:
     CORS_ORIGINS = "*"
     OLLAMA_BASE_URL = ""
     OLLAMA_MODEL = "llama3.1"
+    DEMO_MODE = True
 
 
 @pytest.fixture()
@@ -30,16 +32,9 @@ def client(app):
 
 
 @pytest.fixture()
-def auth_headers(client):
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "name": "Admin",
-            "email": "admin@test.local",
-            "phone": "9000000000",
-            "role": "Admin",
-            "password": "password123",
-        },
-    )
+def auth_headers(client, app):
+    with app.app_context():
+        seed_demo_data()
+    response = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
     token = response.get_json()["token"]
     return {"Authorization": f"Bearer {token}"}

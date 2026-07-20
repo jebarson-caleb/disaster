@@ -16,6 +16,9 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - Ambulances can update dispatch status.
 - NGOs/admins can plan resource distribution and volunteer assignment.
 - Admin dashboard shows active disasters, pending rescues, available ambulances, hospital beds, shelter capacity, and charts.
+- Authorized command roles can issue consistent multi-channel public warnings and view receipt counts.
+- Citizens can confirm warning receipt and find the nearest available shelter or hospital from request coordinates.
+- Citizen reports remain usable during connectivity loss and synchronize when service returns.
 
 ## Non-Functional Requirements
 

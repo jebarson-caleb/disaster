@@ -1,6 +1,6 @@
 from .auth import hash_password
 from .extensions import db
-from .models import Ambulance, Disaster, Hospital, Resource, Shelter, User, Volunteer
+from .models import Ambulance, Disaster, EmergencyAlert, Hospital, RescueRequest, Resource, Shelter, User, Volunteer
 
 
 def seed_demo_data():
@@ -21,14 +21,17 @@ def seed_demo_data():
         role="Citizen",
         password_hash=hash_password("password123"),
     )
-    volunteer_user = User(
-        name="Ravi Kumar",
-        email="volunteer@rescue.local",
-        phone="9000000002",
-        role="Volunteer",
-        password_hash=hash_password("password123"),
-    )
-    db.session.add_all([admin, citizen, volunteer_user])
+    demo_users = {
+        "Volunteer": User(name="Ravi Kumar", email="volunteer@rescue.local", phone="9000000002", role="Volunteer", password_hash=hash_password("password123")),
+        "Hospital": User(name="Hospital Duty Officer", email="hospital@rescue.local", phone="9000000003", role="Hospital", password_hash=hash_password("password123")),
+        "Shelter": User(name="Shelter Coordinator", email="shelter@rescue.local", phone="9000000004", role="Shelter", password_hash=hash_password("password123")),
+        "Ambulance": User(name="108 Dispatcher", email="ambulance@rescue.local", phone="9000000005", role="Ambulance", password_hash=hash_password("password123")),
+        "NGO": User(name="Relief NGO Lead", email="ngo@rescue.local", phone="9000000006", role="NGO", password_hash=hash_password("password123")),
+        "Police": User(name="Police Control Room", email="police@rescue.local", phone="9000000007", role="Police", password_hash=hash_password("password123")),
+        "Fire Service": User(name="Fire Control Officer", email="fire@rescue.local", phone="9000000008", role="Fire Service", password_hash=hash_password("password123")),
+    }
+    volunteer_user = demo_users["Volunteer"]
+    db.session.add_all([admin, citizen, *demo_users.values()])
     db.session.flush()
 
     disaster = Disaster(
@@ -85,4 +88,54 @@ def seed_demo_data():
         Resource(name="Rescue Boats", category="rescue", unit="boat", available_quantity=14, storage_location="TNDRF Boat Yard"),
     ]
     db.session.add_all([disaster, hospital, shelter, ambulance, volunteer, *resources])
+    db.session.flush()
+    rescues = [
+        RescueRequest(
+            disaster_id=disaster.id,
+            requester_id=citizen.id,
+            victim_name="Meena Kumar",
+            victim_age=8,
+            people_count=3,
+            condition="critical",
+            trapped=True,
+            vulnerable_people=1,
+            latitude=12.9806,
+            longitude=80.2194,
+            priority_score=97,
+            priority_label="Critical",
+            status="assigned",
+            assigned_unit="TNDRF Boat Unit 2",
+            notes="Child and two adults stranded on a first-floor terrace.",
+        ),
+        RescueRequest(
+            disaster_id=disaster.id,
+            requester_id=citizen.id,
+            victim_name="Fathima Banu",
+            victim_age=31,
+            people_count=5,
+            condition="stable",
+            trapped=False,
+            vulnerable_people=0,
+            latitude=12.9769,
+            longitude=80.224,
+            priority_score=43,
+            priority_label="Medium",
+            status="en route",
+            assigned_unit="Greater Chennai Volunteer Team A",
+            notes="Family needs relocation to the relief camp.",
+        ),
+    ]
+    alert = EmergencyAlert(
+        identifier="RESQ-DEMO-FLOOD-001",
+        sender_id=admin.id,
+        event="Urban flood warning",
+        audience="Ward 176 - Velachery",
+        channels="SMS + radio + volunteer relay",
+        urgency="immediate",
+        severity="severe",
+        certainty="observed",
+        message="Water is rising near the lake bund service road.",
+        instruction="Move to Velachery Govt School Relief Camp and avoid the lake bund service road.",
+    )
+    db.session.add_all([*rescues, alert])
     db.session.commit()

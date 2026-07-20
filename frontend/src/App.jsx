@@ -22,7 +22,9 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  CircleCheck,
   ClipboardList,
+  CloudOff,
   Crosshair,
   Database,
   Gauge,
@@ -36,6 +38,8 @@ import {
   Package,
   Plus,
   RadioTower,
+  RefreshCw,
+  Route,
   Search,
   Send,
   ShieldAlert,
@@ -50,6 +54,7 @@ import {
 import MetricTile from './components/MetricTile.jsx';
 import StatusPill from './components/StatusPill.jsx';
 import { allocateResources, estimateDamage, prioritizeRescue } from './services/ai.js';
+import { api, isNetworkFailure, login, openDemoSession, register } from './services/api.js';
 import { initialDisasters, initialFacilities, initialRescues, roles } from './services/mockData.js';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
@@ -122,6 +127,7 @@ const roleNavigation = {
     { id: 'report', label: 'Report Disaster', icon: MapPin },
     { id: 'rescue', label: 'Rescue Queue', icon: HeartPulse },
     { id: 'facilities', label: 'Facilities', icon: Building2 },
+    { id: 'coordination', label: 'Relief Coordination', icon: Package },
   ],
   Citizen: [
     { id: 'command', label: 'My Safety', icon: Home },
@@ -147,6 +153,7 @@ const roleNavigation = {
     { id: 'rescue', label: 'Needs Queue', icon: ClipboardList },
     { id: 'facilities', label: 'Shelters', icon: Home },
     { id: 'report', label: 'Field Report', icon: MapPin },
+    { id: 'coordination', label: 'Relief Coordination', icon: Users },
   ],
   Volunteer: [
     { id: 'command', label: 'My Assignment', icon: Users },
@@ -177,6 +184,7 @@ const roleTopbar = {
 };
 
 const assignCapableRoles = new Set(['Admin', 'Police', 'Fire Service', 'Ambulance', 'NGO']);
+const OFFLINE_QUEUE_KEY = 'resq-command-offline-queue';
 
 export default function App() {
   const reduceMotion = useReducedMotion();
@@ -189,14 +197,25 @@ export default function App() {
   const [filters, setFilters] = useState({ type: 'all', severity: 'all', status: 'all' });
   const [selectedRescueId, setSelectedRescueId] = useState(null);
   const [operatorNotice, setOperatorNotice] = useState('Tamil Nadu emergency demo data loaded');
+  const [connectionState, setConnectionState] = useState('connecting');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [sessionMode, setSessionMode] = useState('demo');
+  const [showAccountPanel, setShowAccountPanel] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authDraft, setAuthDraft] = useState({ name: '', email: '', phone: '', password: '', role: 'Citizen' });
+  const [pendingOperations, setPendingOperations] = useState(() => readOfflineQueue());
+  const [routeResult, setRouteResult] = useState(null);
+  const [coordinationData, setCoordinationData] = useState({ volunteers: [], distributions: [], assignments: [] });
   const [disasters, setDisasters] = useState(initialDisasters);
   const [rescues, setRescues] = useState(initialRescues);
   const [facilities, setFacilities] = useState(initialFacilities);
+  const [resources, setResources] = useState([]);
   const [alerts, setAlerts] = useState(initialAlerts);
   const [alertDraft, setAlertDraft] = useState({
     audience: 'Chennai Zone 13 - Adyar / Velachery',
     channel: 'SMS + siren + volunteer relay',
     message: 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.',
+    instruction: 'Use the marked evacuation corridor, assist children and older adults, and acknowledge this warning when safe.',
   });
   const [incidentDraft, setIncidentDraft] = useState({
     title: '',
@@ -220,6 +239,8 @@ export default function App() {
     longitude: 80.2194,
     notes: '',
   });
+  const [distributionDraft, setDistributionDraft] = useState({ resource_id: 1, disaster_id: 1, quantity: 25, destination: 'Velachery Govt School Relief Camp' });
+  const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: 1, disaster_id: 1, task: 'Support evacuation and first-aid desk' });
 
   const metrics = useMemo(() => {
     const pending = rescues.filter((item) => item.status === 'pending').length;
@@ -320,10 +341,82 @@ export default function App() {
     }
   }, [activeRole, activeNavigation, activeView]);
 
-  function submitIncident(event) {
+  useEffect(() => {
+    let cancelled = false;
+    async function connect() {
+      if (sessionMode === 'account' && !currentUser) return;
+      setConnectionState('connecting');
+      try {
+        const session = sessionMode === 'demo' ? await openDemoSession(activeRole) : { user: currentUser };
+        await flushOfflineQueue();
+        const [snapshot, coordination] = await Promise.all([
+          api.bootstrap(),
+          ['Admin', 'NGO'].includes(activeRole) ? api.coordination() : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        if (sessionMode === 'demo') setCurrentUser(session.user);
+        setDisasters(snapshot.disasters);
+        setRescues(snapshot.rescue_requests);
+        setFacilities(snapshot.facilities);
+        setResources(snapshot.resources || []);
+        if (coordination) {
+          setCoordinationData(coordination);
+          alignCoordinationDrafts(snapshot, coordination);
+        }
+        setAlerts(snapshot.alerts.map(normalizeAlert));
+        setConnectionState('online');
+        setOperatorNotice(`${session.user.name} connected to the live response API${sessionMode === 'demo' ? ' in demo mode' : ''}`);
+      } catch (error) {
+        if (cancelled) return;
+        setConnectionState('offline');
+        setOperatorNotice(`Offline-ready local mode active: ${error.message}`);
+      }
+    }
+    connect();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRole, sessionMode]);
+
+  useEffect(() => {
+    function reconnect() {
+      if (navigator.onLine) {
+        (sessionMode === 'demo' ? openDemoSession(activeRole) : Promise.resolve())
+          .then(() => flushOfflineQueue())
+          .then(() => Promise.all([
+            api.bootstrap(),
+            ['Admin', 'NGO'].includes(activeRole) ? api.coordination() : Promise.resolve(null),
+          ]))
+          .then(([snapshot, coordination]) => {
+            setDisasters(snapshot.disasters);
+            setRescues(snapshot.rescue_requests);
+            setFacilities(snapshot.facilities);
+            setResources(snapshot.resources || []);
+            if (coordination) {
+              setCoordinationData(coordination);
+              alignCoordinationDrafts(snapshot, coordination);
+            }
+            setAlerts(snapshot.alerts.map(normalizeAlert));
+            setConnectionState('online');
+            return flushOfflineQueue();
+          })
+          .catch(() => setConnectionState('offline'));
+      } else {
+        setConnectionState('offline');
+      }
+    }
+    window.addEventListener('online', reconnect);
+    window.addEventListener('offline', reconnect);
+    return () => {
+      window.removeEventListener('online', reconnect);
+      window.removeEventListener('offline', reconnect);
+    };
+  }, [activeRole, sessionMode]);
+
+  async function submitIncident(event) {
     event.preventDefault();
     const assessment = estimateDamage(incidentDraft);
-    const next = {
+    const optimistic = {
       id: Date.now(),
       ...incidentDraft,
       latitude: Number(incidentDraft.latitude),
@@ -334,17 +427,30 @@ export default function App() {
       label: assessment.label,
       created_at: 'Just now',
     };
-    setDisasters([next, ...disasters]);
+    let next = optimistic;
+    try {
+      const response = await api.createDisaster(incidentDraft);
+      next = { ...response.disaster, score: response.damage_estimation.score, label: response.damage_estimation.label };
+      setConnectionState('online');
+    } catch (error) {
+      if (!isNetworkFailure(error)) {
+        setOperatorNotice(`Report rejected: ${error.message}`);
+        return;
+      }
+      queueOfflineOperation('disaster', incidentDraft);
+      setConnectionState('offline');
+    }
+    setDisasters((items) => [next, ...items]);
     setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: 25 });
     setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the Tamil Nadu command view`);
     setActiveView('command');
   }
 
-  function submitRescue(event) {
+  async function submitRescue(event) {
     event.preventDefault();
     const disaster = disasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id));
     const priority = prioritizeRescue(rescueDraft, disaster?.disaster_type);
-    const next = {
+    const optimistic = {
       id: Date.now(),
       ...rescueDraft,
       latitude: Number(rescueDraft.latitude),
@@ -358,22 +464,47 @@ export default function App() {
       assigned_unit: '',
       created_at: 'Just now',
     };
-    setRescues([next, ...rescues]);
+    let next = optimistic;
+    try {
+      const response = await api.createRescue(rescueDraft);
+      next = response.rescue_request;
+      setConnectionState('online');
+    } catch (error) {
+      if (!isNetworkFailure(error)) {
+        setOperatorNotice(`Rescue request rejected: ${error.message}`);
+        return;
+      }
+      queueOfflineOperation('rescue', rescueDraft);
+      setConnectionState('offline');
+    }
+    setRescues((items) => [next, ...items]);
     setRescueDraft({ ...rescueDraft, victim_name: '', notes: '', trapped: false });
     setSelectedRescueId(next.id);
     setOperatorNotice(`${priority.label} rescue request created for ${next.victim_name}`);
     setActiveView('rescue');
   }
 
-  function sendAlert(event) {
+  async function sendAlert(event) {
     event.preventDefault();
-    const next = { id: Date.now(), ...alertDraft, time: 'Just now' };
-    setAlerts([next, ...alerts]);
-    setAlertDraft({ ...alertDraft, message: '' });
-    setOperatorNotice(`Alert sent to ${next.audience} by ${next.channel}`);
+    try {
+      const response = await api.createAlert({
+        audience: alertDraft.audience,
+        channels: alertDraft.channel,
+        message: alertDraft.message,
+        instruction: alertDraft.instruction,
+        event: 'Multi-hazard public warning',
+      });
+      const next = normalizeAlert(response.alert);
+      setAlerts((items) => [next, ...items]);
+      setAlertDraft({ ...alertDraft, message: '', instruction: '' });
+      setConnectionState('online');
+      setOperatorNotice(`Authoritative alert sent to ${next.audience} by ${next.channel}`);
+    } catch (error) {
+      setOperatorNotice(`Alert was not sent: ${error.message}`);
+    }
   }
 
-  function handleRescueAction(id, role = activeRole) {
+  async function handleRescueAction(id, role = activeRole) {
     const rescue = rescues.find((item) => item.id === id);
     if (!rescue) return;
     setSelectedRescueId(id);
@@ -398,45 +529,70 @@ export default function App() {
         ),
       );
       setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} with ${unit}`);
+      try {
+        const response = rescue.assigned_unit
+          ? await api.updateRescue(id, { status: nextStatus, note: `${role} advanced the response` })
+          : await api.assignRescue(id, { status: nextStatus, assigned_unit: unit });
+        setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+      } catch (error) {
+        setOperatorNotice(`Local status updated; server sync failed: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
+      }
       return;
     }
 
     if (role === 'Hospital') {
+      const nextStatus = rescue.status === 'rescued' ? rescue.status : 'triage';
+      const assignedUnit = rescue.assigned_unit || 'Rajiv Gandhi Govt General Hospital triage desk';
       setRescues((items) =>
         items.map((item) =>
           item.id === id
             ? {
                 ...item,
-                status: item.status === 'rescued' ? item.status : 'triage',
-                assigned_unit: item.assigned_unit || 'Rajiv Gandhi Govt General Hospital triage desk',
+                status: nextStatus,
+                assigned_unit: assignedUnit,
               }
             : item,
         ),
       );
       setOperatorNotice(`${rescue.victim_name} accepted for hospital triage`);
+      try {
+        const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Accepted by hospital triage' });
+        setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+      } catch (error) {
+        setOperatorNotice(`Triage updated locally; server sync failed: ${error.message}`);
+      }
       return;
     }
 
     if (role === 'Volunteer') {
+      const nextStatus = rescue.status === 'rescued' ? rescue.status : 'en route';
+      const assignedUnit = rescue.assigned_unit || 'Greater Chennai Volunteer Team A';
       setRescues((items) =>
         items.map((item) =>
           item.id === id
             ? {
                 ...item,
-                status: item.status === 'rescued' ? item.status : 'en route',
-                assigned_unit: item.assigned_unit || 'Greater Chennai Volunteer Team A',
+                status: nextStatus,
+                assigned_unit: assignedUnit,
               }
             : item,
         ),
       );
       setOperatorNotice(`Volunteer check-in recorded for ${rescue.victim_name}`);
+      try {
+        const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Volunteer check-in recorded' });
+        setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+      } catch (error) {
+        setOperatorNotice(`Check-in updated locally; server sync failed: ${error.message}`);
+      }
       return;
     }
 
     setOperatorNotice(`Showing live tracking for ${rescue.victim_name}: ${rescue.status}`);
   }
 
-  function updateHospital(id, delta) {
+  async function updateHospital(id, delta) {
     setFacilities((current) => ({
       ...current,
       hospitals: current.hospitals.map((item) =>
@@ -446,10 +602,17 @@ export default function App() {
     const hospital = facilities.hospitals.find((item) => item.id === id);
     if (hospital) {
       setOperatorNotice(`${hospital.name} capacity ${delta > 0 ? 'increased' : 'reduced'} by ${Math.abs(delta)} beds`);
+      const availableBeds = clampNumber(hospital.available_beds + delta, 0, hospital.total_beds);
+      try {
+        const response = await api.updateHospital(id, { available_beds: availableBeds });
+        setFacilities((current) => ({ ...current, hospitals: current.hospitals.map((item) => (item.id === id ? response.hospital : item)) }));
+      } catch (error) {
+        setOperatorNotice(`Hospital updated locally; server sync failed: ${error.message}`);
+      }
     }
   }
 
-  function updateShelter(id, delta) {
+  async function updateShelter(id, delta) {
     setFacilities((current) => ({
       ...current,
       shelters: current.shelters.map((item) =>
@@ -459,10 +622,17 @@ export default function App() {
     const shelter = facilities.shelters.find((item) => item.id === id);
     if (shelter) {
       setOperatorNotice(`${shelter.name} slots ${delta > 0 ? 'opened' : 'filled'} by ${Math.abs(delta)}`);
+      const availableCapacity = clampNumber(shelter.available_capacity + delta, 0, shelter.total_capacity);
+      try {
+        const response = await api.updateShelter(id, { available_capacity: availableCapacity });
+        setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? response.shelter : item)) }));
+      } catch (error) {
+        setOperatorNotice(`Shelter updated locally; server sync failed: ${error.message}`);
+      }
     }
   }
 
-  function updateAmbulanceStatus(id) {
+  async function updateAmbulanceStatus(id) {
     const ambulance = facilities.ambulances.find((item) => item.id === id);
     if (!ambulance) return;
     const nextStatus = nextAmbulanceStatus(ambulance.status);
@@ -471,6 +641,101 @@ export default function App() {
       ambulances: current.ambulances.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
     }));
     setOperatorNotice(`${ambulance.vehicle_number} marked ${nextStatus}`);
+    try {
+      const response = await api.updateAmbulance(id, { status: nextStatus });
+      setFacilities((current) => ({ ...current, ambulances: current.ambulances.map((item) => (item.id === id ? response.ambulance : item)) }));
+    } catch (error) {
+      setOperatorNotice(`Ambulance updated locally; server sync failed: ${error.message}`);
+    }
+  }
+
+  async function findSafeRoute(destination = 'shelter') {
+    try {
+      const result = await api.safeRoute({ latitude: rescueDraft.latitude, longitude: rescueDraft.longitude, destination });
+      setRouteResult(result);
+      setOperatorNotice(`Nearest available ${destination}: ${result.destination.name}, ${result.distance_km} km away`);
+    } catch (error) {
+      setRouteResult(null);
+      setOperatorNotice(`Safe-route lookup failed: ${error.message}`);
+    }
+  }
+
+  async function acknowledgeAlert(alert) {
+    try {
+      const response = await api.acknowledgeAlert(alert.id, { response: 'received', latitude: rescueDraft.latitude, longitude: rescueDraft.longitude });
+      setAlerts((items) => items.map((item) => (item.id === alert.id ? { ...item, acknowledged: true, acknowledgement_count: Number(item.acknowledgement_count || 0) + (response.created ? 1 : 0) } : item)));
+      setOperatorNotice(`Warning receipt confirmed for ${alert.audience}`);
+    } catch (error) {
+      setOperatorNotice(`Could not acknowledge warning: ${error.message}`);
+    }
+  }
+
+  async function submitDistribution(event) {
+    event.preventDefault();
+    try {
+      await api.createDistribution(distributionDraft);
+      const coordination = await api.coordination();
+      setCoordinationData(coordination);
+      setResources(coordination.resources);
+      alignCoordinationDrafts({ disasters, resources: coordination.resources }, coordination);
+      setOperatorNotice(`Relief inventory dispatched to ${distributionDraft.destination}`);
+    } catch (error) {
+      setOperatorNotice(`Distribution could not be planned: ${error.message}`);
+    }
+  }
+
+  async function submitVolunteerAssignment(event) {
+    event.preventDefault();
+    try {
+      await api.createVolunteerAssignment(volunteerDraft);
+      const coordination = await api.coordination();
+      setCoordinationData(coordination);
+      alignCoordinationDrafts({ disasters, resources }, coordination);
+      setOperatorNotice('Volunteer assignment created and availability updated');
+    } catch (error) {
+      setOperatorNotice(`Volunteer could not be assigned: ${error.message}`);
+    }
+  }
+
+  function alignCoordinationDrafts(snapshot, coordination) {
+    const firstDisasterId = snapshot.disasters?.[0]?.id;
+    const firstResourceId = snapshot.resources?.[0]?.id;
+    const firstVolunteerId = coordination.volunteers?.find((item) => item.availability_status === 'available')?.id;
+    setDistributionDraft((current) => ({
+      ...current,
+      disaster_id: snapshot.disasters?.some((item) => Number(item.id) === Number(current.disaster_id)) ? current.disaster_id : firstDisasterId ?? '',
+      resource_id: snapshot.resources?.some((item) => Number(item.id) === Number(current.resource_id)) ? current.resource_id : firstResourceId ?? '',
+    }));
+    setVolunteerDraft((current) => ({
+      ...current,
+      disaster_id: snapshot.disasters?.some((item) => Number(item.id) === Number(current.disaster_id)) ? current.disaster_id : firstDisasterId ?? '',
+      volunteer_id: coordination.volunteers?.some((item) => Number(item.id) === Number(current.volunteer_id) && item.availability_status === 'available')
+        ? current.volunteer_id
+        : firstVolunteerId ?? '',
+    }));
+  }
+
+  function queueOfflineOperation(type, payload) {
+    const next = [...readOfflineQueue(), { id: Date.now(), type, payload }];
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(next));
+    setPendingOperations(next);
+  }
+
+  async function flushOfflineQueue() {
+    const queued = readOfflineQueue();
+    if (!queued.length) return;
+    const remaining = [];
+    for (const operation of queued) {
+      try {
+        if (operation.type === 'disaster') await api.createDisaster(operation.payload);
+        if (operation.type === 'rescue') await api.createRescue(operation.payload);
+      } catch (_error) {
+        remaining.push(operation);
+      }
+    }
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+    setPendingOperations(remaining);
+    if (!remaining.length) setOperatorNotice(`${queued.length} offline submission${queued.length === 1 ? '' : 's'} synchronized`);
   }
 
   function cycleSortMode() {
@@ -484,6 +749,23 @@ export default function App() {
     setSearchQuery('');
     setFilters({ type: 'all', severity: 'all', status: 'all' });
     setOperatorNotice('Showing all Tamil Nadu operations');
+  }
+
+  async function submitAuthentication(event) {
+    event.preventDefault();
+    try {
+      const session = authMode === 'login'
+        ? await login({ email: authDraft.email, password: authDraft.password })
+        : await register(authDraft);
+      setCurrentUser(session.user);
+      setSessionMode('account');
+      setActiveRole(session.user.role);
+      setAuthDraft((current) => ({ ...current, password: '' }));
+      setShowAccountPanel(false);
+      setOperatorNotice(`${session.user.name} signed in successfully`);
+    } catch (error) {
+      setOperatorNotice(`${authMode === 'login' ? 'Sign in' : 'Registration'} failed: ${error.message}`);
+    }
   }
 
   return (
@@ -507,6 +789,7 @@ export default function App() {
           className="form-select"
           value={activeRole}
           onChange={(event) => {
+            setSessionMode('demo');
             setActiveRole(event.target.value);
             setActiveView('command');
             setOperatorNotice(`${event.target.value} role selected`);
@@ -549,6 +832,16 @@ export default function App() {
             />
           </div>
           <div className="topbar-tools">
+            <button
+              type="button"
+              className={`sync-state sync-${connectionState}`}
+              onClick={() => flushOfflineQueue()}
+              title={currentUser ? `Authenticated as ${currentUser.name}` : 'Using local fallback data'}
+            >
+              {connectionState === 'online' ? <Wifi size={16} /> : connectionState === 'connecting' ? <RefreshCw size={16} /> : <CloudOff size={16} />}
+              {connectionState === 'online' ? 'Live API' : connectionState === 'connecting' ? 'Connecting' : 'Offline'}
+              {pendingOperations.length ? ` · ${pendingOperations.length} queued` : ''}
+            </button>
             <button type="button" onClick={cycleSortMode}>
               <ArrowUpDown size={16} />
               {sortLabels[sortMode]}
@@ -560,12 +853,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveView('command');
-                setOperatorNotice(`${activeRole} workspace opened`);
+                setShowAccountPanel((value) => !value);
               }}
             >
               <UserRound size={16} />
-              {activeRole}
+              {sessionMode === 'account' ? currentUser?.name || activeRole : `${activeRole} demo`}
             </button>
             <button
               type="button"
@@ -580,6 +872,23 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {showAccountPanel && (
+          <AccountPanel
+            mode={authMode}
+            setMode={setAuthMode}
+            draft={authDraft}
+            setDraft={setAuthDraft}
+            onSubmit={submitAuthentication}
+            currentUser={currentUser}
+            sessionMode={sessionMode}
+            onReturnToDemo={() => {
+              setSessionMode('demo');
+              setShowAccountPanel(false);
+              setOperatorNotice(`${activeRole} demo session restored`);
+            }}
+          />
+        )}
 
         {showFilters && (
           <section className="filter-panel" aria-label="Operational filters">
@@ -625,6 +934,7 @@ export default function App() {
                   disasters={filteredDisasters}
                   rescues={sortedRescues}
                   facilities={facilities}
+                  resources={resources}
                   priorityChart={priorityChart}
                   disasterChart={disasterChart}
                   trendChart={trendChart}
@@ -647,6 +957,7 @@ export default function App() {
                   facilities={facilities}
                   alerts={alerts}
                   setActiveView={setActiveView}
+                  onAcknowledge={acknowledgeAlert}
                 />
               )}
             </MotionPage>
@@ -661,6 +972,8 @@ export default function App() {
                 setRescueDraft={setRescueDraft}
                 disasters={disasters}
                 onRescueSubmit={submitRescue}
+                routeResult={routeResult}
+                onFindSafeRoute={findSafeRoute}
               />
             </MotionPage>
           )}
@@ -687,9 +1000,62 @@ export default function App() {
               />
             </MotionPage>
           )}
+          {activeView === 'coordination' && (
+            <MotionPage key="coordination" reduceMotion={reduceMotion}>
+              <CoordinationView
+                disasters={disasters}
+                resources={resources}
+                coordination={coordinationData}
+                distributionDraft={distributionDraft}
+                setDistributionDraft={setDistributionDraft}
+                volunteerDraft={volunteerDraft}
+                setVolunteerDraft={setVolunteerDraft}
+                onDistributionSubmit={submitDistribution}
+                onVolunteerSubmit={submitVolunteerAssignment}
+              />
+            </MotionPage>
+          )}
         </AnimatePresence>
       </section>
     </main>
+  );
+}
+
+function AccountPanel({ mode, setMode, draft, setDraft, onSubmit, currentUser, sessionMode, onReturnToDemo }) {
+  return (
+    <section className="panel account-panel" aria-label="Account access">
+      <div>
+        <p className="eyebrow">Authenticated access</p>
+        <h2>{mode === 'login' ? 'Sign in to your operational account' : 'Register a verified role account'}</h2>
+        <span>
+          {sessionMode === 'account'
+            ? `Signed in as ${currentUser?.name} (${currentUser?.role})`
+            : 'Role switching remains available as a clearly marked local demo.'}
+        </span>
+      </div>
+      <form className="account-form" onSubmit={onSubmit}>
+        {mode === 'register' && (
+          <>
+            <Input label="Full name" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} required />
+            <Input label="Phone" value={draft.phone} onChange={(value) => setDraft({ ...draft, phone: value })} required />
+            <Select label="Account role" value={draft.role} options={['Citizen', 'Volunteer']} onChange={(value) => setDraft({ ...draft, role: value })} />
+          </>
+        )}
+        <Input label="Email" type="email" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} required />
+        <Input label="Password" type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required />
+        <button className="primary-action" type="submit">
+          <UserRound size={18} /> {mode === 'login' ? 'Sign in' : 'Create account'}
+        </button>
+      </form>
+      <div className="account-actions">
+        <button type="button" className="compact-button secondary-button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+          {mode === 'login' ? 'Create an account' : 'I already have an account'}
+        </button>
+        {sessionMode === 'account' && (
+          <button type="button" className="compact-button secondary-button" onClick={onReturnToDemo}>Return to demo mode</button>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -815,6 +1181,23 @@ function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
 }
 
+function readOfflineQueue() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function normalizeAlert(alert) {
+  return {
+    ...alert,
+    channel: alert.channel || alert.channels || 'Operations dashboard',
+    time: alert.time || (alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Just now'),
+  };
+}
+
 function EmptyState({ title, detail }) {
   return (
     <div className="empty-state">
@@ -824,7 +1207,7 @@ function EmptyState({ title, detail }) {
   );
 }
 
-function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, setActiveView }) {
+function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, setActiveView, onAcknowledge }) {
   const workspace = getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts });
   const HeroIcon = workspace.icon;
 
@@ -911,6 +1294,19 @@ function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, 
           </div>
         </section>
       </section>
+      {role === 'Citizen' && alerts[0] && (
+        <section className="panel citizen-alert-card">
+          <div>
+            <p className="eyebrow">Authoritative warning · {alerts[0].channel}</p>
+            <h2>{alerts[0].audience}</h2>
+            <p>{alerts[0].message}</p>
+            {alerts[0].instruction && <strong>{alerts[0].instruction}</strong>}
+          </div>
+          <button className="primary-action" type="button" disabled={alerts[0].acknowledged} onClick={() => onAcknowledge(alerts[0])}>
+            <CircleCheck size={18} /> {alerts[0].acknowledged ? 'Receipt confirmed' : 'I received this warning'}
+          </button>
+        </section>
+      )}
     </div>
   );
 }
@@ -1173,6 +1569,7 @@ function CommandView({
   disasters,
   rescues,
   facilities,
+  resources,
   priorityChart,
   disasterChart,
   trendChart,
@@ -1283,7 +1680,7 @@ function CommandView({
       {dashboardMode === 'logistics' && (
         <>
           <section className="operations-grid">
-            <ResourceReadinessPanel />
+            <ResourceReadinessPanel resources={resources} />
             <FieldTeamsPanel />
             <StandardsPanel />
             <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
@@ -1652,12 +2049,24 @@ function EarlyWarningPanel() {
   );
 }
 
-function ResourceReadinessPanel() {
+function ResourceReadinessPanel({ resources = [] }) {
+  const inventory = resources.length
+    ? resources.map((resource) => {
+        const reference = resourceInventory.find((item) => item.name.toLowerCase().includes(resource.name.toLowerCase()) || resource.name.toLowerCase().includes(item.name.toLowerCase()));
+        const available = Number(resource.available_quantity || 0);
+        return {
+          name: resource.name,
+          available,
+          total: Math.max(available, reference?.total || available || 1),
+          unit: resource.unit,
+        };
+      })
+    : resourceInventory;
   return (
     <section className="panel">
       <PanelTitle eyebrow="Logistics" title="Resource inventory health" />
       <div className="inventory-list">
-        {resourceInventory.map((item) => {
+        {inventory.map((item) => {
           const percent = Math.round((item.available / item.total) * 100);
           return (
             <div className="inventory-row" key={item.name}>
@@ -1730,6 +2139,7 @@ function AlertComposer({ alerts, draft, setDraft, onSubmit }) {
           <Input label="Channel" value={draft.channel} onChange={(value) => setDraft({ ...draft, channel: value })} required />
         </div>
         <Textarea label="Message" value={draft.message} onChange={(value) => setDraft({ ...draft, message: value })} required />
+        <Textarea label="Action instruction" value={draft.instruction} onChange={(value) => setDraft({ ...draft, instruction: value })} required />
         <button className="primary-action" type="submit">
           <Send size={18} /> Send alert
         </button>
@@ -1740,8 +2150,9 @@ function AlertComposer({ alerts, draft, setDraft, onSubmit }) {
             <Megaphone size={16} />
             <div>
               <strong>{alert.audience}</strong>
-              <span>{alert.channel} - {alert.time}</span>
+              <span>{alert.channel} - {alert.time}{alert.acknowledgement_count != null ? ` · ${alert.acknowledgement_count} confirmed` : ''}</span>
               <p>{alert.message}</p>
+              {alert.instruction && <p><strong>Action:</strong> {alert.instruction}</p>}
             </div>
           </div>
         ))}
@@ -1769,7 +2180,7 @@ function ProgressBar({ value }) {
   );
 }
 
-function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, disasters, onRescueSubmit }) {
+function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, disasters, onRescueSubmit, routeResult, onFindSafeRoute }) {
   return (
     <section className="form-grid">
       <form className="panel form-panel" onSubmit={onSubmit}>
@@ -1824,6 +2235,35 @@ function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, di
           <HeartPulse size={18} /> Submit rescue request
         </button>
       </form>
+
+      <section className="panel form-panel safe-route-panel">
+        <div className="panel-header">
+          <div>
+            <p>Last-mile safety</p>
+            <h2>Find an available safe destination</h2>
+          </div>
+        </div>
+        <p className="route-guidance">Uses the request coordinates and live capacity to locate the nearest available facility. Always follow official closures and responder instructions.</p>
+        <div className="route-actions">
+          <button className="primary-action" type="button" onClick={() => onFindSafeRoute('shelter')}>
+            <Route size={18} /> Find shelter
+          </button>
+          <button className="secondary-button compact-button" type="button" onClick={() => onFindSafeRoute('hospital')}>
+            <HeartPulse size={18} /> Find hospital
+          </button>
+        </div>
+        {routeResult && (
+          <div className="route-result">
+            <CircleCheck size={20} />
+            <div>
+              <strong>{routeResult.destination.name}</strong>
+              <span>{routeResult.distance_km} km away · {routeResult.nearby_hazards.length} nearby active hazard{routeResult.nearby_hazards.length === 1 ? '' : 's'}</span>
+              <p>{routeResult.guidance}</p>
+              <a href={routeResult.navigation_url} target="_blank" rel="noreferrer">Open turn-by-turn directions</a>
+            </div>
+          </div>
+        )}
+      </section>
     </section>
   );
 }
@@ -1910,6 +2350,115 @@ function RescueView({ role, rescues, disasters, selectedRescueId, onAction, onSe
           </div>
         </section>
       )}
+    </section>
+  );
+}
+
+function CoordinationView({
+  disasters,
+  resources,
+  coordination,
+  distributionDraft,
+  setDistributionDraft,
+  volunteerDraft,
+  setVolunteerDraft,
+  onDistributionSubmit,
+  onVolunteerSubmit,
+}) {
+  const availableVolunteers = coordination.volunteers.filter((item) => item.availability_status === 'available');
+  return (
+    <section className="view-stack">
+      <section className="command-hero">
+        <div>
+          <p className="eyebrow">Shared logistics workspace</p>
+          <h2>Move supplies and people to verified needs</h2>
+          <span>Inventory is decremented when dispatched and volunteer availability changes when an assignment is accepted.</span>
+        </div>
+        <div className="hero-score-grid">
+          <HeroScore label="Resource types" value={resources.length} icon={Package} />
+          <HeroScore label="Volunteers ready" value={availableVolunteers.length} icon={Users} />
+          <HeroScore label="Active dispatches" value={coordination.distributions.filter((item) => item.status !== 'delivered').length} icon={Navigation} />
+        </div>
+      </section>
+
+      <section className="form-grid coordination-forms">
+        <form className="panel form-panel" onSubmit={onDistributionSubmit}>
+          <PanelTitle eyebrow="Resource dispatch" title="Plan relief distribution" />
+          <Select
+            label="Resource"
+            value={distributionDraft.resource_id}
+            options={resources.map((item) => ({ label: `${item.name} · ${item.available_quantity} ${item.unit} available`, value: item.id }))}
+            onChange={(value) => setDistributionDraft({ ...distributionDraft, resource_id: value })}
+          />
+          <Select
+            label="Incident"
+            value={distributionDraft.disaster_id}
+            options={disasters.map((item) => ({ label: item.title, value: item.id }))}
+            onChange={(value) => setDistributionDraft({ ...distributionDraft, disaster_id: value })}
+          />
+          <div className="form-row form-row-2">
+            <Input label="Quantity" type="number" value={distributionDraft.quantity} onChange={(value) => setDistributionDraft({ ...distributionDraft, quantity: value })} required />
+            <Input label="Destination" value={distributionDraft.destination} onChange={(value) => setDistributionDraft({ ...distributionDraft, destination: value })} required />
+          </div>
+          <button className="primary-action" type="submit" disabled={!resources.length || !disasters.length}>
+            <Package size={18} /> Dispatch inventory
+          </button>
+        </form>
+
+        <form className="panel form-panel" onSubmit={onVolunteerSubmit}>
+          <PanelTitle eyebrow="Field assignment" title="Assign an available volunteer" />
+          <Select
+            label="Volunteer"
+            value={volunteerDraft.volunteer_id}
+            options={availableVolunteers.map((item) => ({ label: `${item.name} · ${item.skills}`, value: item.id }))}
+            onChange={(value) => setVolunteerDraft({ ...volunteerDraft, volunteer_id: value })}
+          />
+          <Select
+            label="Incident"
+            value={volunteerDraft.disaster_id}
+            options={disasters.map((item) => ({ label: item.title, value: item.id }))}
+            onChange={(value) => setVolunteerDraft({ ...volunteerDraft, disaster_id: value })}
+          />
+          <Textarea label="Task" value={volunteerDraft.task} onChange={(value) => setVolunteerDraft({ ...volunteerDraft, task: value })} required />
+          <button className="primary-action" type="submit" disabled={!availableVolunteers.length || !disasters.length}>
+            <Users size={18} /> Create assignment
+          </button>
+          {!availableVolunteers.length && <p className="route-guidance">No unassigned volunteers are currently available.</p>}
+        </form>
+      </section>
+
+      <section className="split-grid">
+        <section className="panel">
+          <PanelTitle eyebrow="Dispatch ledger" title="Recent distributions" />
+          <div className="facility-list">
+            {coordination.distributions.slice(0, 8).map((item) => (
+              <div className="facility-item" key={item.id}>
+                <div>
+                  <strong>{item.destination}</strong>
+                  <span>{item.quantity} units · incident #{item.disaster_id}</span>
+                </div>
+                <StatusPill value={item.status} />
+              </div>
+            ))}
+            {!coordination.distributions.length && <EmptyState title="No dispatches yet" detail="Plan a distribution to create the shared logistics record." />}
+          </div>
+        </section>
+        <section className="panel">
+          <PanelTitle eyebrow="Volunteer ledger" title="Recent assignments" />
+          <div className="facility-list">
+            {coordination.assignments.slice(0, 8).map((item) => (
+              <div className="facility-item" key={item.id}>
+                <div>
+                  <strong>{item.task}</strong>
+                  <span>Volunteer #{item.volunteer_id} · incident #{item.disaster_id}</span>
+                </div>
+                <StatusPill value={item.status} />
+              </div>
+            ))}
+            {!coordination.assignments.length && <EmptyState title="No assignments yet" detail="Assign an available volunteer to an active incident." />}
+          </div>
+        </section>
+      </section>
     </section>
   );
 }

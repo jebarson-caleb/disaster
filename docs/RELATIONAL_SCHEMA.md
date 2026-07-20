@@ -26,6 +26,8 @@
 
 - `volunteers(id, user_id, skills, availability_status, latitude, longitude)`
 - `volunteer_assignments(id, volunteer_id, disaster_id, task, status, assigned_at)`
+- `emergency_alerts(id, identifier, sender_id, event, audience, channels, urgency, severity, certainty, message, instruction, status, created_at, expires_at)`
+- `alert_acknowledgements(id, alert_id, user_id, response, latitude, longitude, created_at)`
 - `ai_assessments(id, entity_type, entity_id, assessment_type, score, label, explanation, created_at)`
 - `notifications(id, user_id, role, message, status, created_at)`
 

@@ -18,3 +18,6 @@ Use these relationships to draw the ER diagram:
 - `volunteers` 1--N `volunteer_assignments`
 - `disasters` 1--N `volunteer_assignments`
 - Operational entities 1--N `ai_assessments` through `(entity_type, entity_id)`
+- `users` 1--N `emergency_alerts` through `sender_id`
+- `emergency_alerts` 1--N `alert_acknowledgements`
+- `users` 1--N `alert_acknowledgements`

@@ -6,6 +6,7 @@ from flask import current_app, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .models import User
+from .extensions import db
 
 
 def hash_password(password):
@@ -35,7 +36,7 @@ def current_user():
         payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
     except jwt.PyJWTError:
         return None
-    return User.query.get(int(payload["sub"]))
+    return db.session.get(User, int(payload["sub"]))
 
 
 def login_required(roles=None):

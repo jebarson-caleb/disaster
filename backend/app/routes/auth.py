@@ -17,6 +17,7 @@ VALID_ROLES = {
     "Ambulance",
     "Admin",
 }
+SELF_REGISTRATION_ROLES = {"Citizen", "Volunteer"}
 
 
 @auth_bp.post("/register")
@@ -28,13 +29,20 @@ def register():
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     if data["role"] not in VALID_ROLES:
         return jsonify({"error": "Invalid role"}), 400
-    if User.query.filter_by(email=data["email"].lower()).first():
+    if data["role"] not in SELF_REGISTRATION_ROLES:
+        return jsonify({"error": "This operational role requires administrator provisioning"}), 403
+    email = str(data["email"]).strip().lower()
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        return jsonify({"error": "A valid email address is required"}), 400
+    if len(str(data["password"])) < 8:
+        return jsonify({"error": "Password must contain at least 8 characters"}), 400
+    if User.query.filter_by(email=email).first():
         return jsonify({"error": "Email already registered"}), 409
 
     user = User(
-        name=data["name"],
-        email=data["email"].lower(),
-        phone=data["phone"],
+        name=str(data["name"]).strip(),
+        email=email,
+        phone=str(data["phone"]).strip(),
         role=data["role"],
         password_hash=hash_password(data["password"]),
     )
@@ -56,7 +64,7 @@ def register():
 def login():
     data = request.get_json() or {}
     user = User.query.filter_by(email=str(data.get("email", "")).lower()).first()
-    if not user or not verify_password(user.password_hash, data.get("password", "")):
+    if not user or not user.is_active or not verify_password(user.password_hash, data.get("password", "")):
         return jsonify({"error": "Invalid email or password"}), 401
     return jsonify({"user": public_user(user), "token": create_token(user)})
 

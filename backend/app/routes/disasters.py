@@ -6,6 +6,7 @@ from ..models import AiAssessment, Disaster, RescueRequest, RescueStatusHistory
 from ..services.ai_service import damage_estimation, relief_prioritization
 
 disasters_bp = Blueprint("disasters", __name__)
+VALID_RESCUE_STATUSES = {"pending", "assigned", "en route", "triage", "rescued", "cancelled"}
 
 
 @disasters_bp.post("/disasters")
@@ -58,7 +59,7 @@ def list_disasters():
 @disasters_bp.get("/disasters/<int:disaster_id>")
 @login_required()
 def get_disaster(disaster_id):
-    disaster = Disaster.query.get_or_404(disaster_id)
+    disaster = db.get_or_404(Disaster, disaster_id)
     requests = RescueRequest.query.filter_by(disaster_id=disaster_id).order_by(RescueRequest.priority_score.desc()).all()
     return jsonify({"disaster": disaster.to_dict(), "rescue_requests": [item.to_dict() for item in requests]})
 
@@ -71,7 +72,7 @@ def create_rescue_request():
     missing = [field for field in required if data.get(field) in {None, ""}]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    disaster = Disaster.query.get_or_404(int(data["disaster_id"]))
+    disaster = db.get_or_404(Disaster, int(data["disaster_id"]))
     ai_payload = {**data, "disaster_type": disaster.disaster_type}
     priority = relief_prioritization(ai_payload)
     rescue = RescueRequest(
@@ -108,26 +109,34 @@ def list_rescue_requests():
 
 
 @disasters_bp.patch("/rescue-requests/<int:request_id>/status")
-@login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO"])
+@login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO", "Hospital", "Volunteer"])
 def update_rescue_status(request_id):
-    rescue = RescueRequest.query.get_or_404(request_id)
+    rescue = db.get_or_404(RescueRequest, request_id)
     data = request.get_json() or {}
     status = data.get("status")
     if not status:
         return jsonify({"error": "status is required"}), 400
+    if status not in VALID_RESCUE_STATUSES:
+        return jsonify({"error": "Invalid rescue status"}), 400
     rescue.status = status
+    if data.get("assigned_unit"):
+        rescue.assigned_unit = data["assigned_unit"]
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=status, note=data.get("note"), changed_by_id=request.user.id))
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict()})
 
 
 @disasters_bp.patch("/rescue-requests/<int:request_id>/assign")
-@login_required(roles=["Admin", "Police", "Fire Service"])
+@login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO"])
 def assign_rescue_request(request_id):
-    rescue = RescueRequest.query.get_or_404(request_id)
+    rescue = db.get_or_404(RescueRequest, request_id)
     data = request.get_json() or {}
-    rescue.assigned_unit = data.get("assigned_unit")
+    if not data.get("assigned_unit"):
+        return jsonify({"error": "assigned_unit is required"}), 400
+    rescue.assigned_unit = data["assigned_unit"]
     rescue.status = data.get("status", "assigned")
+    if rescue.status not in VALID_RESCUE_STATUSES:
+        return jsonify({"error": "Invalid rescue status"}), 400
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=rescue.status, note=f"Assigned to {rescue.assigned_unit}", changed_by_id=request.user.id))
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict()})

@@ -19,3 +19,5 @@
 | `volunteer_assignments` | Links volunteers to disaster tasks | `task`, `status`, `assigned_at` |
 | `ai_assessments` | Stores AI outputs for auditability | `assessment_type`, `score`, `label`, `explanation` |
 | `notifications` | Stores alerts for users or roles | `role`, `message`, `status` |
+| `emergency_alerts` | Stores CAP-inspired authoritative public warnings | `identifier`, `audience`, `channels`, `urgency`, `severity`, `certainty`, `instruction` |
+| `alert_acknowledgements` | Confirms last-mile receipt of warnings | `alert_id`, `user_id`, `response`, optional location |

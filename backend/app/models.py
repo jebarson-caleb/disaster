@@ -241,3 +241,37 @@ class Notification(db.Model, SerializerMixin):
     message = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(30), default="unread", nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class EmergencyAlert(db.Model, SerializerMixin):
+    """CAP-inspired authoritative warning distributed over multiple channels."""
+
+    __tablename__ = "emergency_alerts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    identifier = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    event = db.Column(db.String(100), nullable=False)
+    audience = db.Column(db.String(180), nullable=False, index=True)
+    channels = db.Column(db.String(180), nullable=False)
+    urgency = db.Column(db.String(30), default="immediate", nullable=False)
+    severity = db.Column(db.String(30), default="severe", nullable=False)
+    certainty = db.Column(db.String(30), default="likely", nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    instruction = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default="active", nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime(timezone=True))
+
+
+class AlertAcknowledgement(db.Model, SerializerMixin):
+    __tablename__ = "alert_acknowledgements"
+    __table_args__ = (db.UniqueConstraint("alert_id", "user_id", name="uq_alert_user_ack"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    alert_id = db.Column(db.Integer, db.ForeignKey("emergency_alerts.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    response = db.Column(db.String(30), default="received", nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)

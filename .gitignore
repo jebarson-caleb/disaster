@@ -7,5 +7,6 @@ backend/app/**/__pycache__/
 frontend/node_modules/
 frontend/dist/
 .env
+.vercel/
 *.pyc
 *.log

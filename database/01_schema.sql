@@ -221,3 +221,36 @@ CREATE TABLE notifications (
   CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id),
   INDEX idx_notifications_role (role, status)
 );
+
+CREATE TABLE emergency_alerts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  identifier VARCHAR(80) NOT NULL UNIQUE,
+  sender_id INT NOT NULL,
+  event VARCHAR(100) NOT NULL,
+  audience VARCHAR(180) NOT NULL,
+  channels VARCHAR(180) NOT NULL,
+  urgency VARCHAR(30) NOT NULL DEFAULT 'immediate',
+  severity VARCHAR(30) NOT NULL DEFAULT 'severe',
+  certainty VARCHAR(30) NOT NULL DEFAULT 'likely',
+  message TEXT NOT NULL,
+  instruction TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NULL,
+  CONSTRAINT fk_alert_sender FOREIGN KEY (sender_id) REFERENCES users(id),
+  INDEX idx_alert_audience (audience),
+  INDEX idx_alert_status_time (status, created_at)
+);
+
+CREATE TABLE alert_acknowledgements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  alert_id INT NOT NULL,
+  user_id INT NOT NULL,
+  response VARCHAR(30) NOT NULL DEFAULT 'received',
+  latitude DECIMAL(10, 7),
+  longitude DECIMAL(10, 7),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ack_alert FOREIGN KEY (alert_id) REFERENCES emergency_alerts(id),
+  CONSTRAINT fk_ack_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT uq_alert_user_ack UNIQUE (alert_id, user_id)
+);
