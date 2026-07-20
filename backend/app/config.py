@@ -27,3 +27,5 @@ class Config:
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "").rstrip("/")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
     DEMO_MODE = os.getenv("DEMO_MODE", "true" if os.getenv("VERCEL") else "false").lower() in {"1", "true", "yes"}
+    EMERGENCY_HOTLINE = os.getenv("EMERGENCY_HOTLINE", "112")
+    DONATION_PAYMENT_URL = os.getenv("DONATION_PAYMENT_URL", "").rstrip("/")

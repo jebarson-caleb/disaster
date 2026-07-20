@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from ..auth import create_token, hash_password, login_required, verify_password
 from ..extensions import db
-from ..models import RoleProfile, User
+from ..models import RoleProfile, User, Volunteer
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -56,6 +56,16 @@ def register():
         longitude=data.get("longitude"),
     )
     db.session.add(profile)
+    if user.role == "Volunteer":
+        db.session.add(
+            Volunteer(
+                user_id=user.id,
+                skills=str(data.get("skills") or "general relief support"),
+                availability_status="available",
+                latitude=float(data["latitude"]) if data.get("latitude") not in {None, ""} else None,
+                longitude=float(data["longitude"]) if data.get("longitude") not in {None, ""} else None,
+            )
+        )
     db.session.commit()
     return jsonify({"user": public_user(user), "token": create_token(user)}), 201
 

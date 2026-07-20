@@ -119,3 +119,35 @@ export const initialFacilities = {
     { id: 3, vehicle_number: 'TN-38-ER-443', driver_name: 'Prakash Selvam', status: 'available' },
   ],
 };
+
+export const initialResponseHub = {
+  emergency_hotline: '112',
+  news_updates: [
+    {
+      id: 1,
+      disaster_id: 1,
+      headline: 'Live: rescue boats enter isolated flood streets',
+      summary: 'Verified field teams are moving food, water, and residents through the Velachery flood corridor.',
+      source_name: 'ResQ verified field desk',
+      state: 'Tamil Nadu',
+      district: 'Chennai',
+      is_live: true,
+      stream_url: 'https://www.youtube.com/@DDNews/live',
+    },
+  ],
+  welfare_checks: [],
+  hospital_notifications: [],
+  supply_requests: [],
+  campaigns: [
+    {
+      id: 1,
+      title: 'National Emergency Rescue & Victim Relief Fund',
+      description: 'Support verified rescue transport, food, medical supplies, and recovery assistance.',
+      goal_amount: 2500000,
+      confirmed_amount: 0,
+      pledged_amount: 0,
+      currency: 'INR',
+    },
+  ],
+  dispatches: [],
+};

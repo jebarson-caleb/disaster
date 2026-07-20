@@ -6,6 +6,7 @@ from .extensions import db
 from .routes.admin import admin_bp
 from .routes.ai import ai_bp
 from .routes.auth import auth_bp
+from .routes.community import community_bp
 from .routes.disasters import disasters_bp
 from .routes.facilities import facilities_bp
 from .routes.operations import operations_bp
@@ -24,6 +25,7 @@ def create_app(config_object=Config):
     app.register_blueprint(ai_bp, url_prefix="/api/v1/ai")
     app.register_blueprint(admin_bp, url_prefix="/api/v1/admin")
     app.register_blueprint(operations_bp, url_prefix="/api/v1")
+    app.register_blueprint(community_bp, url_prefix="/api/v1")
 
     @app.get("/api/v1/health")
     def health():

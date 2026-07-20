@@ -1635,6 +1635,176 @@ button {
 
 .citizen-alert-card { border-left: 4px solid #dc2626; }
 
+.response-hub-view {
+  padding-bottom: 24px;
+}
+
+.response-hub-hero {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 54%, #ecfdf5 100%);
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.hub-grid-wide {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.hub-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hub-panel,
+.donation-card {
+  min-width: 0;
+}
+
+.hub-feed {
+  display: grid;
+  gap: 12px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.dispatch-audit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hub-feed-item {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid #e3e2da;
+  border-radius: 10px;
+  background: #fbfbf7;
+}
+
+.hub-feed-item.alert-item {
+  border-left: 4px solid #dc2626;
+  background: #fffafa;
+}
+
+.hub-feed-item p,
+.hub-feed-item small,
+.donation-card p,
+.pledge-copy,
+.consent-copy {
+  margin: 0;
+  color: #667680;
+}
+
+.hub-item-heading,
+.donation-progress-copy,
+.hub-form-actions,
+.hub-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hub-item-heading > div {
+  min-width: 0;
+}
+
+.hub-item-heading strong,
+.hub-item-heading span {
+  display: block;
+}
+
+.hub-item-heading span {
+  margin-top: 3px;
+  color: #667680;
+  font-size: 0.82rem;
+}
+
+.stream-link,
+.emergency-call,
+.call-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: fit-content;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.stream-link {
+  color: #b91c1c;
+}
+
+.emergency-call {
+  min-height: 42px;
+  margin-top: 16px;
+  padding: 9px 14px;
+  color: #fff;
+  border-radius: 8px;
+  background: #b91c1c;
+}
+
+.call-link {
+  color: #171717;
+}
+
+.location-consent-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 13px;
+  color: #075985;
+  border: 1px solid #7dd3fc;
+  border-radius: 8px;
+  background: #f0f9ff;
+  font-weight: 800;
+}
+
+.location-consent-button:hover {
+  color: #fff;
+  background: #0369a1;
+}
+
+.consent-copy {
+  font-size: 0.82rem;
+}
+
+.donation-card h3 {
+  margin: 4px 0 8px;
+}
+
+.donation-progress-copy {
+  align-items: baseline;
+  margin: 20px 0 8px;
+}
+
+.donation-progress-copy strong {
+  font-size: 1.5rem;
+}
+
+.pledge-copy {
+  display: block;
+  margin-top: 10px;
+}
+
+.news-publisher-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.news-publisher-form .form-field:has(textarea),
+.news-publisher-form .toggle-row,
+.news-publisher-form .primary-action {
+  grid-column: 1 / -1;
+}
+
 .account-panel {
   margin: 16px 24px 0;
   display: grid;
@@ -1674,4 +1844,19 @@ button {
   .account-form { grid-template-columns: 1fr; }
 
   .account-panel { margin: 12px 16px 0; }
+
+  .hub-grid,
+  .hub-grid-wide,
+  .hub-grid-3,
+  .news-publisher-form,
+  .dispatch-audit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-item-heading,
+  .hub-form-actions,
+  .donation-progress-copy {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

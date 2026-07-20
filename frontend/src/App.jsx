@@ -55,7 +55,7 @@ import MetricTile from './components/MetricTile.jsx';
 import StatusPill from './components/StatusPill.jsx';
 import { allocateResources, estimateDamage, prioritizeRescue } from './services/ai.js';
 import { api, isNetworkFailure, login, openDemoSession, register } from './services/api.js';
-import { initialDisasters, initialFacilities, initialRescues, roles } from './services/mockData.js';
+import { initialDisasters, initialFacilities, initialRescues, initialResponseHub, roles } from './services/mockData.js';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
 
@@ -196,7 +196,7 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ type: 'all', severity: 'all', status: 'all' });
   const [selectedRescueId, setSelectedRescueId] = useState(null);
-  const [operatorNotice, setOperatorNotice] = useState('Tamil Nadu emergency demo data loaded');
+  const [operatorNotice, setOperatorNotice] = useState('India-wide emergency demo data loaded');
   const [connectionState, setConnectionState] = useState('connecting');
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionMode, setSessionMode] = useState('demo');
@@ -211,6 +211,7 @@ export default function App() {
   const [facilities, setFacilities] = useState(initialFacilities);
   const [resources, setResources] = useState([]);
   const [alerts, setAlerts] = useState(initialAlerts);
+  const [responseHub, setResponseHub] = useState(initialResponseHub);
   const [alertDraft, setAlertDraft] = useState({
     audience: 'Chennai Zone 13 - Adyar / Velachery',
     channel: 'SMS + siren + volunteer relay',
@@ -241,6 +242,10 @@ export default function App() {
   });
   const [distributionDraft, setDistributionDraft] = useState({ resource_id: 1, disaster_id: 1, quantity: 25, destination: 'Velachery Govt School Relief Camp' });
   const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: 1, disaster_id: 1, task: 'Support evacuation and first-aid desk' });
+  const [welfareDraft, setWelfareDraft] = useState({ disaster_id: 1, relative_name: '', relative_phone: '', relationship: '', last_known_location: '', requester_phone: '', consent_to_contact: false });
+  const [supplyDraft, setSupplyDraft] = useState({ disaster_id: 1, category: 'food and water', description: '', people_count: 1, urgency: 'high', contact_phone: '', latitude: 12.9806, longitude: 80.2194, location_accuracy: '', location_consent: false });
+  const [donationDraft, setDonationDraft] = useState({ campaign_id: 1, donor_name: '', donor_email: '', amount: 500, anonymous: false, message: '' });
+  const [newsDraft, setNewsDraft] = useState({ disaster_id: 1, headline: '', summary: '', source_name: 'Verified field desk', stream_url: '', state: '', district: '', is_live: true });
 
   const metrics = useMemo(() => {
     const pending = rescues.filter((item) => item.status === 'pending').length;
@@ -324,7 +329,7 @@ export default function App() {
     [rescues, disasterLookup, searchQuery, filters, sortMode],
   );
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
-  const filterSummary = searchQuery.trim() || activeFilterCount ? `${filteredDisasters.length} reports, ${sortedRescues.length} rescues shown` : 'All Tamil Nadu operations';
+  const filterSummary = searchQuery.trim() || activeFilterCount ? `${filteredDisasters.length} reports, ${sortedRescues.length} rescues shown` : 'All India operations';
   const selectedDisaster = filteredDisasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters[0];
   const allocation = allocateResources({
     severity: sortedRescues[0]?.priority_label || 'Medium',
@@ -332,7 +337,13 @@ export default function App() {
     disaster_type: selectedDisaster?.disaster_type || 'flood',
   });
   const activeTopbar = roleTopbar[activeRole] || roleTopbar.Admin;
-  const activeNavigation = roleNavigation[activeRole] || roleNavigation.Admin;
+  const activeNavigation = useMemo(
+    () => [
+      ...(roleNavigation[activeRole] || roleNavigation.Admin),
+      { id: 'response-hub', label: activeRole === 'Citizen' ? 'Family & Aid' : 'Response Hub', icon: RadioTower },
+    ],
+    [activeRole],
+  );
   const visibleRescues = rescueItemsForRole(activeRole, sortedRescues);
 
   useEffect(() => {
@@ -355,7 +366,7 @@ export default function App() {
         ]);
         if (cancelled) return;
         if (sessionMode === 'demo') setCurrentUser(session.user);
-        setDisasters(snapshot.disasters);
+        setDisasters(snapshot.disasters.map(normalizeDisaster));
         setRescues(snapshot.rescue_requests);
         setFacilities(snapshot.facilities);
         setResources(snapshot.resources || []);
@@ -364,6 +375,7 @@ export default function App() {
           alignCoordinationDrafts(snapshot, coordination);
         }
         setAlerts(snapshot.alerts.map(normalizeAlert));
+        setResponseHub(snapshot.response_hub || initialResponseHub);
         setConnectionState('online');
         setOperatorNotice(`${session.user.name} connected to the live response API${sessionMode === 'demo' ? ' in demo mode' : ''}`);
       } catch (error) {
@@ -388,7 +400,7 @@ export default function App() {
             ['Admin', 'NGO'].includes(activeRole) ? api.coordination() : Promise.resolve(null),
           ]))
           .then(([snapshot, coordination]) => {
-            setDisasters(snapshot.disasters);
+            setDisasters(snapshot.disasters.map(normalizeDisaster));
             setRescues(snapshot.rescue_requests);
             setFacilities(snapshot.facilities);
             setResources(snapshot.resources || []);
@@ -397,6 +409,7 @@ export default function App() {
               alignCoordinationDrafts(snapshot, coordination);
             }
             setAlerts(snapshot.alerts.map(normalizeAlert));
+            setResponseHub(snapshot.response_hub || initialResponseHub);
             setConnectionState('online');
             return flushOfflineQueue();
           })
@@ -442,7 +455,7 @@ export default function App() {
     }
     setDisasters((items) => [next, ...items]);
     setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: 25 });
-    setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the Tamil Nadu command view`);
+    setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the national command view`);
     setActiveView('command');
   }
 
@@ -468,6 +481,8 @@ export default function App() {
     try {
       const response = await api.createRescue(rescueDraft);
       next = response.rescue_request;
+      const allocated = [response.automatic_allocation?.rescue_unit?.name, response.automatic_allocation?.volunteer?.name, response.automatic_allocation?.ambulance?.vehicle_number].filter(Boolean).join(' + ');
+      if (allocated) setOperatorNotice(`${priority.label} request auto-dispatched to ${allocated}; receiving hospital alerted`);
       setConnectionState('online');
     } catch (error) {
       if (!isNetworkFailure(error)) {
@@ -480,7 +495,7 @@ export default function App() {
     setRescues((items) => [next, ...items]);
     setRescueDraft({ ...rescueDraft, victim_name: '', notes: '', trapped: false });
     setSelectedRescueId(next.id);
-    setOperatorNotice(`${priority.label} rescue request created for ${next.victim_name}`);
+    if (!next.assigned_unit) setOperatorNotice(`${priority.label} rescue request created for ${next.victim_name}`);
     setActiveView('rescue');
   }
 
@@ -697,6 +712,117 @@ export default function App() {
     }
   }
 
+  function captureDeviceLocation(target) {
+    if (!navigator.geolocation) {
+      setOperatorNotice('Device location is not supported by this browser; enter coordinates manually and call 112 if in immediate danger');
+      return;
+    }
+    setOperatorNotice('Waiting for your device location permission...');
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const location = { latitude: Number(coords.latitude.toFixed(6)), longitude: Number(coords.longitude.toFixed(6)), location_accuracy: Math.round(coords.accuracy), location_consent: true };
+        if (target === 'rescue') setRescueDraft((current) => ({ ...current, ...location }));
+        if (target === 'supply') setSupplyDraft((current) => ({ ...current, ...location }));
+        if (target === 'welfare') setWelfareDraft((current) => ({ ...current, latitude: location.latitude, longitude: location.longitude }));
+        try {
+          await api.shareLocation({ latitude: location.latitude, longitude: location.longitude, accuracy_meters: location.location_accuracy, consent_granted: true, source: 'device' });
+          setOperatorNotice(`Location shared with responders to approximately ${location.location_accuracy} m accuracy`);
+        } catch (error) {
+          setOperatorNotice(`Location captured for this request; live sharing will retry on submission (${error.message})`);
+        }
+      },
+      (error) => setOperatorNotice(`Location was not shared: ${error.message}. Enter coordinates manually or call 112.`),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
+
+  async function submitWelfareCheck(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createWelfareCheck(welfareDraft);
+      setResponseHub((current) => ({ ...current, welfare_checks: [response.welfare_check, ...current.welfare_checks] }));
+      setWelfareDraft((current) => ({ ...current, relative_name: '', relative_phone: '', relationship: '', last_known_location: '', consent_to_contact: false }));
+      setOperatorNotice(`Welfare check opened for ${response.welfare_check.relative_name}; call responders can now update the case`);
+    } catch (error) {
+      setOperatorNotice(`Welfare check could not be opened: ${error.message}`);
+    }
+  }
+
+  async function advanceWelfareCheck(item) {
+    const statuses = ['requested', 'assigned', 'contacting', 'located_safe', 'closed'];
+    const nextStatus = statuses[Math.min(statuses.length - 1, Math.max(0, statuses.indexOf(item.status)) + 1)];
+    try {
+      const response = await api.updateWelfareCheck(item.id, { status: nextStatus, responder_notes: `Responder updated case to ${nextStatus}` });
+      setResponseHub((current) => ({ ...current, welfare_checks: current.welfare_checks.map((entry) => (entry.id === item.id ? response.welfare_check : entry)) }));
+      setOperatorNotice(`${item.relative_name} welfare check updated to ${nextStatus}`);
+    } catch (error) {
+      setOperatorNotice(`Welfare check update failed: ${error.message}`);
+    }
+  }
+
+  async function submitSupplyRequest(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createSupplyRequest(supplyDraft);
+      setResponseHub((current) => ({ ...current, supply_requests: [response.supply_request, ...current.supply_requests] }));
+      setSupplyDraft((current) => ({ ...current, description: '', location_consent: false }));
+      setOperatorNotice(`Supply case #${response.supply_request.id} sent to nearby relief coordinators`);
+    } catch (error) {
+      setOperatorNotice(`Supply request could not be sent: ${error.message}`);
+    }
+  }
+
+  async function advanceSupplyRequest(item) {
+    const statuses = ['requested', 'assigned', 'packing', 'en route', 'delivered'];
+    const nextStatus = statuses[Math.min(statuses.length - 1, Math.max(0, statuses.indexOf(item.status)) + 1)];
+    try {
+      const response = await api.updateSupplyRequest(item.id, { status: nextStatus, assigned_unit: item.assigned_unit || 'Nearest relief logistics team' });
+      setResponseHub((current) => ({ ...current, supply_requests: current.supply_requests.map((entry) => (entry.id === item.id ? response.supply_request : entry)) }));
+      setOperatorNotice(`Supply request #${item.id} moved to ${nextStatus}`);
+    } catch (error) {
+      setOperatorNotice(`Supply request update failed: ${error.message}`);
+    }
+  }
+
+  async function acknowledgeHospitalPrep(item) {
+    try {
+      const response = await api.acknowledgeHospitalNotification(item.id);
+      setResponseHub((current) => ({ ...current, hospital_notifications: current.hospital_notifications.map((entry) => (entry.id === item.id ? { ...entry, ...response.hospital_notification } : entry)) }));
+      setOperatorNotice(`Hospital preparation notice #${item.id} acknowledged`);
+    } catch (error) {
+      setOperatorNotice(`Hospital acknowledgement failed: ${error.message}`);
+    }
+  }
+
+  async function submitDonation(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createDonation(donationDraft);
+      const amount = Number(response.donation.amount);
+      setResponseHub((current) => ({
+        ...current,
+        campaigns: current.campaigns.map((campaign) => Number(campaign.id) === Number(response.donation.campaign_id) ? { ...campaign, pledged_amount: Number(campaign.pledged_amount || 0) + amount } : campaign),
+      }));
+      setDonationDraft((current) => ({ ...current, message: '' }));
+      setOperatorNotice(`${response.message} Reference: ${response.donation.reference}`);
+      if (response.checkout_url) window.open(response.checkout_url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      setOperatorNotice(`Donation pledge failed: ${error.message}`);
+    }
+  }
+
+  async function publishNewsUpdate(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createNewsUpdate(newsDraft);
+      setResponseHub((current) => ({ ...current, news_updates: [response.news_update, ...current.news_updates] }));
+      setNewsDraft((current) => ({ ...current, headline: '', summary: '', stream_url: '' }));
+      setOperatorNotice('Verified disaster-area news update published');
+    } catch (error) {
+      setOperatorNotice(`News update could not be published: ${error.message}`);
+    }
+  }
+
   function alignCoordinationDrafts(snapshot, coordination) {
     const firstDisasterId = snapshot.disasters?.[0]?.id;
     const firstResourceId = snapshot.resources?.[0]?.id;
@@ -748,7 +874,7 @@ export default function App() {
   function clearOperationalFilters() {
     setSearchQuery('');
     setFilters({ type: 'all', severity: 'all', status: 'all' });
-    setOperatorNotice('Showing all Tamil Nadu operations');
+    setOperatorNotice('Showing all India operations');
   }
 
   async function submitAuthentication(event) {
@@ -826,7 +952,7 @@ export default function App() {
             <Search size={18} />
             <input
               aria-label="Search operations"
-              placeholder="Search Chennai incident, shelter, patient..."
+              placeholder="Search incident, state, shelter, patient..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -974,6 +1100,7 @@ export default function App() {
                 onRescueSubmit={submitRescue}
                 routeResult={routeResult}
                 onFindSafeRoute={findSafeRoute}
+                onUseDeviceLocation={() => captureDeviceLocation('rescue')}
               />
             </MotionPage>
           )}
@@ -1012,6 +1139,32 @@ export default function App() {
                 setVolunteerDraft={setVolunteerDraft}
                 onDistributionSubmit={submitDistribution}
                 onVolunteerSubmit={submitVolunteerAssignment}
+              />
+            </MotionPage>
+          )}
+          {activeView === 'response-hub' && (
+            <MotionPage key="response-hub" reduceMotion={reduceMotion}>
+              <ResponseHubView
+                role={activeRole}
+                disasters={disasters}
+                alerts={alerts}
+                hub={responseHub}
+                welfareDraft={welfareDraft}
+                setWelfareDraft={setWelfareDraft}
+                supplyDraft={supplyDraft}
+                setSupplyDraft={setSupplyDraft}
+                donationDraft={donationDraft}
+                setDonationDraft={setDonationDraft}
+                newsDraft={newsDraft}
+                setNewsDraft={setNewsDraft}
+                onWelfareSubmit={submitWelfareCheck}
+                onWelfareAdvance={advanceWelfareCheck}
+                onSupplySubmit={submitSupplyRequest}
+                onSupplyAdvance={advanceSupplyRequest}
+                onHospitalAcknowledge={acknowledgeHospitalPrep}
+                onDonationSubmit={submitDonation}
+                onNewsSubmit={publishNewsUpdate}
+                onUseDeviceLocation={captureDeviceLocation}
               />
             </MotionPage>
           )}
@@ -1195,6 +1348,17 @@ function normalizeAlert(alert) {
     ...alert,
     channel: alert.channel || alert.channels || 'Operations dashboard',
     time: alert.time || (alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Just now'),
+  };
+}
+
+function normalizeDisaster(disaster) {
+  const severity = normalizeValue(disaster.severity_hint || 'medium');
+  const fallbackScores = { low: 28, medium: 52, high: 78, critical: 94 };
+  const score = Number.isFinite(Number(disaster.score)) ? Number(disaster.score) : fallbackScores[severity] || 52;
+  return {
+    ...disaster,
+    score,
+    label: disaster.label || `${severity.charAt(0).toUpperCase()}${severity.slice(1)}`,
   };
 }
 
@@ -1594,8 +1758,8 @@ function CommandView({
       <section className="command-hero">
         <div>
           <p className="eyebrow">Common operating picture</p>
-          <h2>Tamil Nadu live risk and relief readiness</h2>
-          <span>GIS map, resources, alerts, health capacity and field teams across Chennai, Cuddalore and the Nilgiris.</span>
+          <h2>India-wide live risk and relief readiness</h2>
+          <span>GIS map, resources, alerts, health capacity, and field teams across affected districts in India.</span>
         </div>
         <div className="hero-score-grid">
           <HeroScore label="People affected" value={metrics.affectedPeople} icon={Users} />
@@ -1698,12 +1862,12 @@ function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
       <motion.div className="panel map-panel" layout transition={reduceMotion ? quickFade : softSpring}>
         <div className="panel-header">
           <div>
-            <p>Live Tamil Nadu map</p>
+            <p>Live India incident map</p>
             <h2>Reports, rescues and impact locations</h2>
           </div>
           <StatusPill value="Live GIS" />
         </div>
-        <MapContainer center={[11.1271, 78.6569]} zoom={7} scrollWheelZoom={false} className="incident-map">
+        <MapContainer center={[22.9734, 78.6569]} zoom={5} scrollWheelZoom={false} className="incident-map">
           <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {disasters.map((item) => (
             <CircleMarker key={`d-${item.id}`} center={[item.latitude, item.longitude]} radius={12} pathOptions={{ color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.75 }}>
@@ -1726,7 +1890,7 @@ function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
             </CircleMarker>
           ))}
         </MapContainer>
-        {!disasters.length && !rescues.length && <EmptyState title="No map results" detail="Clear search or filters to restore Tamil Nadu operations." />}
+        {!disasters.length && !rescues.length && <EmptyState title="No map results" detail="Clear search or filters to restore national operations." />}
       </motion.div>
 
       <DecisionStack allocation={allocation} rescues={rescues} disasters={disasters} />
@@ -2180,7 +2344,7 @@ function ProgressBar({ value }) {
   );
 }
 
-function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, disasters, onRescueSubmit, routeResult, onFindSafeRoute }) {
+function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, disasters, onRescueSubmit, routeResult, onFindSafeRoute, onUseDeviceLocation }) {
   return (
     <section className="form-grid">
       <form className="panel form-panel" onSubmit={onSubmit}>
@@ -2225,6 +2389,10 @@ function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, di
           <input type="checkbox" checked={rescueDraft.trapped} onChange={(event) => setRescueDraft({ ...rescueDraft, trapped: event.target.checked })} />
           Victim is trapped
         </label>
+        <button className="location-consent-button" type="button" onClick={onUseDeviceLocation}>
+          <Crosshair size={18} /> {rescueDraft.location_consent ? `Device location captured · ±${rescueDraft.location_accuracy || '?'} m` : 'Share my device location with responders'}
+        </button>
+        <p className="consent-copy">Location is shared only after browser permission and is attached to this emergency request.</p>
         <div className="form-row">
           <Input label="Vulnerable people" type="number" value={rescueDraft.vulnerable_people} onChange={(value) => setRescueDraft({ ...rescueDraft, vulnerable_people: value })} />
           <Input label="Latitude" type="number" step="any" value={rescueDraft.latitude} onChange={(value) => setRescueDraft({ ...rescueDraft, latitude: value })} />
@@ -2461,6 +2629,228 @@ function CoordinationView({
       </section>
     </section>
   );
+}
+
+function ResponseHubView({
+  role,
+  disasters,
+  alerts,
+  hub,
+  welfareDraft,
+  setWelfareDraft,
+  supplyDraft,
+  setSupplyDraft,
+  donationDraft,
+  setDonationDraft,
+  newsDraft,
+  setNewsDraft,
+  onWelfareSubmit,
+  onWelfareAdvance,
+  onSupplySubmit,
+  onSupplyAdvance,
+  onHospitalAcknowledge,
+  onDonationSubmit,
+  onNewsSubmit,
+  onUseDeviceLocation,
+}) {
+  const canHandleWelfare = ['Admin', 'Police', 'Fire Service', 'NGO', 'Volunteer'].includes(role);
+  const canHandleSupplies = ['Admin', 'NGO', 'Shelter', 'Police', 'Fire Service'].includes(role);
+  const canPublishNews = role !== 'Citizen';
+  const canSeeHospitalPrep = ['Admin', 'Hospital', 'Ambulance'].includes(role);
+  const campaign = hub.campaigns?.find((item) => Number(item.id) === Number(donationDraft.campaign_id)) || hub.campaigns?.[0];
+  const hotline = hub.emergency_hotline || '112';
+
+  return (
+    <section className="view-stack response-hub-view">
+      <section className="command-hero response-hub-hero">
+        <div>
+          <p className="eyebrow">National response network</p>
+          <h2>Alerts, live field news, family tracing, rescue aid, and verified relief</h2>
+          <span>Country-wide incidents are consolidated here while private welfare and supply cases remain role-restricted.</span>
+          <div className="hub-actions">
+            <a className="emergency-call" href={`tel:${hotline}`}><PhoneCallIcon /> Call emergency responders · {hotline}</a>
+          </div>
+        </div>
+        <div className="hero-score-grid">
+          <HeroScore label="Active alerts" value={alerts.length} icon={Bell} />
+          <HeroScore label="Live sources" value={(hub.news_updates || []).filter((item) => item.is_live).length} icon={RadioTower} />
+          <HeroScore label="Aid cases" value={(hub.supply_requests || []).filter((item) => item.status !== 'delivered').length} icon={Package} />
+        </div>
+      </section>
+
+      <section className="hub-grid hub-grid-wide">
+        <section className="panel hub-panel">
+          <PanelTitle eyebrow="All-India warning feed" title="Disaster alerts across the country" />
+          <div className="hub-feed">
+            {alerts.slice(0, 8).map((alert) => (
+              <article className="hub-feed-item alert-item" key={alert.id}>
+                <div className="hub-item-heading">
+                  <div><strong>{alert.event || alert.audience}</strong><span>{alert.audience} · {alert.channel || alert.channels}</span></div>
+                  <StatusPill value={alert.severity || 'severe'} />
+                </div>
+                <p>{alert.message}</p>
+                {alert.instruction && <small><strong>Action:</strong> {alert.instruction}</small>}
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel hub-panel">
+          <PanelTitle eyebrow="Verified area coverage" title="Live disaster news and field updates" />
+          <div className="hub-feed">
+            {(hub.news_updates || []).slice(0, 8).map((item) => (
+              <article className="hub-feed-item" key={item.id}>
+                <div className="hub-item-heading">
+                  <div><strong>{item.headline}</strong><span>{item.district}, {item.state} · {item.source_name}</span></div>
+                  <StatusPill value={item.is_live ? 'Live' : 'Verified'} />
+                </div>
+                <p>{item.summary}</p>
+                {item.stream_url && <a className="stream-link" href={item.stream_url} target="_blank" rel="noreferrer"><RadioTower size={16} /> Open live stream</a>}
+              </article>
+            ))}
+            {!(hub.news_updates || []).length && <EmptyState title="No verified updates" detail="Authorized field desks can publish a stream or situation update." />}
+          </div>
+        </section>
+      </section>
+
+      {role === 'Citizen' && (
+        <section className="hub-grid">
+          <form className="panel form-panel" onSubmit={onWelfareSubmit}>
+            <PanelTitle eyebrow="Family tracing" title="Ask call responders to check a relative" />
+            <Select label="Alerted disaster area" value={welfareDraft.disaster_id} options={disasters.map((item) => ({ label: item.title, value: item.id }))} onChange={(value) => setWelfareDraft({ ...welfareDraft, disaster_id: value })} />
+            <div className="form-row form-row-2">
+              <Input label="Relative's full name" value={welfareDraft.relative_name} onChange={(value) => setWelfareDraft({ ...welfareDraft, relative_name: value })} required />
+              <Input label="Relationship" value={welfareDraft.relationship} onChange={(value) => setWelfareDraft({ ...welfareDraft, relationship: value })} required />
+            </div>
+            <Input label="Relative's phone (if known)" value={welfareDraft.relative_phone} onChange={(value) => setWelfareDraft({ ...welfareDraft, relative_phone: value })} />
+            <Input label="Last known location" value={welfareDraft.last_known_location} onChange={(value) => setWelfareDraft({ ...welfareDraft, last_known_location: value })} required />
+            <Input label="Your callback number" value={welfareDraft.requester_phone} onChange={(value) => setWelfareDraft({ ...welfareDraft, requester_phone: value })} required />
+            <div className="hub-form-actions">
+              <button className="location-consent-button" type="button" onClick={() => onUseDeviceLocation('welfare')}><Crosshair size={17} /> Add last-known coordinates</button>
+              <a className="compact-button secondary-button call-link" href={`tel:${hotline}`}>Call {hotline}</a>
+            </div>
+            <label className="toggle-row"><input type="checkbox" checked={welfareDraft.consent_to_contact} onChange={(event) => setWelfareDraft({ ...welfareDraft, consent_to_contact: event.target.checked })} /> I consent to responders contacting me and searching operational records.</label>
+            <button className="primary-action" type="submit"><Users size={18} /> Open welfare-check case</button>
+          </form>
+
+          <form className="panel form-panel" onSubmit={onSupplySubmit}>
+            <PanelTitle eyebrow="Isolated survivor aid" title="Request food, water, medicine, or supplies" />
+            <Select label="Linked disaster" value={supplyDraft.disaster_id} options={disasters.map((item) => ({ label: item.title, value: item.id }))} onChange={(value) => setSupplyDraft({ ...supplyDraft, disaster_id: value })} />
+            <div className="form-row form-row-2">
+              <Select label="Supply type" value={supplyDraft.category} options={['food and water', 'medicine', 'baby supplies', 'mobility support', 'sanitation', 'other']} onChange={(value) => setSupplyDraft({ ...supplyDraft, category: value })} />
+              <Select label="Urgency" value={supplyDraft.urgency} options={['medium', 'high', 'critical']} onChange={(value) => setSupplyDraft({ ...supplyDraft, urgency: value })} />
+            </div>
+            <Textarea label="What is needed and access constraints" value={supplyDraft.description} onChange={(value) => setSupplyDraft({ ...supplyDraft, description: value })} required />
+            <div className="form-row form-row-2">
+              <Input label="People waiting" type="number" value={supplyDraft.people_count} onChange={(value) => setSupplyDraft({ ...supplyDraft, people_count: value })} required />
+              <Input label="Contact phone" value={supplyDraft.contact_phone} onChange={(value) => setSupplyDraft({ ...supplyDraft, contact_phone: value })} required />
+            </div>
+            <button className="location-consent-button" type="button" onClick={() => onUseDeviceLocation('supply')}><Crosshair size={18} /> {supplyDraft.location_consent ? `Location captured · ±${supplyDraft.location_accuracy || '?'} m` : 'Share exact device location for delivery'}</button>
+            <p className="consent-copy">Your browser asks permission first. Coordinates are visible only to authorized response roles.</p>
+            <button className="primary-action" type="submit"><Package size={18} /> Send urgent supply request</button>
+          </form>
+        </section>
+      )}
+
+      <section className="hub-grid">
+        <section className="panel donation-card">
+          <PanelTitle eyebrow="Transparent relief funding" title="Fund future rescues and victim support" />
+          {campaign ? (
+            <>
+              <h3>{campaign.title}</h3>
+              <p>{campaign.description}</p>
+              <div className="donation-progress-copy"><strong>{formatCurrency(Number(campaign.confirmed_amount || 0), campaign.currency)}</strong><span>confirmed of {formatCurrency(Number(campaign.goal_amount || 0), campaign.currency)}</span></div>
+              <ProgressBar value={(Number(campaign.confirmed_amount || 0) / Math.max(1, Number(campaign.goal_amount || 0))) * 100} />
+              <span className="pledge-copy">Plus {formatCurrency(Number(campaign.pledged_amount || 0), campaign.currency)} pledged and awaiting confirmation.</span>
+            </>
+          ) : <EmptyState title="No active campaign" detail="Verified organizers can activate a relief campaign." />}
+        </section>
+        <form className="panel form-panel" onSubmit={onDonationSubmit}>
+          <PanelTitle eyebrow="Donation pledge" title="Support verified response work" />
+          <Select label="Campaign" value={donationDraft.campaign_id} options={(hub.campaigns || []).map((item) => ({ label: item.title, value: item.id }))} onChange={(value) => setDonationDraft({ ...donationDraft, campaign_id: value })} />
+          <div className="form-row form-row-2"><Input label="Name" value={donationDraft.donor_name} onChange={(value) => setDonationDraft({ ...donationDraft, donor_name: value })} required /><Input label="Email receipt" type="email" value={donationDraft.donor_email} onChange={(value) => setDonationDraft({ ...donationDraft, donor_email: value })} required /></div>
+          <Input label="Amount (INR)" type="number" value={donationDraft.amount} onChange={(value) => setDonationDraft({ ...donationDraft, amount: value })} required />
+          <Textarea label="Message (optional)" value={donationDraft.message} onChange={(value) => setDonationDraft({ ...donationDraft, message: value })} />
+          <label className="toggle-row"><input type="checkbox" checked={donationDraft.anonymous} onChange={(event) => setDonationDraft({ ...donationDraft, anonymous: event.target.checked })} /> Show this contribution as anonymous</label>
+          <button className="primary-action" type="submit" disabled={!campaign}><HeartPulse size={18} /> Pledge donation</button>
+          <p className="consent-copy">Online collection opens only when an approved payment URL is configured; otherwise this records a traceable pledge for manual confirmation.</p>
+        </form>
+      </section>
+
+      {(canHandleWelfare || canHandleSupplies || canSeeHospitalPrep) && (
+        <section className="hub-grid hub-grid-3">
+          {canHandleWelfare && <ResponseCaseList title="Family welfare checks" eyebrow="Call responder queue" items={hub.welfare_checks || []} empty="No family checks waiting." onAdvance={onWelfareAdvance} primary="relative_name" secondary="last_known_location" />}
+          {canHandleSupplies && <ResponseCaseList title="Food and supply requests" eyebrow="Relief delivery queue" items={hub.supply_requests || []} empty="No supply requests waiting." onAdvance={onSupplyAdvance} primary="description" secondary="assigned_unit" />}
+          {canSeeHospitalPrep && (
+            <section className="panel hub-panel">
+              <PanelTitle eyebrow="Incoming patient early warning" title="Hospital preparation alerts" />
+              <div className="hub-feed">
+                {(hub.hospital_notifications || []).map((item) => <article className="hub-feed-item" key={item.id}><div className="hub-item-heading"><div><strong>{item.expected_patients} incoming patient{item.expected_patients === 1 ? '' : 's'}</strong><span>Priority {item.priority} · rescue #{item.rescue_request_id}</span></div><StatusPill value={item.status} /></div><p>{item.message}</p><button className="compact-button" type="button" disabled={item.status === 'acknowledged'} onClick={() => onHospitalAcknowledge(item)}>{item.status === 'acknowledged' ? 'Preparation confirmed' : 'Acknowledge and prepare'}</button></article>)}
+                {!(hub.hospital_notifications || []).length && <EmptyState title="No incoming notices" detail="Automatic rescue allocation will notify the nearest hospital here." />}
+              </div>
+            </section>
+          )}
+        </section>
+      )}
+
+      {canHandleWelfare && (
+        <section className="panel hub-panel">
+          <PanelTitle eyebrow="Automatic proximity allocation" title="Professional rescue units, volunteers, and ambulances" />
+          <div className="dispatch-audit-grid">
+            {(hub.dispatches || []).slice(0, 12).map((item) => (
+              <article className="hub-feed-item" key={item.id}>
+                <div className="hub-item-heading"><div><strong>{item.responder_name}</strong><span>{item.responder_type.replace('_', ' ')} · rescue #{item.rescue_request_id}</span></div><StatusPill value={item.status} /></div>
+                <p>{Number(item.distance_km).toFixed(1)} km from the reported device coordinates at allocation time.</p>
+              </article>
+            ))}
+            {!(hub.dispatches || []).length && <EmptyState title="No automatic dispatches yet" detail="Creating a rescue request reserves the nearest available professional unit, volunteer, and required ambulance." />}
+          </div>
+        </section>
+      )}
+
+      {canPublishNews && (
+        <section className="panel form-panel news-publisher">
+          <PanelTitle eyebrow="Authorized publishing" title="Post a verified field update or live stream" />
+          <form className="news-publisher-form" onSubmit={onNewsSubmit}>
+            <Select label="Disaster" value={newsDraft.disaster_id} options={disasters.map((item) => ({ label: item.title, value: item.id }))} onChange={(value) => setNewsDraft({ ...newsDraft, disaster_id: value })} />
+            <Input label="Headline" value={newsDraft.headline} onChange={(value) => setNewsDraft({ ...newsDraft, headline: value })} required />
+            <Input label="Verified source" value={newsDraft.source_name} onChange={(value) => setNewsDraft({ ...newsDraft, source_name: value })} required />
+            <div className="form-row form-row-2"><Input label="State" value={newsDraft.state} onChange={(value) => setNewsDraft({ ...newsDraft, state: value })} required /><Input label="District" value={newsDraft.district} onChange={(value) => setNewsDraft({ ...newsDraft, district: value })} required /></div>
+            <Textarea label="Situation update" value={newsDraft.summary} onChange={(value) => setNewsDraft({ ...newsDraft, summary: value })} required />
+            <Input label="Livestream URL (optional)" type="url" value={newsDraft.stream_url} onChange={(value) => setNewsDraft({ ...newsDraft, stream_url: value })} />
+            <label className="toggle-row"><input type="checkbox" checked={newsDraft.is_live} onChange={(event) => setNewsDraft({ ...newsDraft, is_live: event.target.checked })} /> Mark source as live now</label>
+            <button className="primary-action" type="submit"><Send size={18} /> Publish verified update</button>
+          </form>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function ResponseCaseList({ title, eyebrow, items, empty, onAdvance, primary, secondary }) {
+  return (
+    <section className="panel hub-panel">
+      <PanelTitle eyebrow={eyebrow} title={title} />
+      <div className="hub-feed">
+        {items.map((item) => (
+          <article className="hub-feed-item" key={item.id}>
+            <div className="hub-item-heading"><div><strong>{item[primary]}</strong><span>{item[secondary] || `Case #${item.id}`}</span></div><StatusPill value={item.status} /></div>
+            {item.responder_notes && <p>{item.responder_notes}</p>}
+            <button className="compact-button" type="button" disabled={['closed', 'delivered'].includes(item.status)} onClick={() => onAdvance(item)}>Advance response</button>
+          </article>
+        ))}
+        {!items.length && <EmptyState title="Queue clear" detail={empty} />}
+      </div>
+    </section>
+  );
+}
+
+function PhoneCallIcon() {
+  return <span aria-hidden="true">☎</span>;
+}
+
+function formatCurrency(value, currency = 'INR') {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0);
 }
 
 function FacilitiesView({ role, facilities, updateHospital, updateShelter, updateAmbulanceStatus }) {

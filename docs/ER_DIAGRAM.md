@@ -21,3 +21,17 @@ Use these relationships to draw the ER diagram:
 - `users` 1--N `emergency_alerts` through `sender_id`
 - `emergency_alerts` 1--N `alert_acknowledgements`
 - `users` 1--N `alert_acknowledgements`
+- `disasters` 1--N `disaster_news_updates`
+- `users` 1--N `welfare_checks` as requester and optional responder
+- `disasters` 1--N `welfare_checks`
+- `hospitals` 1--N `hospital_notifications`
+- `rescue_requests` 1--N `hospital_notifications`
+- `users` 1--N `supply_requests`
+- `disasters` 1--N `supply_requests`
+- `disasters` 1--N `donation_campaigns`
+- `donation_campaigns` 1--N `donations`
+- `users` 1--N `location_pings`
+- `rescue_requests` 1--N `location_pings`
+- `supply_requests` 1--N `location_pings`
+- `rescue_requests` 1--N `response_dispatches`
+- `responder_units` are allocated through `response_dispatches.responder_type/responder_id`

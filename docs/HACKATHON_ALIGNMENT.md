@@ -21,7 +21,15 @@ This implementation treats the repository SRS as its primary acceptance statemen
 | Resource and volunteer silos | Shared inventory/distribution/volunteer snapshot; allocation decrements inventory and assignments change availability atomically | `GET /api/v1/coordination` |
 | Slow prioritization | Deterministic, offline-capable damage and rescue scoring with audit records | `/api/v1/ai/*` and `ai_assessments` |
 | Role ambiguity | Demo sessions and backend-enforced permissions for all SRS actors | `POST /api/v1/auth/demo-session` in demo mode |
+| Regional information silos | Public India-wide active incident, warning, and verified field-news aggregation | `GET /api/v1/national-alerts` |
+| Unverified or missing disaster-area coverage | Authorized, source-labelled field updates with optional live-stream URLs and verification state | `GET/POST /api/v1/news-updates` |
+| Families cannot trace relatives in affected areas | Consent-based welfare-check cases, emergency calling, responder ownership, notes, and status tracking | `/api/v1/welfare-checks` |
+| Manual dispatch delays | Transactional nearest professional rescue unit, registered volunteer, and required ambulance allocation using incident coordinates; assets are released when the rescue closes | `POST /api/v1/rescue-requests`, `responder_units`, and `response_dispatches` |
+| Hospitals receive patients without warning | Automatic nearest-capacity hospital notice with patient count, priority, condition, and acknowledgement | `/api/v1/hospital-notifications` |
+| Victims are isolated but not medically trapped | Dedicated food, water, medicine, and essential-supply cases with coordinator status tracking | `/api/v1/supply-requests` |
+| Responders cannot locate remote callers | Explicit browser-consent geolocation capture with accuracy and case linkage | `POST /api/v1/location-pings` |
+| Rescue funding lacks an auditable path | Campaign, pledge, payment handoff, confirmation, refund status, and aggregate totals | `/api/v1/donation-campaigns` and `/api/v1/donations` |
 
 ## Scope boundary
 
-SMS, siren, radio, and volunteer relay are represented as delivery channels and operational records. Actual telecom or siren-provider dispatch requires provider credentials and is intentionally outside this local MVP. Navigation is advisory and explicitly defers to official closures and responder instructions.
+SMS, siren, radio, and volunteer relay are represented as delivery channels and operational records. Actual telecom or siren-provider dispatch requires provider credentials and is intentionally outside this local MVP. Navigation is advisory and explicitly defers to official closures and responder instructions. Donation pledges are auditable without a payment provider; actual online collection is enabled only when an approved `DONATION_PAYMENT_URL` is configured. Device location is never requested or stored without an explicit user action and consent.

@@ -2,8 +2,9 @@ from flask import Blueprint, jsonify, request
 
 from ..auth import login_required
 from ..extensions import db
-from ..models import AiAssessment, Disaster, RescueRequest, RescueStatusHistory
+from ..models import AiAssessment, Ambulance, Disaster, LocationPing, RescueRequest, RescueStatusHistory, ResponseDispatch, ResponderUnit, Volunteer
 from ..services.ai_service import damage_estimation, relief_prioritization
+from ..services.dispatch_service import auto_dispatch_rescue
 
 disasters_bp = Blueprint("disasters", __name__)
 VALID_RESCUE_STATUSES = {"pending", "assigned", "en route", "triage", "rescued", "cancelled"}
@@ -94,8 +95,22 @@ def create_rescue_request():
     db.session.flush()
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status="pending", note="Request created", changed_by_id=request.user.id))
     db.session.add(AiAssessment(entity_type="rescue_request", entity_id=rescue.id, assessment_type="relief_prioritization", score=priority["score"], label=priority["label"], explanation=priority["explanation"]))
+    if data.get("location_consent") is True:
+        db.session.add(
+            LocationPing(
+                user_id=request.user.id,
+                rescue_request_id=rescue.id,
+                latitude=rescue.latitude,
+                longitude=rescue.longitude,
+                accuracy_meters=float(data["location_accuracy"]) if data.get("location_accuracy") not in {None, ""} else None,
+                consent_granted=True,
+            )
+        )
+    allocation = auto_dispatch_rescue(rescue, disaster)
+    if rescue.status == "assigned":
+        db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status="assigned", note=f"Automatically allocated to {rescue.assigned_unit}", changed_by_id=request.user.id))
     db.session.commit()
-    return jsonify({"rescue_request": rescue.to_dict(), "priority": priority}), 201
+    return jsonify({"rescue_request": rescue.to_dict(), "priority": priority, "automatic_allocation": allocation}), 201
 
 
 @disasters_bp.get("/rescue-requests")
@@ -121,6 +136,22 @@ def update_rescue_status(request_id):
     rescue.status = status
     if data.get("assigned_unit"):
         rescue.assigned_unit = data["assigned_unit"]
+    if status in {"rescued", "cancelled"}:
+        final_dispatch_status = "completed" if status == "rescued" else "cancelled"
+        for dispatch in ResponseDispatch.query.filter_by(rescue_request_id=rescue.id).all():
+            dispatch.status = final_dispatch_status
+            if dispatch.responder_type == "rescue_unit":
+                unit = db.session.get(ResponderUnit, dispatch.responder_id)
+                if unit:
+                    unit.availability_status = "available"
+            elif dispatch.responder_type == "volunteer":
+                volunteer = db.session.get(Volunteer, dispatch.responder_id)
+                if volunteer:
+                    volunteer.availability_status = "available"
+            elif dispatch.responder_type == "ambulance":
+                ambulance = db.session.get(Ambulance, dispatch.responder_id)
+                if ambulance:
+                    ambulance.status = "available"
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=status, note=data.get("note"), changed_by_id=request.user.id))
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict()})

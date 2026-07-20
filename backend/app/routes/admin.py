@@ -46,6 +46,16 @@ def provision_user():
             verification_status="verified",
         )
     )
+    if user.role == "Volunteer":
+        db.session.add(
+            Volunteer(
+                user_id=user.id,
+                skills=str(data.get("skills") or "general relief support"),
+                availability_status="available",
+                latitude=float(data["latitude"]) if data.get("latitude") not in {None, ""} else None,
+                longitude=float(data["longitude"]) if data.get("longitude") not in {None, ""} else None,
+            )
+        )
     db.session.commit()
     output = user.to_dict()
     output.pop("password_hash", None)

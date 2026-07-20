@@ -275,3 +275,166 @@ class AlertAcknowledgement(db.Model, SerializerMixin):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DisasterNewsUpdate(db.Model, SerializerMixin):
+    """Verified field update or external live-news stream for an incident."""
+
+    __tablename__ = "disaster_news_updates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), nullable=False, index=True)
+    headline = db.Column(db.String(200), nullable=False)
+    summary = db.Column(db.Text, nullable=False)
+    source_name = db.Column(db.String(120), nullable=False)
+    stream_url = db.Column(db.String(500))
+    state = db.Column(db.String(100), nullable=False, index=True)
+    district = db.Column(db.String(100), nullable=False, index=True)
+    is_live = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_verified = db.Column(db.Boolean, default=True, nullable=False)
+    published_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    published_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class WelfareCheck(db.Model, SerializerMixin):
+    """Family tracing request handled by an authorized call responder."""
+
+    __tablename__ = "welfare_checks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), index=True)
+    relative_name = db.Column(db.String(120), nullable=False, index=True)
+    relative_phone = db.Column(db.String(30))
+    relationship = db.Column(db.String(80), nullable=False)
+    last_known_location = db.Column(db.String(255), nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    requester_phone = db.Column(db.String(30), nullable=False)
+    consent_to_contact = db.Column(db.Boolean, default=False, nullable=False)
+    status = db.Column(db.String(40), default="requested", nullable=False, index=True)
+    responder_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    responder_notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class HospitalNotification(db.Model, SerializerMixin):
+    """Advance notice for a receiving hospital to prepare beds and triage."""
+
+    __tablename__ = "hospital_notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=False, index=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), nullable=False, index=True)
+    rescue_request_id = db.Column(db.Integer, db.ForeignKey("rescue_requests.id"), nullable=False, index=True)
+    expected_patients = db.Column(db.Integer, default=1, nullable=False)
+    priority = db.Column(db.String(30), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default="sent", nullable=False, index=True)
+    acknowledged_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    acknowledged_at = db.Column(db.DateTime(timezone=True))
+
+
+class SupplyRequest(db.Model, SerializerMixin):
+    """Food, water, medicine, or essential-supply request from an isolated group."""
+
+    __tablename__ = "supply_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), nullable=False, index=True)
+    category = db.Column(db.String(60), nullable=False, index=True)
+    description = db.Column(db.Text, nullable=False)
+    people_count = db.Column(db.Integer, default=1, nullable=False)
+    urgency = db.Column(db.String(30), default="high", nullable=False, index=True)
+    contact_phone = db.Column(db.String(30), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    location_accuracy = db.Column(db.Float)
+    status = db.Column(db.String(40), default="requested", nullable=False, index=True)
+    assigned_unit = db.Column(db.String(160))
+    responder_notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class DonationCampaign(db.Model, SerializerMixin):
+    __tablename__ = "donation_campaigns"
+
+    id = db.Column(db.Integer, primary_key=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), index=True)
+    title = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    goal_amount = db.Column(db.Numeric(14, 2), nullable=False)
+    currency = db.Column(db.String(10), default="INR", nullable=False)
+    status = db.Column(db.String(30), default="active", nullable=False, index=True)
+    organizer = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    ends_at = db.Column(db.DateTime(timezone=True))
+
+
+class Donation(db.Model, SerializerMixin):
+    __tablename__ = "donations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    campaign_id = db.Column(db.Integer, db.ForeignKey("donation_campaigns.id"), nullable=False, index=True)
+    donor_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    donor_name = db.Column(db.String(120), nullable=False)
+    donor_email = db.Column(db.String(160), nullable=False)
+    amount = db.Column(db.Numeric(14, 2), nullable=False)
+    currency = db.Column(db.String(10), default="INR", nullable=False)
+    anonymous = db.Column(db.Boolean, default=False, nullable=False)
+    message = db.Column(db.String(500))
+    reference = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    status = db.Column(db.String(30), default="pledged", nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class LocationPing(db.Model, SerializerMixin):
+    """Consent-based device location shared with responders."""
+
+    __tablename__ = "location_pings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    rescue_request_id = db.Column(db.Integer, db.ForeignKey("rescue_requests.id"), index=True)
+    supply_request_id = db.Column(db.Integer, db.ForeignKey("supply_requests.id"), index=True)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    accuracy_meters = db.Column(db.Float)
+    source = db.Column(db.String(30), default="device", nullable=False)
+    consent_granted = db.Column(db.Boolean, nullable=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class ResponseDispatch(db.Model, SerializerMixin):
+    """Auditable automatic proximity allocation for rescue responders."""
+
+    __tablename__ = "response_dispatches"
+
+    id = db.Column(db.Integer, primary_key=True)
+    rescue_request_id = db.Column(db.Integer, db.ForeignKey("rescue_requests.id"), nullable=False, index=True)
+    responder_type = db.Column(db.String(40), nullable=False, index=True)
+    responder_id = db.Column(db.Integer, nullable=False)
+    responder_name = db.Column(db.String(160), nullable=False)
+    distance_km = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(30), default="assigned", nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ResponderUnit(db.Model, SerializerMixin):
+    """Registered professional rescue, fire, police, or medical field unit."""
+
+    __tablename__ = "responder_units"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(160), unique=True, nullable=False)
+    unit_type = db.Column(db.String(50), nullable=False, index=True)
+    skills = db.Column(db.String(255), nullable=False)
+    contact_phone = db.Column(db.String(30), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    availability_status = db.Column(db.String(30), default="available", nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

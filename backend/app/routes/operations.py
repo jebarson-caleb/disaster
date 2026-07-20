@@ -11,15 +11,23 @@ from ..models import (
     AlertAcknowledgement,
     Ambulance,
     Disaster,
+    DisasterNewsUpdate,
+    Donation,
+    DonationCampaign,
     EmergencyAlert,
     Hospital,
+    HospitalNotification,
     RescueRequest,
+    ResponseDispatch,
+    ResponderUnit,
     Resource,
     ResourceDistribution,
     Shelter,
+    SupplyRequest,
     User,
     Volunteer,
     VolunteerAssignment,
+    WelfareCheck,
 )
 
 operations_bp = Blueprint("operations", __name__)
@@ -48,6 +56,18 @@ def bootstrap():
         .group_by(AlertAcknowledgement.alert_id)
         .all()
     )
+    welfare_query = WelfareCheck.query.order_by(WelfareCheck.created_at.desc())
+    supply_query = SupplyRequest.query.order_by(SupplyRequest.created_at.desc())
+    if request.user.role not in {"Admin", "Police", "Fire Service", "NGO", "Volunteer"}:
+        welfare_query = welfare_query.filter_by(requester_id=request.user.id)
+    if request.user.role not in {"Admin", "NGO", "Shelter", "Police", "Fire Service"}:
+        supply_query = supply_query.filter_by(requester_id=request.user.id)
+    campaigns = DonationCampaign.query.filter_by(status="active").order_by(DonationCampaign.created_at.desc()).all()
+    campaign_items = []
+    for campaign in campaigns:
+        confirmed = db.session.query(func.coalesce(func.sum(Donation.amount), 0)).filter(Donation.campaign_id == campaign.id, Donation.status == "confirmed").scalar()
+        pledged = db.session.query(func.coalesce(func.sum(Donation.amount), 0)).filter(Donation.campaign_id == campaign.id, Donation.status.in_(["pledged", "pending_payment"])).scalar()
+        campaign_items.append({**campaign.to_dict(), "goal_amount": float(campaign.goal_amount), "confirmed_amount": float(confirmed or 0), "pledged_amount": float(pledged or 0)})
     return jsonify(
         {
             "disasters": [item.to_dict() for item in Disaster.query.order_by(Disaster.created_at.desc()).limit(200).all()],
@@ -66,6 +86,16 @@ def bootstrap():
                 }
                 for item in alerts
             ],
+            "response_hub": {
+                "news_updates": [item.to_dict() for item in DisasterNewsUpdate.query.order_by(DisasterNewsUpdate.is_live.desc(), DisasterNewsUpdate.published_at.desc()).limit(100).all()],
+                "welfare_checks": [item.to_dict() for item in welfare_query.limit(200).all()],
+                "hospital_notifications": [item.to_dict() for item in HospitalNotification.query.order_by(HospitalNotification.created_at.desc()).limit(200).all()] if request.user.role in {"Admin", "Hospital", "Ambulance"} else [],
+                "supply_requests": [item.to_dict() for item in supply_query.limit(200).all()],
+                "campaigns": campaign_items,
+                "dispatches": [item.to_dict() for item in ResponseDispatch.query.order_by(ResponseDispatch.created_at.desc()).limit(200).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
+                "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
+                "emergency_hotline": current_app.config.get("EMERGENCY_HOTLINE", "112"),
+            },
             "server_time": datetime.now(timezone.utc).isoformat(),
         }
     )

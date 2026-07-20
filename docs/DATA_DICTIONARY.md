@@ -21,3 +21,12 @@
 | `notifications` | Stores alerts for users or roles | `role`, `message`, `status` |
 | `emergency_alerts` | Stores CAP-inspired authoritative public warnings | `identifier`, `audience`, `channels`, `urgency`, `severity`, `certainty`, `instruction` |
 | `alert_acknowledgements` | Confirms last-mile receipt of warnings | `alert_id`, `user_id`, `response`, optional location |
+| `disaster_news_updates` | Stores verified disaster-area news and live sources | `headline`, `source_name`, `stream_url`, `state`, `district`, `is_live` |
+| `welfare_checks` | Tracks relative/next-of-kin tracing handled by call responders | `relative_name`, `last_known_location`, `requester_phone`, `status`, `responder_id` |
+| `hospital_notifications` | Warns receiving hospitals of automatically routed patients | `hospital_id`, `rescue_request_id`, `expected_patients`, `priority`, `status` |
+| `supply_requests` | Tracks food, water, medicine, and essential aid for isolated survivors | `category`, `people_count`, `urgency`, location, `assigned_unit`, `status` |
+| `donation_campaigns` | Defines verified relief-funding campaigns | `goal_amount`, `currency`, `organizer`, `status` |
+| `donations` | Audits pledges and confirmed/refunded contributions | `amount`, `reference`, `anonymous`, `status` |
+| `location_pings` | Stores explicitly consented device locations and accuracy | `user_id`, optional rescue/supply case, coordinates, `consent_granted` |
+| `response_dispatches` | Audits automatic proximity allocation | `rescue_request_id`, `responder_type`, `responder_name`, `distance_km`, `status` |
+| `responder_units` | Registers professional rescue, fire, police, and medical field units | `unit_type`, `skills`, location, `availability_status` |

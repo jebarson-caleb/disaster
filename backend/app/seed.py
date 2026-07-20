@@ -1,10 +1,27 @@
 from .auth import hash_password
 from .extensions import db
-from .models import Ambulance, Disaster, EmergencyAlert, Hospital, RescueRequest, Resource, Shelter, User, Volunteer
+from .models import (
+    Ambulance,
+    Disaster,
+    DisasterNewsUpdate,
+    DonationCampaign,
+    EmergencyAlert,
+    Hospital,
+    HospitalNotification,
+    RescueRequest,
+    Resource,
+    ResponderUnit,
+    Shelter,
+    SupplyRequest,
+    User,
+    Volunteer,
+    WelfareCheck,
+)
 
 
 def seed_demo_data():
     if User.query.first():
+        seed_extended_demo_data()
         return
 
     admin = User(
@@ -138,4 +155,178 @@ def seed_demo_data():
         instruction="Move to Velachery Govt School Relief Camp and avoid the lake bund service road.",
     )
     db.session.add_all([*rescues, alert])
+    db.session.commit()
+    seed_extended_demo_data()
+
+
+def seed_extended_demo_data():
+    """Add feature-rich demo records without duplicating an existing database."""
+    admin = User.query.filter_by(role="Admin").first()
+    citizen = User.query.filter_by(role="Citizen").first()
+    if not admin or not citizen:
+        return
+
+    incident_specs = [
+        {
+            "title": "Brahmaputra flooding isolates Dibrugarh villages",
+            "disaster_type": "flood",
+            "description": "River overflow has cut road access to several villages; boats and food packets are being mobilized.",
+            "address": "Dibrugarh District, Assam",
+            "latitude": 27.4728,
+            "longitude": 94.9120,
+            "people_affected": 840,
+            "severity_hint": "critical",
+        },
+        {
+            "title": "Cloudburst blocks access near Joshimath",
+            "disaster_type": "landslide",
+            "description": "Debris has blocked a mountain access road and isolated travellers in remote settlements.",
+            "address": "Chamoli District, Uttarakhand",
+            "latitude": 30.5553,
+            "longitude": 79.5650,
+            "people_affected": 126,
+            "severity_hint": "high",
+        },
+        {
+            "title": "Cyclone evacuation along Puri coast",
+            "disaster_type": "cyclone",
+            "description": "Coastal evacuation and shelter activation are underway ahead of severe wind and storm surge.",
+            "address": "Puri District, Odisha",
+            "latitude": 19.8135,
+            "longitude": 85.8312,
+            "people_affected": 1260,
+            "severity_hint": "high",
+        },
+    ]
+    incidents = {}
+    for spec in incident_specs:
+        incident = Disaster.query.filter_by(title=spec["title"]).first()
+        if not incident:
+            incident = Disaster(**spec, reported_by_id=citizen.id)
+            db.session.add(incident)
+            db.session.flush()
+        incidents[incident.title] = incident
+
+    responder_specs = [
+        ("TNDRF Boat Rescue Unit 2", "professional rescue", "swift-water rescue, evacuation, first aid", "9000000201", 12.9820, 80.2220),
+        ("NDRF Mountain Rescue Team North", "professional rescue", "rope rescue, landslide search, remote evacuation", "9000000202", 30.5560, 79.5660),
+        ("Odisha Coastal Rescue Unit 4", "professional rescue", "cyclone evacuation, water rescue, shelter transfer", "9000000203", 19.8150, 85.8320),
+        ("Assam SDRF River Rescue Team", "professional rescue", "boat rescue, flood logistics, medical evacuation", "9000000204", 27.4730, 94.9130),
+    ]
+    for name, unit_type, skills, phone, latitude, longitude in responder_specs:
+        if not ResponderUnit.query.filter_by(name=name).first():
+            db.session.add(ResponderUnit(name=name, unit_type=unit_type, skills=skills, contact_phone=phone, latitude=latitude, longitude=longitude))
+
+    alert_specs = [
+        ("RESQ-DEMO-ASSAM-001", incidents[incident_specs[0]["title"]], "Assam - Dibrugarh river belt", "Move to raised shelters. Do not cross flooded roads; call 112 if isolated."),
+        ("RESQ-DEMO-UK-001", incidents[incident_specs[1]["title"]], "Uttarakhand - Chamoli / Joshimath", "Avoid blocked mountain roads and share device location when requesting rescue."),
+        ("RESQ-DEMO-ODISHA-001", incidents[incident_specs[2]["title"]], "Odisha - Puri coastal blocks", "Complete evacuation to the nearest cyclone shelter and carry medicines and identity documents."),
+    ]
+    for identifier, incident, audience, instruction in alert_specs:
+        if not EmergencyAlert.query.filter_by(identifier=identifier).first():
+            db.session.add(
+                EmergencyAlert(
+                    identifier=identifier,
+                    sender_id=admin.id,
+                    event=incident.title,
+                    audience=audience,
+                    channels="SMS + radio + web + volunteer relay",
+                    urgency="immediate",
+                    severity="severe",
+                    certainty="observed",
+                    message=incident.description,
+                    instruction=instruction,
+                )
+            )
+
+    chennai_incident = Disaster.query.filter_by(title="Flooding near Velachery lake bund").first()
+    news_specs = [
+        (incidents[incident_specs[0]["title"]], "Live: boat teams enter isolated Dibrugarh villages", "Assam", "Dibrugarh", True),
+        (incidents[incident_specs[1]["title"]], "Live: alternate rescue route opened near Joshimath", "Uttarakhand", "Chamoli", True),
+        (incidents[incident_specs[2]["title"]], "Live: Puri shelters begin coastal intake", "Odisha", "Puri", True),
+    ]
+    if chennai_incident:
+        news_specs.append((chennai_incident, "Live: Velachery flood rescue and relief corridor", "Tamil Nadu", "Chennai", True))
+    for incident, headline, state, district, is_live in news_specs:
+        existing_news = DisasterNewsUpdate.query.filter_by(disaster_id=incident.id).first()
+        if existing_news:
+            existing_news.is_live = is_live
+            existing_news.stream_url = "https://www.youtube.com/@DDNews/live"
+        elif not DisasterNewsUpdate.query.filter_by(headline=headline).first():
+            db.session.add(
+                DisasterNewsUpdate(
+                    disaster_id=incident.id,
+                    headline=headline,
+                    summary=f"Verified operations update for {incident.address}. Follow local authority instructions and avoid unverified forwards.",
+                    source_name="ResQ verified field desk",
+                    stream_url="https://www.youtube.com/@DDNews/live" if is_live else None,
+                    state=state,
+                    district=district,
+                    is_live=is_live,
+                    is_verified=True,
+                    published_by_id=admin.id,
+                )
+            )
+
+    flood = Disaster.query.order_by(Disaster.id).first()
+    if flood and not DonationCampaign.query.filter_by(title="National Emergency Rescue & Victim Relief Fund").first():
+        db.session.add(
+            DonationCampaign(
+                disaster_id=flood.id,
+                title="National Emergency Rescue & Victim Relief Fund",
+                description="Funds verified rescue transport, emergency food, medical supplies, temporary shelter, and victim recovery support.",
+                goal_amount=2500000,
+                currency="INR",
+                organizer="ResQ Command Relief Coalition",
+            )
+        )
+
+    if flood and not SupplyRequest.query.filter_by(requester_id=citizen.id).first():
+        db.session.add(
+            SupplyRequest(
+                requester_id=citizen.id,
+                disaster_id=flood.id,
+                category="food and water",
+                description="Five residents isolated on an upper floor need drinking water, ready-to-eat food, and essential medicines.",
+                people_count=5,
+                urgency="high",
+                contact_phone=citizen.phone,
+                latitude=12.9806,
+                longitude=80.2194,
+                location_accuracy=18,
+                status="assigned",
+                assigned_unit="Greater Chennai Volunteer Team A",
+            )
+        )
+
+    if flood and not WelfareCheck.query.filter_by(requester_id=citizen.id).first():
+        db.session.add(
+            WelfareCheck(
+                requester_id=citizen.id,
+                disaster_id=flood.id,
+                relative_name="Anita Raman",
+                relationship="Sister",
+                last_known_location="Velachery lake bund service road",
+                requester_phone=citizen.phone,
+                consent_to_contact=True,
+                status="contacting",
+                responder_id=admin.id,
+                responder_notes="Call responder is checking the shelter intake list and field-team registry.",
+            )
+        )
+
+    rescue = RescueRequest.query.order_by(RescueRequest.id).first()
+    hospital = Hospital.query.order_by(Hospital.id).first()
+    if rescue and hospital and not HospitalNotification.query.filter_by(rescue_request_id=rescue.id).first():
+        db.session.add(
+            HospitalNotification(
+                hospital_id=hospital.id,
+                disaster_id=rescue.disaster_id,
+                rescue_request_id=rescue.id,
+                expected_patients=rescue.people_count,
+                priority=rescue.priority_label,
+                message=f"Prepare pediatric and emergency triage for {rescue.people_count} incoming patient(s) from rescue #{rescue.id}.",
+            )
+        )
+
     db.session.commit()

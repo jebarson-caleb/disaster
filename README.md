@@ -16,6 +16,9 @@ The zero-configuration deployment uses SQLite in Vercel's writable `/tmp` direct
 - Flask REST API with JWT auth, SQLAlchemy models, role authorization, disaster/rescue/facility/admin routes, and local AI scoring services.
 - Live frontend/API synchronization with offline-safe citizen submissions and automatic reconnect replay.
 - CAP-inspired multi-channel public alerts, citizen receipt confirmation, nearest-capacity safe routing, and resource/volunteer coordination.
+- India-wide alert aggregation, verified disaster-area live-news sources, and responder-managed family welfare checks.
+- Automatic proximity dispatch for volunteers and ambulances, plus advance receiving-hospital preparation notices.
+- Consent-based device location, isolated-survivor food/supply requests, and auditable relief donation campaigns.
 - MySQL DBMS deliverables: normalized schema, views, stored procedures, triggers, sample data, complex queries, and a 5,000+ record seed generator.
 - Academic docs: SRS, relational schema, data dictionary, and query notes.
 

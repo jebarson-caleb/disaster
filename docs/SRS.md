@@ -19,6 +19,13 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - Authorized command roles can issue consistent multi-channel public warnings and view receipt counts.
 - Citizens can confirm warning receipt and find the nearest available shelter or hospital from request coordinates.
 - Citizen reports remain usable during connectivity loss and synchronize when service returns.
+- Anyone can view an India-wide feed of active alerts and verified disaster-area news or live sources.
+- Relatives can open consent-based welfare checks, call the national emergency hotline, and track responder updates.
+- New rescue requests automatically reserve the nearest available volunteer and ambulance when appropriate.
+- The nearest hospital with capacity receives an incoming-patient preparation notice and can acknowledge readiness.
+- Isolated survivors can request food, water, medicine, and essential supplies using device coordinates.
+- Device location is captured only after explicit browser permission and stored with accuracy and consent evidence.
+- People can pledge to verified donation campaigns; administrators can confirm payment status and totals.
 
 ## Non-Functional Requirements
 
@@ -28,6 +35,7 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - AI decisions must remain available without internet access.
 - Backend configuration must support MySQL through environment variables.
 - Tests must cover auth, core emergency workflows, facility updates, and AI endpoints.
+- Sensitive welfare, supply, and location records must be filtered by authenticated role and requester ownership.
 
 ## Actors
 
@@ -48,3 +56,8 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - Admin can assign a rescue unit and update status history.
 - Hospital and shelter capacity changes are visible to operations users.
 - Dashboard displays maps, charts, and live operational counts.
+- National alerts show multiple affected states and verified area updates.
+- A critical rescue produces proximity dispatch records and an advance hospital notice.
+- A citizen can submit and track both a family welfare check and an isolated-survivor supply case.
+- Location sharing fails without explicit consent and succeeds with permission and coordinates.
+- A donation pledge receives a unique reference and confirmed payments update campaign totals.
