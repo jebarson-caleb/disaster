@@ -5,7 +5,7 @@ from uuid import uuid4
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
-from ..auth import create_token, login_required
+from ..auth import login_required, session_response
 from ..extensions import db
 from ..models import (
     AlertAcknowledgement,
@@ -200,7 +200,9 @@ def demo_session():
     user = User.query.filter_by(role=role).order_by(User.id).first()
     if user is None:
         return jsonify({"error": f"No demo user is configured for {role}"}), 404
-    return jsonify({"user": public_user(user), "token": create_token(user)})
+    response = session_response(user, mfa_state="not_required")
+    db.session.commit()
+    return response
 
 
 def public_user(user):

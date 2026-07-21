@@ -1,12 +1,9 @@
 from app import create_app
-from app.extensions import db
-from app.seed import seed_demo_data
+from app.bootstrap import initialize_database
 
 app = create_app()
 
 if __name__ == "__main__":
-    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
-        with app.app_context():
-            db.create_all()
-            seed_demo_data()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    with app.app_context():
+        initialize_database()
+    app.run(host="0.0.0.0", port=5000, debug=app.config.get("APP_ENV") == "development")

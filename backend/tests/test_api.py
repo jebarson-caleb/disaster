@@ -9,7 +9,7 @@ def test_register_login_and_me(client):
         "email": "citizen@test.local",
         "phone": "9000000001",
         "role": "Citizen",
-        "password": "password123",
+        "password": "LongTestPassword123!",
     }
     response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
@@ -146,7 +146,7 @@ def test_admin_can_provision_operational_user(client, auth_headers):
             "email": "commander@hospital.local",
             "phone": "9000000011",
             "role": "Hospital",
-            "password": "securepass123",
+            "password": "SecureHospitalPass123!",
             "organization_name": "District Hospital",
         },
     )
@@ -156,7 +156,7 @@ def test_admin_can_provision_operational_user(client, auth_headers):
 
     login_response = client.post(
         "/api/v1/auth/login",
-        json={"email": "commander@hospital.local", "password": "securepass123"},
+        json={"email": "commander@hospital.local", "password": "SecureHospitalPass123!"},
     )
     assert login_response.status_code == 200
 

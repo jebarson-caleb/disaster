@@ -1815,6 +1815,31 @@ button {
   background: linear-gradient(135deg, #f0fdfa, #ffffff);
 }
 
+.auth-gate {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 22px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(13, 148, 136, 0.16), transparent 32%),
+    linear-gradient(145deg, #f8fafc, #ecfeff);
+}
+
+.auth-gate-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.auth-gate-brand div:last-child { display: grid; }
+.auth-gate-brand strong { font-size: 1.3rem; }
+.auth-gate-brand span { color: var(--muted); }
+.auth-gate .account-panel { width: min(920px, calc(100vw - 48px)); margin: 0; }
+.auth-gate-loading { display: flex; align-items: center; gap: 12px; }
+.auth-gate-loading h1 { margin: 0; font-size: 1.1rem; }
+
 .account-panel h2 { margin: 3px 0 6px; }
 
 .account-panel > div > span { color: var(--muted); }
@@ -1831,6 +1856,88 @@ button {
   gap: 8px;
 }
 
+.account-notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  color: #334155;
+  border-left: 3px solid #0f766e;
+  background: #f0fdfa;
+}
+
+.mfa-recovery-panel,
+.account-panel > section.account-form {
+  grid-column: 1 / -1;
+}
+
+.mfa-recovery-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+}
+
+.recovery-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.recovery-code-grid code,
+.mfa-secret code {
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: #e2e8f0;
+  color: #0f172a;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.mfa-secret {
+  display: grid;
+  gap: 5px;
+  grid-column: 1 / -1;
+}
+
+.mfa-secret span { color: var(--muted); font-size: 0.82rem; }
+
+.access-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.access-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.access-form .primary-action { min-height: 42px; }
+.muted-copy { color: var(--muted); }
+.access-users-panel { grid-column: 1 / -1; }
+
+.managed-user-list { display: grid; gap: 10px; }
+
+.managed-user {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.managed-user > div:first-child { display: grid; gap: 4px; }
+.managed-user span { color: var(--muted); font-size: 0.88rem; }
+.managed-user-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+
 .citizen-alert-card .primary-action:disabled {
   opacity: 0.7;
   cursor: default;
@@ -1841,9 +1948,14 @@ button {
   .citizen-alert-card { flex-direction: column; }
 
   .account-panel,
-  .account-form { grid-template-columns: 1fr; }
+  .account-form,
+  .access-layout,
+  .access-form,
+  .managed-user { grid-template-columns: 1fr; }
 
   .account-panel { margin: 12px 16px 0; }
+  .recovery-code-grid { grid-template-columns: 1fr; }
+  .access-users-panel { grid-column: auto; }
 
   .hub-grid,
   .hub-grid-wide,

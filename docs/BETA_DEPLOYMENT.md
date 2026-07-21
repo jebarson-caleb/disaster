@@ -1,0 +1,72 @@
+# Beta Deployment and Operations
+
+## Vercel release checklist
+
+1. Provision PostgreSQL through a Vercel Marketplace integration such as Neon, or another managed provider. Copy its pooled, TLS-enabled connection URL to `DATABASE_URL`. Do not use SQLite on Vercel; the writable `/tmp` directory is temporary.
+2. Generate two different application secrets. For example, run `openssl rand -hex 32` twice and assign the results to `SECRET_KEY` and `JWT_SECRET_KEY`.
+3. Generate the independent MFA encryption key with `python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"` and assign it to `MFA_ENCRYPTION_KEY`.
+4. Set `BOOTSTRAP_ADMIN_EMAIL` and a unique `BOOTSTRAP_ADMIN_PASSWORD` of at least 15 characters. Set `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_PHONE` if desired.
+5. Leave `DEMO_MODE=false`, `APP_ENV=production`, `AUTO_MIGRATE=true`, and `COOKIE_SECURE=true`. These are already the Vercel defaults. Do not set `VITE_DEMO_MODE` on production builds.
+6. Optional but recommended for multi-instance beta traffic: provision Redis and set `RATELIMIT_STORAGE_URI` to its TLS `rediss://` URL. Database-backed account lockout remains active even when this is not configured.
+7. Keep the Vercel application preset as **Services**, root directory `./`, frontend service `frontend` (Vite), and backend service `backend` (`index:app`). Deploy.
+
+## Required environment variables
+
+| Variable | Requirement |
+| --- | --- |
+| `DATABASE_URL` | Persistent `postgresql://...` or `mysql+pymysql://...` database; PostgreSQL is recommended |
+| `SECRET_KEY` | Random 32+ character secret, different from the JWT secret |
+| `JWT_SECRET_KEY` | A second independent random 32+ character secret |
+| `MFA_ENCRYPTION_KEY` | URL-safe base64 encoding of 32 independent random bytes; use the command above |
+| `BOOTSTRAP_ADMIN_EMAIL` | First authorized administrator email |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Unique 15–128 character initial administrator password |
+
+Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, and `OLLAMA_MODEL`.
+
+## Database migrations
+
+Checked-in Alembic migrations run automatically before the backend accepts requests. PostgreSQL and MySQL deployments use a database advisory lock so concurrent cold starts cannot apply the same migration at once. A database created by an earlier `db.create_all()` release is detected, validated against the supported legacy schema, stamped, upgraded, and kept intact. Startup fails instead of guessing when an unversioned database is incomplete or only partially upgraded.
+
+Before merging a model change, generate and review its migration, test it against a production-like backup, and run:
+
+```bash
+cd backend
+flask --app run:app db check
+pytest -q
+```
+
+Keep `AUTO_MIGRATE=true` for the Vercel one-click flow. Teams that later move migrations into a dedicated release job may set it to `false` only after replacing the startup step and updating the readiness/release procedure.
+
+## Acceptance checks
+
+After deployment:
+
+1. Open `https://<deployment>/api/v1/health`; expect HTTP 200 and `status: ok`.
+2. Open `https://<deployment>/api/v1/ready`; expect HTTP 200, `status: ready`, and both checks `true`. A 503 means the release must not receive beta traffic; inspect Vercel function logs using the returned request ID.
+3. Open the site in a private browser. Confirm operational data is hidden behind the login screen.
+4. Sign in as the bootstrap administrator, open **User Access**, provision a test operational account, deactivate/reactivate it, reset its password, create a non-critical test alert, then sign out. Confirm `/api/v1/auth/me` returns 401 afterward.
+5. On the administrator's first login, enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes.
+6. Register a Citizen test account, submit and track a test incident, acknowledge an alert, and verify role restrictions prevent it from publishing an alert.
+7. Test mobile layout, location consent denial/approval, offline submission and reconnect, and the emergency hotline for the deployment country.
+
+## Operational boundaries
+
+- Call/SMS/siren/radio values are coordination records; actual delivery needs an approved communications provider and credentials.
+- `DONATION_PAYMENT_URL` is only a handoff to an approved checkout. Without it, donations are recorded as pledges and no money is collected.
+- Safe routes are advisory and must not override official closures or responder instructions.
+- Device location is captured only after an explicit browser action and consent.
+- Ollama is optional; deterministic scoring remains available without it.
+
+## Beta operations
+
+- Limit the first cohort, name an incident commander and privacy contact, and publish support/escalation channels before inviting users.
+- Monitor Vercel errors, readiness, database capacity, failed login/audit events, dispatch queues, and unacknowledged hospital notices.
+- Back up PostgreSQL daily and perform a restoration drill before handling real incidents.
+- Rotate initial administrator credentials after first use. Rotate application secrets through a coordinated maintenance window because doing so invalidates active sessions.
+- Review pending volunteer registrations in **User Access** and verify identity/affiliation out of band before approving access.
+- Define retention periods for location, welfare, contact, and audit data before collecting real personal information.
+- Roll back the Vercel deployment if readiness fails or critical workflows regress. Do not silently fall back to demo data in production.
+
+## Release gate
+
+The code is beta-deployable when CI passes and `/ready` is green. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.

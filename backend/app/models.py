@@ -41,7 +41,7 @@ class RoleProfile(db.Model, SerializerMixin):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     verification_status = db.Column(db.String(30), default="pending", nullable=False)
-    user = db.relationship("User", backref="profile", uselist=False)
+    user = db.relationship("User", backref=db.backref("profile", uselist=False))
 
 
 class Disaster(db.Model, SerializerMixin):
@@ -438,3 +438,76 @@ class ResponderUnit(db.Model, SerializerMixin):
     longitude = db.Column(db.Float, nullable=False)
     availability_status = db.Column(db.String(30), default="available", nullable=False, index=True)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AuthSession(db.Model, SerializerMixin):
+    """Revocable server-side login session referenced by an opaque cookie."""
+
+    __tablename__ = "auth_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    csrf_hash = db.Column(db.String(64), nullable=False)
+    user_agent = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    last_seen_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    idle_expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    absolute_expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), index=True)
+    mfa_state = db.Column(db.String(30), default="not_required", nullable=False, index=True)
+
+
+class AccountSecurity(db.Model, SerializerMixin):
+    """Authentication state kept separate from the legacy users table."""
+
+    __tablename__ = "account_security"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime(timezone=True), index=True)
+    last_login_at = db.Column(db.DateTime(timezone=True))
+    password_changed_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class AuditEvent(db.Model, SerializerMixin):
+    """Minimal security/operations audit trail without credentials or sensitive payloads."""
+
+    __tablename__ = "audit_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(80), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
+    outcome = db.Column(db.String(30), nullable=False, index=True)
+    request_id = db.Column(db.String(64), index=True)
+    details = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class MfaCredential(db.Model, SerializerMixin):
+    """Encrypted TOTP seed and one-time recovery-code hashes."""
+
+    __tablename__ = "mfa_credentials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    secret_ciphertext = db.Column(db.String(500), nullable=False)
+    recovery_code_hashes = db.Column(db.Text, nullable=False, default="[]")
+    enabled_at = db.Column(db.DateTime(timezone=True), index=True)
+    last_used_step = db.Column(db.BigInteger)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class MfaChallenge(db.Model, SerializerMixin):
+    """Short-lived, single-use proof that the password factor succeeded."""
+
+    __tablename__ = "mfa_challenges"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    consumed_at = db.Column(db.DateTime(timezone=True), index=True)
+    failed_attempts = db.Column(db.Integer, default=0, nullable=False)

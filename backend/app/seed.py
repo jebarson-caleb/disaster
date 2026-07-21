@@ -29,23 +29,23 @@ def seed_demo_data():
         email="admin@rescue.local",
         phone="9000000000",
         role="Admin",
-        password_hash=hash_password("password123"),
+        password_hash=hash_password("DemoPassword123!"),
     )
     citizen = User(
         name="Kavya Raman",
         email="citizen@rescue.local",
         phone="9000000001",
         role="Citizen",
-        password_hash=hash_password("password123"),
+        password_hash=hash_password("DemoPassword123!"),
     )
     demo_users = {
-        "Volunteer": User(name="Ravi Kumar", email="volunteer@rescue.local", phone="9000000002", role="Volunteer", password_hash=hash_password("password123")),
-        "Hospital": User(name="Hospital Duty Officer", email="hospital@rescue.local", phone="9000000003", role="Hospital", password_hash=hash_password("password123")),
-        "Shelter": User(name="Shelter Coordinator", email="shelter@rescue.local", phone="9000000004", role="Shelter", password_hash=hash_password("password123")),
-        "Ambulance": User(name="108 Dispatcher", email="ambulance@rescue.local", phone="9000000005", role="Ambulance", password_hash=hash_password("password123")),
-        "NGO": User(name="Relief NGO Lead", email="ngo@rescue.local", phone="9000000006", role="NGO", password_hash=hash_password("password123")),
-        "Police": User(name="Police Control Room", email="police@rescue.local", phone="9000000007", role="Police", password_hash=hash_password("password123")),
-        "Fire Service": User(name="Fire Control Officer", email="fire@rescue.local", phone="9000000008", role="Fire Service", password_hash=hash_password("password123")),
+        "Volunteer": User(name="Ravi Kumar", email="volunteer@rescue.local", phone="9000000002", role="Volunteer", password_hash=hash_password("DemoPassword123!")),
+        "Hospital": User(name="Hospital Duty Officer", email="hospital@rescue.local", phone="9000000003", role="Hospital", password_hash=hash_password("DemoPassword123!")),
+        "Shelter": User(name="Shelter Coordinator", email="shelter@rescue.local", phone="9000000004", role="Shelter", password_hash=hash_password("DemoPassword123!")),
+        "Ambulance": User(name="108 Dispatcher", email="ambulance@rescue.local", phone="9000000005", role="Ambulance", password_hash=hash_password("DemoPassword123!")),
+        "NGO": User(name="Relief NGO Lead", email="ngo@rescue.local", phone="9000000006", role="NGO", password_hash=hash_password("DemoPassword123!")),
+        "Police": User(name="Police Control Room", email="police@rescue.local", phone="9000000007", role="Police", password_hash=hash_password("DemoPassword123!")),
+        "Fire Service": User(name="Fire Control Officer", email="fire@rescue.local", phone="9000000008", role="Fire Service", password_hash=hash_password("DemoPassword123!")),
     }
     volunteer_user = demo_users["Volunteer"]
     db.session.add_all([admin, citizen, *demo_users.values()])
