@@ -19,13 +19,19 @@ def database_url():
     return "sqlite:///disaster_dev.db"
 
 
+def cors_origins():
+    environment = os.getenv("APP_ENV", "production" if os.getenv("VERCEL") else "development").lower()
+    default_origins = "" if environment == "production" else "http://localhost:5173"
+    return [item.strip() for item in os.getenv("CORS_ORIGINS", default_origins).split(",") if item.strip()]
+
+
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production" if os.getenv("VERCEL") else "development").lower()
     SECRET_KEY = os.getenv("SECRET_KEY") or "dev-secret-change-before-production"
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
     SQLALCHEMY_DATABASE_URI = database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    CORS_ORIGINS = [item.strip() for item in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if item.strip()]
+    CORS_ORIGINS = cors_origins()
     CORS_SUPPORTS_CREDENTIALS = True
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "").rstrip("/")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
@@ -70,7 +76,7 @@ def production_configuration_issues(config):
     if config.get("APP_ENV") != "production":
         return issues
     database_uri = str(config.get("SQLALCHEMY_DATABASE_URI") or "")
-    if not database_uri or database_uri.startswith("sqlite"):
+    if not database_uri.startswith(("postgresql+psycopg://", "mysql+pymysql://")):
         issues.append("DATABASE_URL must point to persistent MySQL or PostgreSQL storage")
     for name in ("SECRET_KEY", "JWT_SECRET_KEY"):
         value = str(config.get(name) or "")
@@ -94,6 +100,8 @@ def production_configuration_issues(config):
     origins = config.get("CORS_ORIGINS") or []
     if "*" in origins:
         issues.append("CORS_ORIGINS cannot contain * when credentials are enabled")
+    if any("localhost" in origin or "127.0.0.1" in origin for origin in origins):
+        issues.append("CORS_ORIGINS cannot contain local development origins in production")
     if not config.get("SESSION_COOKIE_SECURE"):
         issues.append("COOKIE_SECURE must be true in production")
     if not config.get("BOOTSTRAP_ADMIN_EMAIL") or not config.get("BOOTSTRAP_ADMIN_PASSWORD"):

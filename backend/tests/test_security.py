@@ -80,6 +80,23 @@ def test_readiness_and_production_configuration_gate(client, app):
     assert any("MFA_ENCRYPTION_KEY" in issue for issue in issues)
     assert any("MFA_REQUIRED_ROLES" in issue for issue in issues)
 
+    safe_production = dict(app.config)
+    safe_production.update(
+        APP_ENV="production",
+        SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
+        SECRET_KEY="a" * 64,
+        JWT_SECRET_KEY="b" * 64,
+        MFA_ENCRYPTION_KEY="vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=",
+        MFA_REQUIRED_ROLES={"Admin", "Police"},
+        DEMO_MODE=False,
+        AUTO_MIGRATE=True,
+        SESSION_COOKIE_SECURE=True,
+        CORS_ORIGINS=[],
+        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
+        BOOTSTRAP_ADMIN_PASSWORD="Production-Admin-Password-77",
+    )
+    assert production_configuration_issues(safe_production) == []
+
 
 def test_password_change_revokes_previous_session(client):
     registered = client.post(
