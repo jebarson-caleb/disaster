@@ -9,6 +9,7 @@ from ..models import (
     HospitalCapacityLog,
     Resource,
     ResourceDistribution,
+    RoleProfile,
     Shelter,
     ShelterCapacityLog,
     Volunteer,
@@ -27,6 +28,8 @@ def get_hospital_capacity(hospital_id):
 @facilities_bp.patch("/hospitals/<int:hospital_id>/capacity")
 @login_required(roles=["Admin", "Hospital"])
 def update_hospital_capacity(hospital_id):
+    if request.user.role == "Hospital" and not _manages(request.user.id, "hospital_id", hospital_id):
+        return jsonify({"error": "You can update only your assigned hospital"}), 403
     hospital = db.get_or_404(Hospital, hospital_id)
     data = request.get_json() or {}
     for field in ["available_beds", "icu_beds", "emergency_capacity"]:
@@ -46,8 +49,10 @@ def get_shelter_capacity(shelter_id):
 
 
 @facilities_bp.patch("/shelters/<int:shelter_id>/capacity")
-@login_required(roles=["Admin", "Shelter", "NGO"])
+@login_required(roles=["Admin", "Shelter"])
 def update_shelter_capacity(shelter_id):
+    if request.user.role == "Shelter" and not _manages(request.user.id, "shelter_id", shelter_id):
+        return jsonify({"error": "You can update only your assigned shelter"}), 403
     shelter = db.get_or_404(Shelter, shelter_id)
     data = request.get_json() or {}
     if "available_capacity" in data:
@@ -70,8 +75,10 @@ def get_ambulance_status(ambulance_id):
 
 
 @facilities_bp.patch("/ambulances/<int:ambulance_id>/status")
-@login_required(roles=["Admin", "Ambulance", "Hospital"])
+@login_required(roles=["Admin", "Ambulance"])
 def update_ambulance_status(ambulance_id):
+    if request.user.role == "Ambulance" and not _manages(request.user.id, "ambulance_id", ambulance_id):
+        return jsonify({"error": "You can update only your assigned ambulance"}), 403
     ambulance = db.get_or_404(Ambulance, ambulance_id)
     data = request.get_json() or {}
     for field in ["status", "latitude", "longitude"]:
@@ -131,3 +138,8 @@ def create_volunteer_assignment():
     db.session.add(assignment)
     db.session.commit()
     return jsonify({"assignment": assignment.to_dict(), "volunteer": volunteer.to_dict()}), 201
+
+
+def _manages(user_id, field, entity_id):
+    profile = RoleProfile.query.filter_by(user_id=user_id).first()
+    return profile is not None and getattr(profile, field) == entity_id

@@ -35,11 +35,14 @@ class RoleProfile(db.Model, SerializerMixin):
     __tablename__ = "role_profiles"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
     organization_name = db.Column(db.String(160))
     address = db.Column(db.String(255))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), index=True)
+    shelter_id = db.Column(db.Integer, db.ForeignKey("shelters.id"), index=True)
+    ambulance_id = db.Column(db.Integer, db.ForeignKey("ambulances.id"), index=True)
     verification_status = db.Column(db.String(30), default="pending", nullable=False)
     user = db.relationship("User", backref=db.backref("profile", uselist=False))
 
@@ -469,6 +472,7 @@ class AccountSecurity(db.Model, SerializerMixin):
     locked_until = db.Column(db.DateTime(timezone=True), index=True)
     last_login_at = db.Column(db.DateTime(timezone=True))
     password_changed_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False)
 
 
 class AuditEvent(db.Model, SerializerMixin):

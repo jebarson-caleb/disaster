@@ -53,10 +53,14 @@ After deployment:
 1. Open `https://<deployment>/api/v1/health`; expect HTTP 200 and `status: ok`.
 2. Open `https://<deployment>/api/v1/ready`; expect HTTP 200, `status: ready`, and both checks `true`. A 503 means the release must not receive beta traffic; inspect Vercel function logs using the returned request ID.
 3. Open the site in a private browser. Confirm operational data is hidden behind the login screen.
-4. Sign in as the bootstrap administrator, open **User Access**, provision a test operational account, deactivate/reactivate it, reset its password, create a non-critical test alert, then sign out. Confirm `/api/v1/auth/me` returns 401 afterward.
-5. On the administrator's first login, enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes.
-6. Register a Citizen test account, submit and track a test incident, acknowledge an alert, and verify role restrictions prevent it from publishing an alert.
-7. Test mobile layout, location consent denial/approval, offline submission and reconnect, and the emergency hotline for the deployment country.
+4. Sign in as the bootstrap administrator and replace the bootstrap password. The temporary-password gate must prevent access to operational data until this succeeds.
+5. Enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes.
+6. Open **User Access** and provision one account for each operational role in use. Hospital, shelter, and ambulance accounts must be assigned to an existing facility or create their facility atomically. Confirm every issued password must be replaced on first sign-in.
+7. For hospital, shelter, and ambulance accounts, confirm the workspace shows only the assigned operational record and rejects attempts to update another facility. For citizens, confirm rescue lists contain only cases created by that citizen.
+8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions.
+9. Test account deactivation/reactivation, administrator-assisted password reset, active-session revocation, a non-critical alert, Citizen registration and tracking, mobile layout, location consent denial/approval, offline submission/reconnect, and the emergency hotline.
+
+The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
 ## Operational boundaries
 
@@ -73,6 +77,7 @@ After deployment:
 - Back up PostgreSQL daily and perform a restoration drill before handling real incidents.
 - Rotate initial administrator credentials after first use. Rotate application secrets through a coordinated maintenance window because doing so invalidates active sessions.
 - Review pending volunteer registrations in **User Access** and verify identity/affiliation out of band before approving access.
+- Verify organization and facility ownership out of band before assigning an operational account to an existing hospital, shelter, or ambulance.
 - Define retention periods for location, welfare, contact, and audit data before collecting real personal information.
 - Roll back the Vercel deployment if readiness fails or critical workflows regress. Do not silently fall back to demo data in production.
 

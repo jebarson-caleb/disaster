@@ -3,9 +3,9 @@
 | Table | Purpose | Important Attributes |
 | --- | --- | --- |
 | `users` | Stores login identity and role | `email`, `role`, `password_hash` |
-| `role_profiles` | Stores organization/location profile | `organization_name`, `verification_status` |
+| `role_profiles` | Stores the one-to-one organization/location profile and managed-facility assignment | `organization_name`, `verification_status`, `hospital_id`, `shelter_id`, `ambulance_id` |
 | `disasters` | Stores reported disaster incidents | `disaster_type`, `people_affected`, `severity_hint`, `status` |
-| `rescue_requests` | Stores victim rescue needs | `condition_label`, `trapped`, `priority_score`, `priority_label`, `assigned_unit` |
+| `rescue_requests` | Stores victim rescue needs | `condition`, `trapped`, `priority_score`, `priority_label`, `assigned_unit` |
 | `rescue_status_history` | Tracks rescue progress changes | `status`, `note`, `changed_by_id` |
 | `hospitals` | Stores emergency medical capacity | `available_beds`, `icu_beds`, `emergency_capacity` |
 | `hospital_capacity_logs` | Audits hospital capacity changes | `hospital_id`, `available_beds`, `created_at` |
@@ -30,3 +30,5 @@
 | `location_pings` | Stores explicitly consented device locations and accuracy | `user_id`, optional rescue/supply case, coordinates, `consent_granted` |
 | `response_dispatches` | Audits automatic proximity allocation | `rescue_request_id`, `responder_type`, `responder_name`, `distance_km`, `status` |
 | `responder_units` | Registers professional rescue, fire, police, and medical field units | `unit_type`, `skills`, location, `availability_status` |
+| `account_security` | Stores account lockout and temporary-password state | `failed_login_attempts`, `locked_until`, `password_changed_at`, `must_change_password` |
+| `auth_sessions` | Stores hashed, revocable browser/API sessions | `token_hash`, `csrf_hash`, idle/absolute expiry, `mfa_state`, `revoked_at` |

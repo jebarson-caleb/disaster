@@ -63,11 +63,13 @@ import {
   disableMfa,
   getMfaStatus,
   isNetworkFailure,
+  listSessions,
   login,
   logout,
   openDemoSession,
   regenerateMfaRecoveryCodes,
   register,
+  revokeSession,
   restoreSession,
 } from './services/api.js';
 import { initialDisasters, initialFacilities, initialRescues, initialResponseHub, roles } from './services/mockData.js';
@@ -144,6 +146,7 @@ const roleNavigation = {
     { id: 'facilities', label: 'Facilities', icon: Building2 },
     { id: 'coordination', label: 'Relief Coordination', icon: Package },
     { id: 'access', label: 'User Access', icon: UserRound },
+    { id: 'setup', label: 'Operational Setup', icon: SlidersHorizontal },
   ],
   Citizen: [
     { id: 'command', label: 'My Safety', icon: Home },
@@ -199,11 +202,39 @@ const roleTopbar = {
   'Fire Service': { eyebrow: 'Fire and rescue operations', title: 'Rescue hazards, teams and equipment', action: 'Open rescue queue', view: 'rescue', icon: Siren },
 };
 
-const assignCapableRoles = new Set(['Admin', 'Police', 'Fire Service', 'Ambulance', 'NGO']);
+const assignCapableRoles = new Set(['Admin', 'Police', 'Fire Service', 'NGO']);
 const OFFLINE_QUEUE_KEY = 'resq-command-offline-queue';
 const OFFLINE_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const OFFLINE_QUEUE_LIMIT = 50;
 const DEMO_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
+const emptyProvisionDraft = {
+  name: '',
+  email: '',
+  phone: '',
+  role: 'Hospital',
+  password: '',
+  password_confirmation: '',
+  organization_name: '',
+  facility_id: 'new',
+  facility: {
+    name: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    contact_phone: '',
+    total_beds: '',
+    available_beds: '',
+    icu_beds: '',
+    emergency_capacity: '',
+    total_capacity: '',
+    available_capacity: '',
+    food_available: true,
+    medical_support: false,
+    vehicle_number: '',
+    driver_name: '',
+    hospital_id: '',
+  },
+};
 
 export default function App() {
   const reduceMotion = useReducedMotion();
@@ -221,15 +252,19 @@ export default function App() {
   const [sessionMode, setSessionMode] = useState(DEMO_ENABLED ? 'demo' : 'checking');
   const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
   const [authMode, setAuthMode] = useState('login');
-  const [authDraft, setAuthDraft] = useState({ name: '', email: '', phone: '', password: '', role: 'Citizen' });
+  const [authDraft, setAuthDraft] = useState({ name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' });
   const [passwordDraft, setPasswordDraft] = useState({ current_password: '', new_password: '' });
   const [mfaChallenge, setMfaChallenge] = useState({ token: '', code: '' });
   const [mfaSession, setMfaSession] = useState({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
   const [mfaSetup, setMfaSetup] = useState({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
   const [mfaAction, setMfaAction] = useState({ current_password: '', code: '' });
+  const [accountSessions, setAccountSessions] = useState([]);
   const [managedUsers, setManagedUsers] = useState([]);
-  const [provisionDraft, setProvisionDraft] = useState({ name: '', email: '', phone: '', role: 'Hospital', password: '', organization_name: '' });
-  const [resetDraft, setResetDraft] = useState({ user_id: '', admin_password: '', new_password: '' });
+  const [provisionDraft, setProvisionDraft] = useState(emptyProvisionDraft);
+  const [resetDraft, setResetDraft] = useState({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
+  const [resourceDraft, setResourceDraft] = useState({ name: '', category: 'food', unit: 'units', available_quantity: 0, storage_location: '' });
+  const [responderDraft, setResponderDraft] = useState({ name: '', unit_type: 'professional rescue', skills: '', contact_phone: '', latitude: '', longitude: '' });
+  const [campaignDraft, setCampaignDraft] = useState({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
   const [pendingOperations, setPendingOperations] = useState(() => readOfflineQueue());
   const [routeResult, setRouteResult] = useState(null);
   const [coordinationData, setCoordinationData] = useState({ volunteers: [], distributions: [], assignments: [] });
@@ -374,6 +409,7 @@ export default function App() {
   const visibleActiveView = activeNavigation.some((item) => item.id === activeView) ? activeView : 'command';
   const currentUserId = currentUser?.id;
   const currentUserName = currentUser?.name;
+  const passwordChangeRequired = Boolean(currentUser?.password_change_required);
   const visibleRescues = rescueItemsForRole(activeRole, sortedRescues);
 
   useEffect(() => {
@@ -393,8 +429,15 @@ export default function App() {
           setup_required: Boolean(session.mfa_setup_required),
           recovery_codes_remaining: 0,
         });
-        setShowAccountPanel(Boolean(session.mfa_setup_required));
-        setOperatorNotice(session.mfa_setup_required ? 'Set up multi-factor authentication to continue.' : `${user.name} session restored`);
+        const passwordRequired = Boolean(user.password_change_required);
+        setShowAccountPanel(passwordRequired || Boolean(session.mfa_setup_required));
+        setOperatorNotice(
+          passwordRequired
+            ? 'Replace your temporary password to continue.'
+            : session.mfa_setup_required
+              ? 'Set up multi-factor authentication to continue.'
+              : `${user.name} session restored`,
+        );
       })
       .catch(() => {
         if (cancelled) return;
@@ -424,7 +467,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (sessionMode !== 'account' || !currentUserId) return;
+    if (sessionMode !== 'account' || !currentUserId || passwordChangeRequired) return;
     let cancelled = false;
     getMfaStatus()
       .then((status) => {
@@ -436,7 +479,30 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [sessionMode, currentUserId]);
+  }, [sessionMode, currentUserId, passwordChangeRequired]);
+
+  useEffect(() => {
+    if (
+      !showAccountPanel
+      || sessionMode !== 'account'
+      || !currentUserId
+      || passwordChangeRequired
+      || mfaSession.setup_required
+    ) {
+      return;
+    }
+    let cancelled = false;
+    listSessions()
+      .then(({ sessions }) => {
+        if (!cancelled) setAccountSessions(sessions);
+      })
+      .catch((error) => {
+        if (!cancelled) setOperatorNotice(`Active sessions could not be loaded: ${error.message}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAccountPanel, sessionMode, currentUserId, passwordChangeRequired, mfaSession.setup_required]);
 
   useEffect(() => {
     if (visibleActiveView !== 'access' || currentUser?.role !== 'Admin') return;
@@ -456,7 +522,10 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     async function connect() {
-      if (sessionMode === 'checking' || (sessionMode === 'account' && (!currentUserId || mfaSession.setup_required))) return;
+      if (
+        sessionMode === 'checking'
+        || (sessionMode === 'account' && (!currentUserId || passwordChangeRequired || mfaSession.setup_required))
+      ) return;
       setConnectionState('connecting');
       try {
         const session = sessionMode === 'demo'
@@ -491,11 +560,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, sessionMode, mfaSession.setup_required, currentUserId, currentUserName]);
+  }, [activeRole, sessionMode, passwordChangeRequired, mfaSession.setup_required, currentUserId, currentUserName]);
 
   useEffect(() => {
     function reconnect() {
-      if (sessionMode === 'account' && mfaSession.setup_required) return;
+      if (sessionMode === 'account' && (passwordChangeRequired || mfaSession.setup_required)) return;
       if (navigator.onLine) {
         (sessionMode === 'demo' ? openDemoSession(activeRole) : Promise.resolve())
           .then(() => flushOfflineQueue())
@@ -528,7 +597,7 @@ export default function App() {
       window.removeEventListener('online', reconnect);
       window.removeEventListener('offline', reconnect);
     };
-  }, [activeRole, sessionMode, mfaSession.setup_required]);
+  }, [activeRole, sessionMode, passwordChangeRequired, mfaSession.setup_required]);
 
   async function submitIncident(event) {
     event.preventDefault();
@@ -656,6 +725,25 @@ export default function App() {
       } catch (error) {
         setOperatorNotice(`Local status updated; server sync failed: ${error.message}`);
         if (isNetworkFailure(error)) setConnectionState('offline');
+      }
+      return;
+    }
+
+    if (role === 'Ambulance') {
+      const nextStatus = nextRescueStatus(rescue.status);
+      if (!nextStatus) {
+        setOperatorNotice(`${rescue.victim_name} is already marked rescued`);
+        return;
+      }
+      setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} by the assigned ambulance`);
+      try {
+        const response = await api.updateRescue(id, {
+          status: nextStatus,
+          note: 'Assigned ambulance advanced the response',
+        });
+        setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+      } catch (error) {
+        setOperatorNotice(`Ambulance status could not be updated: ${error.message}`);
       }
       return;
     }
@@ -983,20 +1071,24 @@ export default function App() {
 
   async function submitAuthentication(event) {
     event.preventDefault();
+    if (authMode === 'register' && authDraft.password !== authDraft.password_confirmation) {
+      setOperatorNotice('Registration failed: password confirmation does not match');
+      return;
+    }
     try {
       const session = authMode === 'login'
         ? await login({ email: authDraft.email, password: authDraft.password })
         : await register(authDraft);
       if (session.mfa_required) {
         setMfaChallenge({ token: session.challenge_token, code: '' });
-        setAuthDraft((current) => ({ ...current, password: '' }));
+        setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
         setOperatorNotice(session.message);
         return;
       }
       if (session.pending_verification) {
         setCurrentUser(null);
         setSessionMode('account');
-        setAuthDraft((current) => ({ ...current, password: '' }));
+        setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
         setOperatorNotice(session.message);
         return;
       }
@@ -1010,10 +1102,17 @@ export default function App() {
         setup_required: Boolean(session.mfa_setup_required),
         recovery_codes_remaining: 0,
       });
-      setAuthDraft((current) => ({ ...current, password: '' }));
+      setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
       setMfaChallenge({ token: '', code: '' });
-      setShowAccountPanel(Boolean(session.mfa_setup_required));
-      setOperatorNotice(session.mfa_setup_required ? 'Set up multi-factor authentication to continue.' : `${session.user.name} signed in successfully`);
+      const passwordRequired = Boolean(session.user.password_change_required);
+      setShowAccountPanel(passwordRequired || Boolean(session.mfa_setup_required));
+      setOperatorNotice(
+        passwordRequired
+          ? 'Password accepted. Replace the temporary password to continue.'
+          : session.mfa_setup_required
+            ? 'Set up multi-factor authentication to continue.'
+            : `${session.user.name} signed in successfully`,
+      );
     } catch (error) {
       setOperatorNotice(`${authMode === 'login' ? 'Sign in' : 'Registration'} failed: ${error.message}`);
     }
@@ -1034,8 +1133,13 @@ export default function App() {
         recovery_codes_remaining: 0,
       });
       setMfaChallenge({ token: '', code: '' });
-      setShowAccountPanel(false);
-      setOperatorNotice(`${session.user.name} signed in with multi-factor authentication`);
+      const passwordRequired = Boolean(session.user.password_change_required);
+      setShowAccountPanel(passwordRequired);
+      setOperatorNotice(
+        passwordRequired
+          ? 'Identity verified. Replace the temporary password to continue.'
+          : `${session.user.name} signed in with multi-factor authentication`,
+      );
     } catch (error) {
       setMfaChallenge((current) => ({ ...current, code: '' }));
       setOperatorNotice(`Verification failed: ${error.message}`);
@@ -1098,7 +1202,17 @@ export default function App() {
       const response = await changePassword(passwordDraft);
       setCurrentUser(response.user);
       setPasswordDraft({ current_password: '', new_password: '' });
-      setOperatorNotice('Password changed and other sessions revoked');
+      setMfaSession((current) => ({
+        ...current,
+        verified: Boolean(response.mfa_verified),
+        setup_required: Boolean(response.mfa_setup_required),
+      }));
+      setShowAccountPanel(Boolean(response.mfa_setup_required));
+      setOperatorNotice(
+        response.mfa_setup_required
+          ? 'Password changed and other sessions revoked. Set up multi-factor authentication to continue.'
+          : 'Password changed and other sessions revoked',
+      );
     } catch (error) {
       setOperatorNotice(`Password change failed: ${error.message}`);
     }
@@ -1106,11 +1220,21 @@ export default function App() {
 
   async function submitProvisionedUser(event) {
     event.preventDefault();
+    if (provisionDraft.password !== provisionDraft.password_confirmation) {
+      setOperatorNotice('User provisioning failed: password confirmation does not match');
+      return;
+    }
     try {
       const response = await api.provisionUser(provisionDraft);
       setManagedUsers((items) => [response.user, ...items]);
-      setProvisionDraft((current) => ({ ...current, name: '', email: '', phone: '', password: '', organization_name: '' }));
-      setOperatorNotice(`${response.user.name} provisioned as ${response.user.role}`);
+      if (response.facility && provisionDraft.facility_id === 'new') {
+        const key = response.user.role === 'Hospital' ? 'hospitals' : response.user.role === 'Shelter' ? 'shelters' : 'ambulances';
+        setFacilities((current) => ({ ...current, [key]: [...current[key], response.facility] }));
+      }
+      setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
+      setOperatorNotice(
+        `${response.user.name} provisioned as ${response.user.role}; they must replace the temporary password on first sign-in`,
+      );
     } catch (error) {
       setOperatorNotice(`User provisioning failed: ${error.message}`);
     }
@@ -1128,12 +1252,77 @@ export default function App() {
 
   async function submitPasswordReset(event) {
     event.preventDefault();
+    if (resetDraft.new_password !== resetDraft.password_confirmation) {
+      setOperatorNotice('Password reset failed: password confirmation does not match');
+      return;
+    }
     try {
       await api.resetUserPassword(resetDraft.user_id, resetDraft);
-      setResetDraft({ user_id: '', admin_password: '', new_password: '' });
-      setOperatorNotice('Password reset completed and the user’s sessions were revoked');
+      setManagedUsers((items) => items.map((item) => (
+        String(item.id) === String(resetDraft.user_id)
+          ? { ...item, password_change_required: true }
+          : item
+      )));
+      setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
+      setOperatorNotice('Password reset completed; the user must replace it at next sign-in and all sessions were revoked');
     } catch (error) {
       setOperatorNotice(`Password reset failed: ${error.message}`);
+    }
+  }
+
+  async function revokeAccountSession(session) {
+    try {
+      await revokeSession(session.id);
+      if (session.current) {
+        await signOut();
+        return;
+      }
+      setAccountSessions((items) => items.filter((item) => item.id !== session.id));
+      setOperatorNotice('The selected session was revoked');
+    } catch (error) {
+      setOperatorNotice(`Session could not be revoked: ${error.message}`);
+    }
+  }
+
+  async function submitResource(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createResource(resourceDraft);
+      setResources((items) => [...items, response.resource]);
+      setResourceDraft({ name: '', category: 'food', unit: 'units', available_quantity: 0, storage_location: '' });
+      setOperatorNotice(`${response.resource.name} added to the live resource inventory`);
+    } catch (error) {
+      setOperatorNotice(`Resource setup failed: ${error.message}`);
+    }
+  }
+
+  async function submitResponder(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createResponder(responderDraft);
+      setResponseHub((current) => ({
+        ...current,
+        responder_units: [...(current.responder_units || []), response.responder],
+      }));
+      setResponderDraft({ name: '', unit_type: 'professional rescue', skills: '', contact_phone: '', latitude: '', longitude: '' });
+      setOperatorNotice(`${response.responder.name} added to automatic dispatch`);
+    } catch (error) {
+      setOperatorNotice(`Responder setup failed: ${error.message}`);
+    }
+  }
+
+  async function submitCampaign(event) {
+    event.preventDefault();
+    try {
+      const response = await api.createDonationCampaign(campaignDraft);
+      setResponseHub((current) => ({
+        ...current,
+        campaigns: [response.campaign, ...(current.campaigns || [])],
+      }));
+      setCampaignDraft({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
+      setOperatorNotice(`${response.campaign.title} opened for verified pledges`);
+    } catch (error) {
+      setOperatorNotice(`Campaign setup failed: ${error.message}`);
     }
   }
 
@@ -1150,13 +1339,14 @@ export default function App() {
     setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
     setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
     setMfaAction({ current_password: '', code: '' });
+    setAccountSessions([]);
     setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
     setShowAccountPanel(!DEMO_ENABLED);
     setActiveRole('Citizen');
     setOperatorNotice('Signed out successfully');
   }
 
-  if (!DEMO_ENABLED && (!currentUser || mfaSession.setup_required)) {
+  if (!DEMO_ENABLED && (!currentUser || passwordChangeRequired || mfaSession.setup_required)) {
     return (
       <main className="auth-gate">
         <div className="auth-gate-brand">
@@ -1191,6 +1381,8 @@ export default function App() {
             setMfaAction={setMfaAction}
             onRecoveryRegenerate={regenerateRecoveryCodes}
             onMfaDisable={turnOffMfa}
+            sessions={accountSessions}
+            onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
           />
         )}
@@ -1331,6 +1523,8 @@ export default function App() {
             setMfaAction={setMfaAction}
             onRecoveryRegenerate={regenerateRecoveryCodes}
             onMfaDisable={turnOffMfa}
+            sessions={accountSessions}
+            onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
             onReturnToDemo={() => {
               setSessionMode('demo');
@@ -1478,6 +1672,23 @@ export default function App() {
                 resetDraft={resetDraft}
                 setResetDraft={setResetDraft}
                 onResetPassword={submitPasswordReset}
+                facilities={facilities}
+              />
+            </MotionPage>
+          )}
+          {visibleActiveView === 'setup' && activeRole === 'Admin' && (
+            <MotionPage key="setup" reduceMotion={reduceMotion}>
+              <OperationalSetupView
+                disasters={disasters}
+                resourceDraft={resourceDraft}
+                setResourceDraft={setResourceDraft}
+                onResourceSubmit={submitResource}
+                responderDraft={responderDraft}
+                setResponderDraft={setResponderDraft}
+                onResponderSubmit={submitResponder}
+                campaignDraft={campaignDraft}
+                setCampaignDraft={setCampaignDraft}
+                onCampaignSubmit={submitCampaign}
               />
             </MotionPage>
           )}
@@ -1540,9 +1751,12 @@ function AccountPanel({
   setMfaAction,
   onRecoveryRegenerate,
   onMfaDisable,
+  sessions,
+  onSessionRevoke,
 }) {
   const hasAccountSession = sessionMode === 'account' && Boolean(currentUser);
   const awaitingMfa = Boolean(mfaChallenge?.token);
+  const passwordChangeRequired = Boolean(currentUser?.password_change_required);
   return (
     <section className="panel account-panel" aria-label="Account access">
       <div>
@@ -1568,9 +1782,15 @@ function AccountPanel({
           )}
           <Input label="Email" type="email" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} required autoComplete="email" />
           <Input label="Password (15+ characters)" type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required minLength={15} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          {mode === 'register' && (
+            <Input label="Confirm password" type="password" value={draft.password_confirmation} onChange={(value) => setDraft({ ...draft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
+          )}
           <button className="primary-action" type="submit">
             <UserRound size={18} /> {mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
+          {mode === 'login' && (
+            <p className="muted-copy">Forgot your password? Ask your organization’s ResQ administrator to verify your identity and issue a temporary replacement.</p>
+          )}
         </form>
       )}
       {!hasAccountSession && awaitingMfa && (
@@ -1587,7 +1807,7 @@ function AccountPanel({
           <button type="button" className="compact-button secondary-button" onClick={() => setMfaChallenge({ token: '', code: '' })}>Use a different account</button>
         </form>
       )}
-      {hasAccountSession && mfaSetup.recovery_codes.length > 0 && (
+      {hasAccountSession && !passwordChangeRequired && mfaSetup.recovery_codes.length > 0 && (
         <section className="mfa-recovery-panel" aria-live="polite">
           <strong>Save these one-time recovery codes now</strong>
           <p className="muted-copy">Each code works once. Store them offline; they will not be shown again after this panel closes.</p>
@@ -1596,7 +1816,7 @@ function AccountPanel({
           </div>
         </section>
       )}
-      {hasAccountSession && !mfaSession.enabled && !mfaSetup.secret && (
+      {hasAccountSession && !passwordChangeRequired && !mfaSession.enabled && !mfaSetup.secret && (
         <form className="account-form" onSubmit={onMfaSetup}>
           <strong>{mfaSession.required ? 'Multi-factor authentication is required' : 'Add multi-factor authentication'}</strong>
           <p className="muted-copy">Use any RFC 6238-compatible authenticator app. Re-enter your password to create a private setup key.</p>
@@ -1604,7 +1824,7 @@ function AccountPanel({
           <button className="primary-action" type="submit"><ShieldAlert size={18} /> Start authenticator setup</button>
         </form>
       )}
-      {hasAccountSession && !mfaSession.enabled && mfaSetup.secret && (
+      {hasAccountSession && !passwordChangeRequired && !mfaSession.enabled && mfaSetup.secret && (
         <form className="account-form" onSubmit={onMfaConfirm}>
           <strong>Connect your authenticator</strong>
           <p className="muted-copy">Open the setup link on this device or enter the manual key in your authenticator. Then confirm a current code.</p>
@@ -1614,7 +1834,7 @@ function AccountPanel({
           <button className="primary-action" type="submit">Confirm and enable MFA</button>
         </form>
       )}
-      {hasAccountSession && mfaSession.enabled && (
+      {hasAccountSession && !passwordChangeRequired && mfaSession.enabled && (
         <section className="account-form">
           <strong>Multi-factor authentication is active</strong>
           <p className="muted-copy">{mfaSession.recovery_codes_remaining} recovery codes remain. Re-enter your password and a current authenticator or recovery code for either action below.</p>
@@ -1626,12 +1846,35 @@ function AccountPanel({
           </div>
         </section>
       )}
-      {hasAccountSession && !mfaSession.setup_required && (
+      {hasAccountSession && (passwordChangeRequired || !mfaSession.setup_required) && (
         <form className="account-form" onSubmit={onPasswordChange}>
+          <strong>{passwordChangeRequired ? 'Replace your temporary password' : 'Change password'}</strong>
+          {passwordChangeRequired && (
+            <p className="muted-copy">Choose a private password that was not supplied by an administrator. Operational access remains locked until this is complete.</p>
+          )}
           <Input label="Current password" type="password" value={passwordDraft.current_password} onChange={(value) => setPasswordDraft({ ...passwordDraft, current_password: value })} required autoComplete="current-password" />
           <Input label="New password (15+ characters)" type="password" value={passwordDraft.new_password} onChange={(value) => setPasswordDraft({ ...passwordDraft, new_password: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit">Change password</button>
         </form>
+      )}
+      {hasAccountSession && !passwordChangeRequired && !mfaSession.setup_required && sessions?.length > 0 && (
+        <section className="account-form">
+          <strong>Active sessions</strong>
+          <p className="muted-copy">Revoke devices you no longer recognize. Revoking this device signs you out immediately.</p>
+          <div className="managed-user-list">
+            {sessions.map((session) => (
+              <article className="managed-user" key={session.id}>
+                <div>
+                  <strong>{session.current ? 'This device' : 'Signed-in device'}</strong>
+                  <span>{session.user_agent || 'Unknown browser'} · last used {formatDateTime(session.last_seen_at)}</span>
+                </div>
+                <button type="button" className="compact-button secondary-button" onClick={() => onSessionRevoke(session)}>
+                  {session.current ? 'Sign out this device' : 'Revoke'}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
       <div className="account-actions">
         {!hasAccountSession && !awaitingMfa && (
@@ -1650,29 +1893,116 @@ function AccountPanel({
   );
 }
 
-function UserAccessView({ users, currentUser, provisionDraft, setProvisionDraft, onProvision, onUpdate, resetDraft, setResetDraft, onResetPassword }) {
+function UserAccessView({
+  users,
+  currentUser,
+  provisionDraft,
+  setProvisionDraft,
+  onProvision,
+  onUpdate,
+  resetDraft,
+  setResetDraft,
+  onResetPassword,
+  facilities,
+}) {
   const resetCandidates = users
     .filter((user) => user.id !== currentUser?.id)
     .map((user) => ({ label: `${user.name} (${user.role})`, value: String(user.id) }));
+  const facilityType = provisionDraft.role === 'Hospital'
+    ? 'hospitals'
+    : provisionDraft.role === 'Shelter'
+      ? 'shelters'
+      : provisionDraft.role === 'Ambulance'
+        ? 'ambulances'
+        : null;
+  const facilityItems = facilityType ? facilities[facilityType] || [] : [];
+  const facilityOptions = [
+    { label: `Create a new ${provisionDraft.role.toLowerCase()} record`, value: 'new' },
+    ...facilityItems.map((item) => ({
+      label: item.name || item.vehicle_number,
+      value: String(item.id),
+    })),
+  ];
+  const updateFacility = (field, value) => setProvisionDraft({
+    ...provisionDraft,
+    facility: { ...provisionDraft.facility, [field]: value },
+  });
   return (
     <div className="access-layout">
       <section className="panel">
         <PanelTitle eyebrow="Administrator control" title="Provision an operational account" />
-        <p className="muted-copy">Create verified accounts for agencies, facilities, field teams, and additional administrators. Share the initial password through an approved secure channel.</p>
+        <p className="muted-copy">Create verified accounts for agencies, facilities, field teams, and additional administrators. Every administrator-supplied password must be replaced by its user before operational access unlocks.</p>
         <form className="access-form" onSubmit={onProvision}>
           <Input label="Full name" value={provisionDraft.name} onChange={(value) => setProvisionDraft({ ...provisionDraft, name: value })} required autoComplete="off" />
           <Input label="Email" type="email" value={provisionDraft.email} onChange={(value) => setProvisionDraft({ ...provisionDraft, email: value })} required autoComplete="off" />
           <Input label="Phone" value={provisionDraft.phone} onChange={(value) => setProvisionDraft({ ...provisionDraft, phone: value })} required autoComplete="off" />
-          <Select label="Role" value={provisionDraft.role} options={roles} onChange={(value) => setProvisionDraft({ ...provisionDraft, role: value })} />
+          <Select
+            label="Role"
+            value={provisionDraft.role}
+            options={roles}
+            onChange={(value) => setProvisionDraft({ ...provisionDraft, role: value, facility_id: 'new' })}
+          />
           <Input label="Organization" value={provisionDraft.organization_name} onChange={(value) => setProvisionDraft({ ...provisionDraft, organization_name: value })} autoComplete="off" />
+          {facilityType && (
+            <>
+              <Select
+                label={`${provisionDraft.role} assignment`}
+                value={provisionDraft.facility_id}
+                options={facilityOptions}
+                onChange={(value) => setProvisionDraft({ ...provisionDraft, facility_id: value })}
+              />
+              {provisionDraft.facility_id === 'new' && (
+                <div className="account-form">
+                  {provisionDraft.role !== 'Ambulance' && (
+                    <>
+                      <Input label={`${provisionDraft.role} name`} value={provisionDraft.facility.name} onChange={(value) => updateFacility('name', value)} required />
+                      <Input label="Address" value={provisionDraft.facility.address} onChange={(value) => updateFacility('address', value)} required />
+                    </>
+                  )}
+                  {provisionDraft.role === 'Ambulance' && (
+                    <>
+                      <Input label="Vehicle number" value={provisionDraft.facility.vehicle_number} onChange={(value) => updateFacility('vehicle_number', value)} required />
+                      <Input label="Driver name" value={provisionDraft.facility.driver_name} onChange={(value) => updateFacility('driver_name', value)} required />
+                    </>
+                  )}
+                  <Input label="Facility contact phone" value={provisionDraft.facility.contact_phone} onChange={(value) => updateFacility('contact_phone', value)} required />
+                  <Input label="Latitude" type="number" step="any" value={provisionDraft.facility.latitude} onChange={(value) => updateFacility('latitude', value)} required />
+                  <Input label="Longitude" type="number" step="any" value={provisionDraft.facility.longitude} onChange={(value) => updateFacility('longitude', value)} required />
+                  {provisionDraft.role === 'Hospital' && (
+                    <>
+                      <Input label="Total beds" type="number" value={provisionDraft.facility.total_beds} onChange={(value) => updateFacility('total_beds', value)} required />
+                      <Input label="Available beds" type="number" value={provisionDraft.facility.available_beds} onChange={(value) => updateFacility('available_beds', value)} required />
+                      <Input label="ICU beds" type="number" value={provisionDraft.facility.icu_beds} onChange={(value) => updateFacility('icu_beds', value)} required />
+                      <Input label="Emergency capacity" type="number" value={provisionDraft.facility.emergency_capacity} onChange={(value) => updateFacility('emergency_capacity', value)} required />
+                    </>
+                  )}
+                  {provisionDraft.role === 'Shelter' && (
+                    <>
+                      <Input label="Total capacity" type="number" value={provisionDraft.facility.total_capacity} onChange={(value) => updateFacility('total_capacity', value)} required />
+                      <Input label="Available capacity" type="number" value={provisionDraft.facility.available_capacity} onChange={(value) => updateFacility('available_capacity', value)} required />
+                      <label className="check-row">
+                        <input type="checkbox" checked={provisionDraft.facility.food_available} onChange={(event) => updateFacility('food_available', event.target.checked)} />
+                        Food available
+                      </label>
+                      <label className="check-row">
+                        <input type="checkbox" checked={provisionDraft.facility.medical_support} onChange={(event) => updateFacility('medical_support', event.target.checked)} />
+                        Medical support
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
           <Input label="Initial password (15+ characters)" type="password" value={provisionDraft.password} onChange={(value) => setProvisionDraft({ ...provisionDraft, password: value })} required minLength={15} autoComplete="new-password" />
+          <Input label="Confirm initial password" type="password" value={provisionDraft.password_confirmation} onChange={(value) => setProvisionDraft({ ...provisionDraft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit"><UserRound size={17} /> Provision verified user</button>
         </form>
       </section>
 
       <section className="panel">
         <PanelTitle eyebrow="Credential recovery" title="Reset another user’s password" />
-        <p className="muted-copy">Re-enter your administrator password. A reset revokes every active session for the selected user.</p>
+        <p className="muted-copy">Re-enter your administrator password. A reset revokes every active session and forces the selected user to replace the temporary password at next sign-in.</p>
         <form className="access-form" onSubmit={onResetPassword}>
           <Select
             label="User"
@@ -1682,6 +2012,7 @@ function UserAccessView({ users, currentUser, provisionDraft, setProvisionDraft,
           />
           <Input label="Your administrator password" type="password" value={resetDraft.admin_password} onChange={(value) => setResetDraft({ ...resetDraft, admin_password: value })} required autoComplete="current-password" />
           <Input label="New password (15+ characters)" type="password" value={resetDraft.new_password} onChange={(value) => setResetDraft({ ...resetDraft, new_password: value })} required minLength={15} autoComplete="new-password" />
+          <Input label="Confirm new password" type="password" value={resetDraft.password_confirmation} onChange={(value) => setResetDraft({ ...resetDraft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit" disabled={!resetDraft.user_id}>Reset password</button>
         </form>
       </section>
@@ -1694,6 +2025,7 @@ function UserAccessView({ users, currentUser, provisionDraft, setProvisionDraft,
               <div>
                 <strong>{user.name}</strong>
                 <span>{user.email} · {user.role}{user.organization_name ? ` · ${user.organization_name}` : ''}</span>
+                {user.password_change_required && <span>Temporary password must be replaced</span>}
               </div>
               <StatusPill value={user.is_active ? user.verification_status : 'inactive'} />
               <div className="managed-user-actions">
@@ -1713,6 +2045,68 @@ function UserAccessView({ users, currentUser, provisionDraft, setProvisionDraft,
           ))}
           {!users.length && <p className="muted-copy">No accounts have been provisioned yet.</p>}
         </div>
+      </section>
+    </div>
+  );
+}
+
+function OperationalSetupView({
+  disasters,
+  resourceDraft,
+  setResourceDraft,
+  onResourceSubmit,
+  responderDraft,
+  setResponderDraft,
+  onResponderSubmit,
+  campaignDraft,
+  setCampaignDraft,
+  onCampaignSubmit,
+}) {
+  const disasterOptions = [
+    { label: 'National / not tied to one incident', value: '' },
+    ...disasters.map((item) => ({ label: item.title, value: String(item.id) })),
+  ];
+  return (
+    <div className="access-layout">
+      <section className="panel">
+        <PanelTitle eyebrow="Logistics baseline" title="Add resource inventory" />
+        <p className="muted-copy">Resources become available to NGO and administrator distribution planning immediately.</p>
+        <form className="access-form" onSubmit={onResourceSubmit}>
+          <Input label="Resource name" value={resourceDraft.name} onChange={(value) => setResourceDraft({ ...resourceDraft, name: value })} required />
+          <Input label="Category" value={resourceDraft.category} onChange={(value) => setResourceDraft({ ...resourceDraft, category: value })} required />
+          <Input label="Unit" value={resourceDraft.unit} onChange={(value) => setResourceDraft({ ...resourceDraft, unit: value })} required />
+          <Input label="Available quantity" type="number" value={resourceDraft.available_quantity} onChange={(value) => setResourceDraft({ ...resourceDraft, available_quantity: value })} required />
+          <Input label="Storage location" value={resourceDraft.storage_location} onChange={(value) => setResourceDraft({ ...resourceDraft, storage_location: value })} required />
+          <button className="primary-action" type="submit"><Package size={17} /> Add resource</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <PanelTitle eyebrow="Dispatch baseline" title="Register a responder unit" />
+        <p className="muted-copy">Available units participate in proximity-based automatic rescue allocation.</p>
+        <form className="access-form" onSubmit={onResponderSubmit}>
+          <Input label="Unit name" value={responderDraft.name} onChange={(value) => setResponderDraft({ ...responderDraft, name: value })} required />
+          <Input label="Unit type" value={responderDraft.unit_type} onChange={(value) => setResponderDraft({ ...responderDraft, unit_type: value })} required />
+          <Textarea label="Skills and capabilities" value={responderDraft.skills} onChange={(value) => setResponderDraft({ ...responderDraft, skills: value })} required />
+          <Input label="Contact phone" value={responderDraft.contact_phone} onChange={(value) => setResponderDraft({ ...responderDraft, contact_phone: value })} required />
+          <Input label="Latitude" type="number" step="any" value={responderDraft.latitude} onChange={(value) => setResponderDraft({ ...responderDraft, latitude: value })} required />
+          <Input label="Longitude" type="number" step="any" value={responderDraft.longitude} onChange={(value) => setResponderDraft({ ...responderDraft, longitude: value })} required />
+          <button className="primary-action" type="submit"><Siren size={17} /> Register responder</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <PanelTitle eyebrow="Verified relief" title="Open a donation campaign" />
+        <p className="muted-copy">Campaigns accept auditable pledges. Configure an approved payment URL separately before collecting money online.</p>
+        <form className="access-form" onSubmit={onCampaignSubmit}>
+          <Select label="Related incident" value={campaignDraft.disaster_id} options={disasterOptions} onChange={(value) => setCampaignDraft({ ...campaignDraft, disaster_id: value })} />
+          <Input label="Campaign title" value={campaignDraft.title} onChange={(value) => setCampaignDraft({ ...campaignDraft, title: value })} required />
+          <Textarea label="Purpose and eligible uses" value={campaignDraft.description} onChange={(value) => setCampaignDraft({ ...campaignDraft, description: value })} required />
+          <Input label="Goal amount" type="number" value={campaignDraft.goal_amount} onChange={(value) => setCampaignDraft({ ...campaignDraft, goal_amount: value })} required />
+          <Input label="Currency" value={campaignDraft.currency} onChange={(value) => setCampaignDraft({ ...campaignDraft, currency: value })} required />
+          <Input label="Verified organizer" value={campaignDraft.organizer} onChange={(value) => setCampaignDraft({ ...campaignDraft, organizer: value })} required />
+          <button className="primary-action" type="submit"><HeartPulse size={17} /> Open campaign</button>
+        </form>
       </section>
     </div>
   );
@@ -1832,6 +2226,7 @@ function rescueActionLabel(role, rescue, canAssign) {
   }
   if (role === 'Hospital') return rescue.status === 'triage' ? 'Triaged' : 'Triage';
   if (role === 'Volunteer') return rescue.status === 'en route' ? 'Checked in' : 'Check in';
+  if (role === 'Ambulance') return rescue.status === 'rescued' ? 'Completed' : 'Advance status';
   if (role === 'Citizen') return 'Track';
   return 'View';
 }
@@ -2233,11 +2628,8 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
 }
 
 function rescueItemsForRole(role, rescues) {
-  if (role === 'Citizen') return rescues.slice(0, 2);
-  if (role === 'Hospital') return rescues.filter((item) => ['Critical', 'High'].includes(item.priority_label));
+  if (['Citizen', 'Hospital', 'Volunteer', 'Ambulance'].includes(role)) return rescues;
   if (role === 'Shelter') return rescues.filter((item) => item.condition === 'stable' || item.status === 'en route');
-  if (role === 'Volunteer') return rescues.filter((item) => item.assigned_unit?.includes('Volunteer') || item.status === 'en route');
-  if (role === 'Ambulance') return rescues.filter((item) => ['Critical', 'High'].includes(item.priority_label));
   return rescues;
 }
 
@@ -3356,6 +3748,13 @@ function formatCurrency(value, currency = 'INR') {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0);
 }
 
+function formatDateTime(value) {
+  if (!value) return 'unknown';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 function FacilitiesView({ role, facilities, updateHospital, updateShelter, updateAmbulanceStatus }) {
   const showHospitals = ['Admin', 'Hospital', 'Ambulance', 'Police', 'Fire Service'].includes(role);
   const showShelters = ['Admin', 'Shelter', 'NGO', 'Citizen', 'Volunteer'].includes(role);
@@ -3372,13 +3771,16 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter, updat
                   <strong>{item.name}</strong>
                   <span>{item.available_beds}/{item.total_beds} beds - ICU {item.icu_beds}</span>
                 </div>
-                <div className="stepper">
-                  <button type="button" onClick={() => updateHospital(item.id, -5)}>-</button>
-                  <strong>{item.available_beds}</strong>
-                  <button type="button" onClick={() => updateHospital(item.id, 5)}>+</button>
-                </div>
+                {['Admin', 'Hospital'].includes(role) && (
+                  <div className="stepper">
+                    <button type="button" onClick={() => updateHospital(item.id, -5)}>-</button>
+                    <strong>{item.available_beds}</strong>
+                    <button type="button" onClick={() => updateHospital(item.id, 5)}>+</button>
+                  </div>
+                )}
               </div>
             ))}
+            {!facilities.hospitals.length && <p className="muted-copy">No hospital is assigned to this account. Ask an administrator to complete the facility assignment.</p>}
           </FacilityPanel>
         )}
         {showShelters && (
@@ -3389,13 +3791,16 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter, updat
                   <strong>{item.name}</strong>
                   <span>{item.available_capacity}/{item.total_capacity} slots - {item.medical_support ? 'medical support' : 'basic support'}</span>
                 </div>
-                <div className="stepper">
-                  <button type="button" onClick={() => updateShelter(item.id, -10)}>-</button>
-                  <strong>{item.available_capacity}</strong>
-                  <button type="button" onClick={() => updateShelter(item.id, 10)}>+</button>
-                </div>
+                {['Admin', 'Shelter'].includes(role) && (
+                  <div className="stepper">
+                    <button type="button" onClick={() => updateShelter(item.id, -10)}>-</button>
+                    <strong>{item.available_capacity}</strong>
+                    <button type="button" onClick={() => updateShelter(item.id, 10)}>+</button>
+                  </div>
+                )}
               </div>
             ))}
+            {!facilities.shelters.length && <p className="muted-copy">No shelter is assigned to this account. Ask an administrator to complete the facility assignment.</p>}
           </FacilityPanel>
         )}
         {showAmbulances && (
@@ -3408,12 +3813,15 @@ function FacilitiesView({ role, facilities, updateHospital, updateShelter, updat
                 </div>
                 <div className="facility-actions">
                   <StatusPill value={item.status} />
-                  <button type="button" className="compact-button secondary-button" onClick={() => updateAmbulanceStatus(item.id)}>
-                    Next status
-                  </button>
+                  {['Admin', 'Ambulance'].includes(role) && (
+                    <button type="button" className="compact-button secondary-button" onClick={() => updateAmbulanceStatus(item.id)}>
+                      Next status
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
+            {!facilities.ambulances.length && <p className="muted-copy">No ambulance is assigned to this account. Ask an administrator to complete the vehicle assignment.</p>}
           </FacilityPanel>
         )}
       </div>

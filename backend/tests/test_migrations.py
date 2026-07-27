@@ -3,7 +3,14 @@ from flask_migrate import upgrade
 from sqlalchemy import inspect, text
 
 from app import create_app
-from app.bootstrap import BASELINE_REVISION, HEAD_REVISION, MIGRATIONS_DIRECTORY, SECURITY_REVISION, initialize_database
+from app.bootstrap import (
+    BASELINE_REVISION,
+    HEAD_REVISION,
+    MFA_REVISION,
+    MIGRATIONS_DIRECTORY,
+    SECURITY_REVISION,
+    initialize_database,
+)
 from app.extensions import db
 from app.models import AccountSecurity, User
 
@@ -31,6 +38,12 @@ def test_fresh_database_migrates_to_head_and_is_idempotent(tmp_path):
 
         tables = set(inspect(db.engine).get_table_names())
         assert {"users", "account_security", "auth_sessions", "audit_events", "alembic_version"} <= tables
+        assert "must_change_password" in {
+            column["name"] for column in inspect(db.engine).get_columns("account_security")
+        }
+        assert {"hospital_id", "shelter_id", "ambulance_id"} <= {
+            column["name"] for column in inspect(db.engine).get_columns("role_profiles")
+        }
         assert current_revision() == HEAD_REVISION
         db.session.remove()
         db.engine.dispose()
@@ -107,7 +120,30 @@ def test_unversioned_security_release_upgrades_to_mfa_schema(tmp_path):
         tables = set(inspect(db.engine).get_table_names())
         assert {"mfa_credentials", "mfa_challenges"} <= tables
         assert "mfa_state" in {column["name"] for column in inspect(db.engine).get_columns("auth_sessions")}
+        assert "must_change_password" in {
+            column["name"] for column in inspect(db.engine).get_columns("account_security")
+        }
         assert current_revision() == HEAD_REVISION
         assert db.session.get(User, existing_user_id).email == "security-release@example.com"
+        db.session.remove()
+        db.engine.dispose()
+
+
+def test_unversioned_mfa_release_upgrades_to_secure_onboarding_schema(tmp_path):
+    application = build_migration_app(tmp_path / "mfa-release.db")
+    with application.app_context():
+        upgrade(directory=str(MIGRATIONS_DIRECTORY), revision=MFA_REVISION)
+        db.session.execute(text("DROP TABLE alembic_version"))
+        db.session.commit()
+
+        initialize_database()
+
+        assert "must_change_password" in {
+            column["name"] for column in inspect(db.engine).get_columns("account_security")
+        }
+        assert {"hospital_id", "shelter_id", "ambulance_id"} <= {
+            column["name"] for column in inspect(db.engine).get_columns("role_profiles")
+        }
+        assert current_revision() == HEAD_REVISION
         db.session.remove()
         db.engine.dispose()

@@ -148,10 +148,23 @@ def test_admin_can_provision_operational_user(client, auth_headers):
             "role": "Hospital",
             "password": "SecureHospitalPass123!",
             "organization_name": "District Hospital",
+            "facility": {
+                "name": "District Hospital",
+                "address": "Medical College Road",
+                "latitude": 12.97,
+                "longitude": 80.22,
+                "contact_phone": "9000000011",
+                "total_beds": 120,
+                "available_beds": 40,
+                "icu_beds": 12,
+                "emergency_capacity": 25,
+            },
         },
     )
     assert response.status_code == 201
     assert response.get_json()["user"]["role"] == "Hospital"
+    assert response.get_json()["user"]["password_change_required"] is True
+    assert response.get_json()["user"]["managed_facility"]["id"] == response.get_json()["facility"]["id"]
     assert "password_hash" not in response.get_json()["user"]
 
     login_response = client.post(
@@ -159,6 +172,22 @@ def test_admin_can_provision_operational_user(client, auth_headers):
         json={"email": "commander@hospital.local", "password": "SecureHospitalPass123!"},
     )
     assert login_response.status_code == 200
+    assert login_response.get_json()["password_change_required"] is True
+    blocked = client.get("/api/v1/operations/bootstrap")
+    assert blocked.status_code == 403
+    assert blocked.get_json()["code"] == "password_change_required"
+
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "SecureHospitalPass123!",
+            "new_password": "PrivateHospitalPassword456!",
+        },
+        headers={"X-CSRF-Token": client.get_cookie("resq_csrf").value},
+    )
+    assert changed.status_code == 200
+    assert changed.get_json()["user"]["password_change_required"] is False
+    assert changed.get_json()["mfa_setup_required"] is True
 
 
 def test_bootstrap_alert_acknowledgement_and_safe_route(client, app):

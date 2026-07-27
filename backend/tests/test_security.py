@@ -124,6 +124,42 @@ def test_password_change_revokes_previous_session(client):
     ).status_code == 200
 
 
+def test_user_can_review_and_revoke_other_active_sessions(client, app):
+    registered = client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Session Owner",
+            "email": "sessions@example.com",
+            "phone": "9000000777",
+            "role": "Citizen",
+            "password": STRONG_PASSWORD,
+        },
+        headers={"User-Agent": "Primary acceptance browser"},
+    )
+    assert registered.status_code == 201
+
+    other_client = app.test_client()
+    other_login = other_client.post(
+        "/api/v1/auth/login",
+        json={"email": "sessions@example.com", "password": STRONG_PASSWORD},
+        headers={"User-Agent": "Secondary acceptance browser"},
+    )
+    assert other_login.status_code == 200
+    other_token = other_login.get_json()["token"]
+
+    sessions = client.get("/api/v1/auth/sessions").get_json()["sessions"]
+    assert len(sessions) == 2
+    assert sum(item["current"] for item in sessions) == 1
+    secondary = next(item for item in sessions if not item["current"])
+    revoked = client.delete(
+        f"/api/v1/auth/sessions/{secondary['id']}",
+        headers={"X-CSRF-Token": client.get_cookie("resq_csrf").value},
+    )
+    assert revoked.status_code == 200
+    assert client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {other_token}"}).status_code == 401
+    assert client.get("/api/v1/auth/me").status_code == 200
+
+
 def test_volunteer_requires_admin_verification(client, app):
     with app.app_context():
         seed_demo_data()

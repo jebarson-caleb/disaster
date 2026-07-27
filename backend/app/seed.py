@@ -1,6 +1,7 @@
 from .auth import hash_password
 from .extensions import db
 from .models import (
+    AccountSecurity,
     Ambulance,
     Disaster,
     DisasterNewsUpdate,
@@ -11,6 +12,7 @@ from .models import (
     RescueRequest,
     Resource,
     ResponderUnit,
+    RoleProfile,
     Shelter,
     SupplyRequest,
     User,
@@ -106,6 +108,33 @@ def seed_demo_data():
     ]
     db.session.add_all([disaster, hospital, shelter, ambulance, volunteer, *resources])
     db.session.flush()
+    profiles = [
+        RoleProfile(
+            user_id=admin.id,
+            organization_name="ResQ Emergency Operations",
+            verification_status="verified",
+        ),
+        RoleProfile(user_id=citizen.id, verification_status="verified"),
+    ]
+    for role, user in demo_users.items():
+        profile = RoleProfile(
+            user_id=user.id,
+            organization_name=f"Demo {role} Operations",
+            verification_status="verified",
+        )
+        if role == "Hospital":
+            profile.hospital_id = hospital.id
+        elif role == "Shelter":
+            profile.shelter_id = shelter.id
+        elif role == "Ambulance":
+            profile.ambulance_id = ambulance.id
+        profiles.append(profile)
+    db.session.add_all(
+        [
+            *profiles,
+            *[AccountSecurity(user_id=user.id) for user in [admin, citizen, *demo_users.values()]],
+        ]
+    )
     rescues = [
         RescueRequest(
             disaster_id=disaster.id,

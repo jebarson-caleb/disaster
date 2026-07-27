@@ -122,10 +122,12 @@ def session_response(user, status=200, mfa_state=None):
     from .routes.auth import public_user
 
     auth_session, raw_token, csrf_token, access_token = create_session(user, mfa_state=mfa_state)
+    user_payload = public_user(user)
     response = jsonify(
         {
-            "user": public_user(user),
+            "user": user_payload,
             "token": access_token,
+            "password_change_required": user_payload["password_change_required"],
             "mfa_setup_required": auth_session.mfa_state == "setup_required",
             "mfa_verified": auth_session.mfa_state == "verified",
         }
@@ -257,9 +259,26 @@ def login_required(roles=None):
                 return jsonify({"error": "Forbidden for this role"}), 403
             request.user = user
             request.auth_session = current_auth_session()
+            password_change_endpoints = {
+                "auth.me",
+                "auth.logout",
+                "auth.change_password",
+            }
+            state = AccountSecurity.query.filter_by(user_id=user.id).first()
+            if state and state.must_change_password and request.endpoint not in password_change_endpoints:
+                return (
+                    jsonify(
+                        {
+                            "error": "A password change is required before operational access",
+                            "code": "password_change_required",
+                        }
+                    ),
+                    403,
+                )
             enrollment_endpoints = {
                 "auth.me",
                 "auth.logout",
+                "auth.change_password",
                 "auth.mfa_status",
                 "auth.begin_mfa_setup",
                 "auth.confirm_mfa_setup",

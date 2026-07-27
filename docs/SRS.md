@@ -7,6 +7,8 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 ## Functional Requirements
 
 - Users can register and log in by role.
+- Administrator-issued credentials must be replaced on first login; privileged roles must complete authenticator MFA before operational access.
+- Hospital, shelter, and ambulance accounts are assigned to their managed operational record and cannot mutate another facility.
 - Citizens can report disasters with location, type, affected people, severity hint, and optional image URL.
 - Citizens can create rescue requests and track status.
 - AI estimates disaster damage and ranks rescue urgency.
@@ -35,6 +37,7 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - AI decisions must remain available without internet access.
 - Backend configuration must support MySQL through environment variables.
 - Tests must cover auth, core emergency workflows, facility updates, and AI endpoints.
+- Acceptance tests must cover onboarding and workspace access for every supported role.
 - Sensitive welfare, supply, and location records must be filtered by authenticated role and requester ownership.
 
 ## Actors

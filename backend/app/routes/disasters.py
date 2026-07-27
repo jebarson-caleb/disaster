@@ -6,11 +6,13 @@ from ..models import (
     AiAssessment,
     Ambulance,
     Disaster,
+    HospitalNotification,
     LocationPing,
     RescueRequest,
     RescueStatusHistory,
     ResponderUnit,
     ResponseDispatch,
+    RoleProfile,
     Volunteer,
 )
 from ..services.ai_service import damage_estimation, relief_prioritization
@@ -71,7 +73,10 @@ def list_disasters():
 @login_required()
 def get_disaster(disaster_id):
     disaster = db.get_or_404(Disaster, disaster_id)
-    requests = RescueRequest.query.filter_by(disaster_id=disaster_id).order_by(RescueRequest.priority_score.desc()).all()
+    requests = _scoped_rescue_query(
+        RescueRequest.query.filter_by(disaster_id=disaster_id),
+        request.user,
+    ).order_by(RescueRequest.priority_score.desc()).all()
     return jsonify({"disaster": disaster.to_dict(), "rescue_requests": [item.to_dict() for item in requests]})
 
 
@@ -127,7 +132,10 @@ def create_rescue_request():
 @login_required()
 def list_rescue_requests():
     status = request.args.get("status")
-    query = RescueRequest.query.order_by(RescueRequest.priority_score.desc(), RescueRequest.created_at.asc())
+    query = _scoped_rescue_query(RescueRequest.query, request.user).order_by(
+        RescueRequest.priority_score.desc(),
+        RescueRequest.created_at.asc(),
+    )
     if status:
         query = query.filter_by(status=status)
     return jsonify({"rescue_requests": [item.to_dict() for item in query.limit(300).all()]})
@@ -137,6 +145,11 @@ def list_rescue_requests():
 @login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO", "Hospital", "Volunteer"])
 def update_rescue_status(request_id):
     rescue = db.get_or_404(RescueRequest, request_id)
+    if request.user.role in {"Hospital", "Ambulance", "Volunteer"} and not _assigned_to_user(
+        rescue.id,
+        request.user,
+    ):
+        return jsonify({"error": "This rescue request is not assigned to your account"}), 403
     data = request.get_json() or {}
     status = data.get("status")
     if not status:
@@ -168,7 +181,7 @@ def update_rescue_status(request_id):
 
 
 @disasters_bp.patch("/rescue-requests/<int:request_id>/assign")
-@login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO"])
+@login_required(roles=["Admin", "Police", "Fire Service", "NGO"])
 def assign_rescue_request(request_id):
     rescue = db.get_or_404(RescueRequest, request_id)
     data = request.get_json() or {}
@@ -181,3 +194,52 @@ def assign_rescue_request(request_id):
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=rescue.status, note=f"Assigned to {rescue.assigned_unit}", changed_by_id=request.user.id))
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict()})
+
+
+def _scoped_rescue_query(query, user):
+    if user.role in {"Admin", "Police", "Fire Service", "NGO"}:
+        return query
+    if user.role == "Citizen":
+        return query.filter_by(requester_id=user.id)
+    if user.role in {"Hospital", "Ambulance", "Volunteer"}:
+        return query.filter(RescueRequest.id.in_(_assigned_rescue_ids(user)))
+    return query.filter(RescueRequest.id.in_([]))
+
+
+def _assigned_to_user(rescue_id, user):
+    return rescue_id in set(_assigned_rescue_ids(user))
+
+
+def _assigned_rescue_ids(user):
+    profile = RoleProfile.query.filter_by(user_id=user.id).first()
+    if user.role == "Hospital":
+        if profile is None or not profile.hospital_id:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in HospitalNotification.query.with_entities(
+                HospitalNotification.rescue_request_id
+            )
+            .filter_by(hospital_id=profile.hospital_id)
+            .all()
+        ]
+    if user.role == "Ambulance":
+        if profile is None or not profile.ambulance_id:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
+            .filter_by(responder_type="ambulance", responder_id=profile.ambulance_id)
+            .all()
+        ]
+    if user.role == "Volunteer":
+        volunteer = Volunteer.query.filter_by(user_id=user.id).first()
+        if volunteer is None:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
+            .filter_by(responder_type="volunteer", responder_id=volunteer.id)
+            .all()
+        ]
+    return []

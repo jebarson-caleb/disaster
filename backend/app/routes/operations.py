@@ -22,6 +22,7 @@ from ..models import (
     ResourceDistribution,
     ResponderUnit,
     ResponseDispatch,
+    RoleProfile,
     Shelter,
     SupplyRequest,
     User,
@@ -56,6 +57,53 @@ def bootstrap():
         .group_by(AlertAcknowledgement.alert_id)
         .all()
     )
+    profile = RoleProfile.query.filter_by(user_id=request.user.id).first()
+    rescue_query = RescueRequest.query.order_by(
+        RescueRequest.priority_score.desc(),
+        RescueRequest.created_at.asc(),
+    )
+    if request.user.role == "Citizen":
+        rescue_query = rescue_query.filter_by(requester_id=request.user.id)
+    elif request.user.role not in {"Admin", "Police", "Fire Service", "NGO"}:
+        rescue_query = rescue_query.filter(RescueRequest.id.in_(_assigned_rescue_ids(request.user, profile)))
+
+    hospital_query = Hospital.query.order_by(Hospital.name)
+    shelter_query = Shelter.query.order_by(Shelter.name)
+    ambulance_query = Ambulance.query.order_by(Ambulance.vehicle_number)
+    if request.user.role == "Hospital":
+        hospital_query = hospital_query.filter_by(id=profile.hospital_id if profile else None)
+        shelter_query = shelter_query.filter_by(id=None)
+        ambulance_query = ambulance_query.filter_by(id=None)
+    elif request.user.role == "Shelter":
+        hospital_query = hospital_query.filter_by(id=None)
+        shelter_query = shelter_query.filter_by(id=profile.shelter_id if profile else None)
+        ambulance_query = ambulance_query.filter_by(id=None)
+    elif request.user.role == "Ambulance":
+        shelter_query = shelter_query.filter_by(id=None)
+        ambulance_query = ambulance_query.filter_by(id=profile.ambulance_id if profile else None)
+
+    hospital_notification_query = HospitalNotification.query.order_by(HospitalNotification.created_at.desc())
+    if request.user.role == "Hospital":
+        hospital_notification_query = hospital_notification_query.filter_by(
+            hospital_id=profile.hospital_id if profile else None
+        )
+    elif request.user.role == "Ambulance":
+        hospital_notification_query = hospital_notification_query.filter(
+            HospitalNotification.rescue_request_id.in_(_assigned_rescue_ids(request.user, profile))
+        )
+
+    dispatch_query = ResponseDispatch.query.order_by(ResponseDispatch.created_at.desc())
+    if request.user.role == "Ambulance":
+        dispatch_query = dispatch_query.filter_by(
+            responder_type="ambulance",
+            responder_id=profile.ambulance_id if profile else None,
+        )
+    elif request.user.role == "Volunteer":
+        volunteer = Volunteer.query.filter_by(user_id=request.user.id).first()
+        dispatch_query = dispatch_query.filter_by(
+            responder_type="volunteer",
+            responder_id=volunteer.id if volunteer else None,
+        )
     welfare_query = WelfareCheck.query.order_by(WelfareCheck.created_at.desc())
     supply_query = SupplyRequest.query.order_by(SupplyRequest.created_at.desc())
     if request.user.role not in {"Admin", "Police", "Fire Service", "NGO", "Volunteer"}:
@@ -71,13 +119,15 @@ def bootstrap():
     return jsonify(
         {
             "disasters": [item.to_dict() for item in Disaster.query.order_by(Disaster.created_at.desc()).limit(200).all()],
-            "rescue_requests": [item.to_dict() for item in RescueRequest.query.order_by(RescueRequest.priority_score.desc(), RescueRequest.created_at.asc()).limit(300).all()],
+            "rescue_requests": [item.to_dict() for item in rescue_query.limit(300).all()],
             "facilities": {
-                "hospitals": [item.to_dict() for item in Hospital.query.order_by(Hospital.name).all()],
-                "shelters": [item.to_dict() for item in Shelter.query.order_by(Shelter.name).all()],
-                "ambulances": [item.to_dict() for item in Ambulance.query.order_by(Ambulance.vehicle_number).all()],
+                "hospitals": [item.to_dict() for item in hospital_query.all()],
+                "shelters": [item.to_dict() for item in shelter_query.all()],
+                "ambulances": [item.to_dict() for item in ambulance_query.all()],
             },
-            "resources": [item.to_dict() for item in Resource.query.order_by(Resource.category, Resource.name).all()],
+            "resources": [item.to_dict() for item in Resource.query.order_by(Resource.category, Resource.name).all()]
+            if request.user.role in {"Admin", "NGO", "Shelter"}
+            else [],
             "alerts": [
                 {
                     **item.to_dict(),
@@ -89,10 +139,14 @@ def bootstrap():
             "response_hub": {
                 "news_updates": [item.to_dict() for item in DisasterNewsUpdate.query.order_by(DisasterNewsUpdate.is_live.desc(), DisasterNewsUpdate.published_at.desc()).limit(100).all()],
                 "welfare_checks": [item.to_dict() for item in welfare_query.limit(200).all()],
-                "hospital_notifications": [item.to_dict() for item in HospitalNotification.query.order_by(HospitalNotification.created_at.desc()).limit(200).all()] if request.user.role in {"Admin", "Hospital", "Ambulance"} else [],
+                "hospital_notifications": [item.to_dict() for item in hospital_notification_query.limit(200).all()]
+                if request.user.role in {"Admin", "Hospital", "Ambulance"}
+                else [],
                 "supply_requests": [item.to_dict() for item in supply_query.limit(200).all()],
                 "campaigns": campaign_items,
-                "dispatches": [item.to_dict() for item in ResponseDispatch.query.order_by(ResponseDispatch.created_at.desc()).limit(200).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
+                "dispatches": [item.to_dict() for item in dispatch_query.limit(200).all()]
+                if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"}
+                else [],
                 "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
                 "emergency_hotline": current_app.config.get("EMERGENCY_HOTLINE", "112"),
             },
@@ -217,3 +271,38 @@ def distance_km(lat1, lon1, lat2, lon2):
     d_lon = radians(lon2 - lon1)
     value = sin(d_lat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
     return 2 * earth_radius_km * asin(sqrt(value))
+
+
+def _assigned_rescue_ids(user, profile=None):
+    profile = profile or RoleProfile.query.filter_by(user_id=user.id).first()
+    if user.role == "Hospital":
+        if not profile or not profile.hospital_id:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in HospitalNotification.query.with_entities(
+                HospitalNotification.rescue_request_id
+            )
+            .filter_by(hospital_id=profile.hospital_id)
+            .all()
+        ]
+    if user.role == "Ambulance":
+        if not profile or not profile.ambulance_id:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
+            .filter_by(responder_type="ambulance", responder_id=profile.ambulance_id)
+            .all()
+        ]
+    if user.role == "Volunteer":
+        volunteer = Volunteer.query.filter_by(user_id=user.id).first()
+        if volunteer is None:
+            return []
+        return [
+            rescue_id
+            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
+            .filter_by(responder_type="volunteer", responder_id=volunteer.id)
+            .all()
+        ]
+    return []

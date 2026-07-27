@@ -26,7 +26,7 @@ from ..mfa import (
     verify_factor,
     verify_totp,
 )
-from ..models import AuthSession, MfaCredential, RoleProfile, User, Volunteer
+from ..models import AccountSecurity, AuthSession, MfaCredential, RoleProfile, User, Volunteer
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -203,9 +203,11 @@ def complete_mfa_login():
 @auth_bp.get("/me")
 @login_required()
 def me():
+    user_payload = public_user(request.user)
     return jsonify(
         {
-            "user": public_user(request.user),
+            "user": user_payload,
+            "password_change_required": user_payload["password_change_required"],
             "mfa_setup_required": request.auth_session.mfa_state == "setup_required",
             "mfa_verified": request.auth_session.mfa_state == "verified",
         }
@@ -359,6 +361,7 @@ def change_password():
     request.user.password_hash = hash_password(new_password)
     state = security_state(request.user)
     state.password_changed_at = utcnow()
+    state.must_change_password = False
     AuthSession.query.filter(
         AuthSession.user_id == request.user.id,
         AuthSession.id != request.auth_session.id,
@@ -409,6 +412,14 @@ def revoke_session(session_id):
 
 def public_user(user):
     profile = RoleProfile.query.filter_by(user_id=user.id).first()
+    state = AccountSecurity.query.filter_by(user_id=user.id).first()
+    managed_facility = None
+    if profile and profile.hospital_id:
+        managed_facility = {"type": "hospital", "id": profile.hospital_id}
+    elif profile and profile.shelter_id:
+        managed_facility = {"type": "shelter", "id": profile.shelter_id}
+    elif profile and profile.ambulance_id:
+        managed_facility = {"type": "ambulance", "id": profile.ambulance_id}
     return {
         "id": user.id,
         "name": user.name,
@@ -420,4 +431,6 @@ def public_user(user):
         "verification_status": profile.verification_status if profile else "verified",
         "mfa_enabled": enabled_credential(user.id) is not None,
         "mfa_required": required_for(user),
+        "password_change_required": bool(state and state.must_change_password),
+        "managed_facility": managed_facility,
     }

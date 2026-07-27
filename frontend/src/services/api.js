@@ -80,12 +80,23 @@ export function disableMfa(payload) {
   return request('/auth/mfa/disable', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function listSessions() {
+  return request('/auth/sessions');
+}
+
+export function revokeSession(id) {
+  return request(`/auth/sessions/${id}`, { method: 'DELETE' });
+}
+
 export const api = {
   bootstrap: () => request('/operations/bootstrap'),
   adminUsers: () => request('/admin/users'),
   provisionUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUserAccess: (id, payload) => request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   resetUserPassword: (id, payload) => request(`/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify(payload) }),
+  createResource: (payload) => request('/admin/resources', { method: 'POST', body: JSON.stringify(payload) }),
+  createResponder: (payload) => request('/admin/responders', { method: 'POST', body: JSON.stringify(payload) }),
+  createDonationCampaign: (payload) => request('/admin/donation-campaigns', { method: 'POST', body: JSON.stringify(payload) }),
   createDisaster: (payload) => request('/disasters', { method: 'POST', body: JSON.stringify(payload) }),
   createRescue: (payload) => request('/rescue-requests', { method: 'POST', body: JSON.stringify(payload) }),
   assignRescue: (id, payload) => request(`/rescue-requests/${id}/assign`, { method: 'PATCH', body: JSON.stringify(payload) }),

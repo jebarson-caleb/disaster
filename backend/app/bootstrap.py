@@ -13,7 +13,8 @@ from .seed import seed_demo_data
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
 BASELINE_REVISION = "20260721_01"
 SECURITY_REVISION = "20260721_02"
-HEAD_REVISION = "20260721_03"
+MFA_REVISION = "20260721_03"
+HEAD_REVISION = "20260727_04"
 SECURITY_TABLES = {"account_security", "audit_events", "auth_sessions"}
 MFA_TABLES = {"mfa_credentials", "mfa_challenges"}
 POST_BASELINE_TABLES = SECURITY_TABLES | MFA_TABLES
@@ -99,7 +100,17 @@ def apply_schema_migrations():
                     }
                     if "mfa_state" not in auth_session_columns:
                         raise RuntimeError("The existing unversioned database has MFA tables but no session MFA state")
-                    legacy_revision = HEAD_REVISION
+                    account_security_columns = {
+                        column["name"] for column in inspect(db.engine).get_columns("account_security")
+                    }
+                    role_profile_columns = {
+                        column["name"] for column in inspect(db.engine).get_columns("role_profiles")
+                    }
+                    onboarding_columns_present = (
+                        "must_change_password" in account_security_columns
+                        and {"hospital_id", "shelter_id", "ambulance_id"} <= role_profile_columns
+                    )
+                    legacy_revision = HEAD_REVISION if onboarding_columns_present else MFA_REVISION
                 elif existing_security == SECURITY_TABLES:
                     legacy_revision = SECURITY_REVISION
                 else:
@@ -144,7 +155,7 @@ def bootstrap_admin():
     db.session.add_all(
         [
             RoleProfile(user_id=user.id, organization_name="Emergency Operations", verification_status="verified"),
-            AccountSecurity(user_id=user.id),
+            AccountSecurity(user_id=user.id, must_change_password=True),
         ]
     )
     db.session.commit()

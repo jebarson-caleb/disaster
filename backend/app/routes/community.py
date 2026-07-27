@@ -20,6 +20,7 @@ from ..models import (
     Notification,
     RescueRequest,
     ResponseDispatch,
+    RoleProfile,
     SupplyRequest,
     User,
     WelfareCheck,
@@ -182,7 +183,17 @@ def update_welfare_check(check_id):
 @community_bp.get("/hospital-notifications")
 @login_required(roles=["Admin", "Hospital", "Ambulance"])
 def list_hospital_notifications():
-    items = HospitalNotification.query.order_by(HospitalNotification.created_at.desc()).limit(200).all()
+    query = HospitalNotification.query.order_by(HospitalNotification.created_at.desc())
+    profile = RoleProfile.query.filter_by(user_id=request.user.id).first()
+    if request.user.role == "Hospital":
+        query = query.filter_by(hospital_id=profile.hospital_id if profile else None)
+    elif request.user.role == "Ambulance":
+        rescue_ids = ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id).filter_by(
+            responder_type="ambulance",
+            responder_id=profile.ambulance_id if profile else None,
+        )
+        query = query.filter(HospitalNotification.rescue_request_id.in_(rescue_ids))
+    items = query.limit(200).all()
     hospitals = {item.id: item for item in Hospital.query.all()}
     return jsonify({"hospital_notifications": [{**item.to_dict(), "hospital_name": hospitals[item.hospital_id].name} for item in items]})
 
@@ -191,6 +202,10 @@ def list_hospital_notifications():
 @login_required(roles=["Admin", "Hospital"])
 def acknowledge_hospital_notification(notification_id):
     item = db.get_or_404(HospitalNotification, notification_id)
+    if request.user.role == "Hospital":
+        profile = RoleProfile.query.filter_by(user_id=request.user.id).first()
+        if profile is None or profile.hospital_id != item.hospital_id:
+            return jsonify({"error": "You can acknowledge only notifications for your assigned hospital"}), 403
     item.status = "acknowledged"
     item.acknowledged_by_id = request.user.id
     item.acknowledged_at = datetime.now(UTC)
@@ -344,7 +359,7 @@ def create_location_ping():
 
 
 @community_bp.post("/rescue-requests/<int:request_id>/auto-dispatch")
-@login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO"])
+@login_required(roles=["Admin", "Police", "Fire Service", "NGO"])
 def auto_dispatch(request_id):
     rescue = db.get_or_404(RescueRequest, request_id)
     existing = ResponseDispatch.query.filter_by(rescue_request_id=rescue.id).all()

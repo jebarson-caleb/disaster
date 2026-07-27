@@ -20,9 +20,10 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - Revocable server-side sessions in `Secure`, `HttpOnly`, `SameSite=Lax` cookies
 - CSRF validation for cookie-authenticated writes and short-lived bearer tokens for API clients
 - 15-character minimum passwords, scrypt hashing, login throttling, and timed account lockout
+- Mandatory replacement of administrator-issued temporary passwords before any operational API is available
 - Encrypted RFC 6238 authenticator MFA, single-use challenges, replay protection, recovery codes, and mandatory privileged-role enrollment
-- Server-side idle and absolute session expiry, logout, session listing, and revocation
-- Role authorization, an administrator User Access workspace, verified operational-account provisioning, volunteer approval, password reset/change, and security audit events
+- Server-side idle and absolute session expiry, logout, in-app session listing, and per-device revocation
+- Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
 - Production login wall; demo data and role switching require explicit demo build/runtime flags
 - CI for linting, migration drift, warning-free tests, backend coverage, production builds, and dependency vulnerability audits
@@ -34,7 +35,8 @@ These controls are aligned with the OWASP session and authentication guidance li
 ## Features
 
 - Role-aware workspaces for citizens, administrators, police, fire, hospitals, shelters, ambulances, NGOs, and volunteers
-- Administrator account directory with activation/deactivation, pending-volunteer verification, re-authenticated password recovery, and automatic session revocation
+- Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password recovery, and automatic session revocation
+- Operational Setup workspace for live resource inventory, responder units, and verified donation campaigns
 - Incident reporting, deterministic damage scoring, rescue priority, automatic nearest-team/volunteer/ambulance dispatch, and hospital preparation
 - CAP-inspired public alerts, acknowledgements, India-wide alert aggregation, verified field updates, and safe-route advice
 - Hospital/shelter capacity, resource inventory, transactional distribution, volunteer assignment, welfare checks, and isolated-survivor supply cases
@@ -42,6 +44,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 - Optional Ollama explanations; operational decisions continue with deterministic rules if Ollama is unavailable
 
 The feature-to-problem mapping is documented in [Hackathon alignment](docs/HACKATHON_ALIGNMENT.md).
+The provisioning, MFA, workspace, and authorization expectations for every login are documented in [Role access](docs/ROLE_ACCESS.md).
 
 ## Local development
 
@@ -90,6 +93,7 @@ The liveness endpoint is `/api/v1/health`; the database/configuration readiness 
 
 - [Beta deployment and operations](docs/BETA_DEPLOYMENT.md)
 - [Security and privacy](docs/SECURITY_PRIVACY.md)
+- [Role access and onboarding](docs/ROLE_ACCESS.md)
 - [Hackathon problem alignment](docs/HACKATHON_ALIGNMENT.md)
 - [Software requirements](docs/SRS.md)
 - [Relational schema](docs/RELATIONAL_SCHEMA.md)

@@ -1918,6 +1918,22 @@ button {
 }
 
 .access-form .primary-action { min-height: 42px; }
+.access-form > .account-form {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.check-row input { width: 18px; height: 18px; }
 .muted-copy { color: var(--muted); }
 .access-users-panel { grid-column: 1 / -1; }
 
