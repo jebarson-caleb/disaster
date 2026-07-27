@@ -1,0 +1,94 @@
+name: Production smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: production-smoke
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: production
+      url: https://disaster-delta-eight.vercel.app
+    env:
+      BASE_URL: https://disaster-delta-eight.vercel.app
+    steps:
+      - name: Probe live application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl_args=(
+            --silent
+            --show-error
+            --fail
+            --location
+            --retry 12
+            --retry-all-errors
+            --retry-delay 15
+            --connect-timeout 10
+            --max-time 45
+          )
+
+          curl "${curl_args[@]}" "$BASE_URL/" \
+            --dump-header root.headers \
+            --output root.html
+          grep -q 'id="root"' root.html
+
+          curl "${curl_args[@]}" "$BASE_URL/api/v1/health" \
+            --dump-header health.headers \
+            --output health.json
+          curl "${curl_args[@]}" "$BASE_URL/api/v1/ready" \
+            --dump-header ready.headers \
+            --output ready.json
+
+          auth_status="$(
+            curl --silent --show-error --location \
+              --connect-timeout 10 --max-time 45 \
+              --output auth.json \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/v1/auth/me"
+          )"
+          test "$auth_status" = "401"
+
+      - name: Validate responses and security headers
+        shell: python {0}
+        run: |
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path("health.json").read_text())
+          readiness = json.loads(Path("ready.json").read_text())
+
+          assert health["status"] == "ok", health
+          assert readiness["status"] == "ready", readiness
+          assert readiness["checks"]["configuration"] is True, readiness
+          assert readiness["checks"]["database"] is True, readiness
+
+          headers = Path("ready.headers").read_text().lower()
+          required_headers = {
+              "cache-control": "no-store",
+              "content-security-policy": "default-src 'self'",
+              "strict-transport-security": "max-age=",
+              "x-content-type-options": "nosniff",
+              "x-frame-options": "deny",
+              "x-request-id": "",
+          }
+          for name, value in required_headers.items():
+              prefix = f"{name}:"
+              matching = [line for line in headers.splitlines() if line.startswith(prefix)]
+              assert matching, f"missing {name}"
+              assert any(value in line for line in matching), f"unexpected {name}"
+
+          print("Production root, liveness, readiness, auth boundary, and headers are healthy.")

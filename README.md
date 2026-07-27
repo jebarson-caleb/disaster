@@ -1,6 +1,9 @@
 # ResQ Command
 
 [![CI](https://github.com/jebarson-caleb/disaster/actions/workflows/ci.yml/badge.svg)](https://github.com/jebarson-caleb/disaster/actions/workflows/ci.yml)
+[![Production smoke](https://github.com/jebarson-caleb/disaster/actions/workflows/production-smoke.yml/badge.svg)](https://github.com/jebarson-caleb/disaster/actions/workflows/production-smoke.yml)
+
+Live beta: [disaster-delta-eight.vercel.app](https://disaster-delta-eight.vercel.app)
 
 ResQ Command is a full-stack disaster-response platform for citizen reporting, rescue triage and dispatch, public warnings, hospitals, shelters, relief logistics, family welfare checks, supply requests, and donation pledges.
 
