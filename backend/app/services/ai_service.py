@@ -1,9 +1,8 @@
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 from flask import current_app
-
 
 SEVERITY_WEIGHTS = {
     "low": 10,
@@ -121,7 +120,7 @@ def waiting_bonus(created_at):
             created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         except ValueError:
             return 0
-    minutes = (datetime.now(timezone.utc) - created_at).total_seconds() / 60
+    minutes = (datetime.now(UTC) - created_at).total_seconds() / 60
     return min(10, int(minutes // 30))
 
 

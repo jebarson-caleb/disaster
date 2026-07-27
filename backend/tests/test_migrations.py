@@ -1,3 +1,4 @@
+from conftest import TestConfig
 from flask_migrate import upgrade
 from sqlalchemy import inspect, text
 
@@ -5,7 +6,6 @@ from app import create_app
 from app.bootstrap import BASELINE_REVISION, HEAD_REVISION, MIGRATIONS_DIRECTORY, SECURITY_REVISION, initialize_database
 from app.extensions import db
 from app.models import AccountSecurity, User
-from conftest import TestConfig
 
 
 def build_migration_app(database_path):

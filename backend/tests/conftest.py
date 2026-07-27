@@ -9,8 +9,8 @@ from app.seed import seed_demo_data
 class TestConfig(Config):
     TESTING = True
     APP_ENV = "testing"
-    SECRET_KEY = "test-secret"
-    JWT_SECRET_KEY = "test-jwt-secret"
+    SECRET_KEY = "test-secret-key-that-is-longer-than-32-bytes"
+    JWT_SECRET_KEY = "test-jwt-key-that-is-different-and-32-bytes"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     CORS_ORIGINS = ["http://localhost:5173"]

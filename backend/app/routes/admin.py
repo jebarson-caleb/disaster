@@ -1,9 +1,28 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
-from ..auth import audit_event, hash_password, login_required, security_state, utcnow, validate_password, verify_password
+from ..auth import (
+    audit_event,
+    hash_password,
+    login_required,
+    security_state,
+    utcnow,
+    validate_password,
+    verify_password,
+)
 from ..extensions import db, limiter
-from ..models import AuthSession, Ambulance, Disaster, Hospital, RescueRequest, Resource, RoleProfile, Shelter, User, Volunteer
+from ..models import (
+    Ambulance,
+    AuthSession,
+    Disaster,
+    Hospital,
+    RescueRequest,
+    Resource,
+    RoleProfile,
+    Shelter,
+    User,
+    Volunteer,
+)
 from .auth import VALID_ROLES, public_user
 
 admin_bp = Blueprint("admin", __name__)

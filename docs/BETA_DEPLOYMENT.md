@@ -31,8 +31,17 @@ Before merging a model change, generate and review its migration, test it agains
 
 ```bash
 cd backend
+python -m ruff check .
+python -m pip_audit -r requirements-dev.txt
+flask --app run:app db upgrade
 flask --app run:app db check
-pytest -q
+pytest -q -W error --cov=app --cov-report=term-missing --cov-fail-under=75
+
+cd ../frontend
+npm ci
+npm audit --audit-level=high
+npm run lint
+npm run build
 ```
 
 Keep `AUTO_MIGRATE=true` for the Vercel one-click flow. Teams that later move migrations into a dedicated release job may set it to `false` only after replacing the startup step and updating the readiness/release procedure.
@@ -69,4 +78,4 @@ After deployment:
 
 ## Release gate
 
-The code is beta-deployable when CI passes and `/ready` is green. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.
+The code is beta-deployable when CI passes, the production dependency audits report no known vulnerabilities, and `/ready` is green. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.

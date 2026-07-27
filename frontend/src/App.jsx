@@ -371,6 +371,9 @@ export default function App() {
     ],
     [activeRole],
   );
+  const visibleActiveView = activeNavigation.some((item) => item.id === activeView) ? activeView : 'command';
+  const currentUserId = currentUser?.id;
+  const currentUserName = currentUser?.name;
   const visibleRescues = rescueItemsForRole(activeRole, sortedRescues);
 
   useEffect(() => {
@@ -421,7 +424,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (sessionMode !== 'account' || !currentUser) return;
+    if (sessionMode !== 'account' || !currentUserId) return;
     let cancelled = false;
     getMfaStatus()
       .then((status) => {
@@ -433,10 +436,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [sessionMode, currentUser?.id]);
+  }, [sessionMode, currentUserId]);
 
   useEffect(() => {
-    if (activeView !== 'access' || currentUser?.role !== 'Admin') return;
+    if (visibleActiveView !== 'access' || currentUser?.role !== 'Admin') return;
     let cancelled = false;
     api.adminUsers()
       .then(({ users }) => {
@@ -448,21 +451,17 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeView, currentUser]);
-
-  useEffect(() => {
-    if (!activeNavigation.some((item) => item.id === activeView)) {
-      setActiveView('command');
-    }
-  }, [activeRole, activeNavigation, activeView]);
+  }, [visibleActiveView, currentUser]);
 
   useEffect(() => {
     let cancelled = false;
     async function connect() {
-      if (sessionMode === 'checking' || (sessionMode === 'account' && (!currentUser || mfaSession.setup_required))) return;
+      if (sessionMode === 'checking' || (sessionMode === 'account' && (!currentUserId || mfaSession.setup_required))) return;
       setConnectionState('connecting');
       try {
-        const session = sessionMode === 'demo' ? await openDemoSession(activeRole) : { user: currentUser };
+        const session = sessionMode === 'demo'
+          ? await openDemoSession(activeRole)
+          : { user: { id: currentUserId, name: currentUserName } };
         await flushOfflineQueue();
         const [snapshot, coordination] = await Promise.all([
           api.bootstrap(),
@@ -492,7 +491,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, sessionMode, mfaSession.setup_required]);
+  }, [activeRole, sessionMode, mfaSession.setup_required, currentUserId, currentUserName]);
 
   useEffect(() => {
     function reconnect() {
@@ -960,7 +959,7 @@ export default function App() {
       try {
         if (operation.type === 'disaster') await api.createDisaster(operation.payload);
         if (operation.type === 'rescue') await api.createRescue(operation.payload);
-      } catch (_error) {
+      } catch {
         remaining.push(operation);
       }
     }
@@ -1141,7 +1140,7 @@ export default function App() {
   async function signOut() {
     try {
       await logout();
-    } catch (_error) {
+    } catch {
       // Local state is still cleared when the server session has expired.
     }
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
@@ -1235,7 +1234,7 @@ export default function App() {
 
         <nav className="nav-stack" aria-label="Main views">
           {activeNavigation.map(({ id, label, icon: Icon }) => (
-            <button key={id} className={activeView === id ? 'active' : ''} onClick={() => setActiveView(id)}>
+            <button key={id} className={visibleActiveView === id ? 'active' : ''} onClick={() => setActiveView(id)}>
               <Icon size={18} /> {label}
             </button>
           ))}
@@ -1377,7 +1376,7 @@ export default function App() {
         </section>
 
         <AnimatePresence mode="wait">
-          {activeView === 'command' && (
+          {visibleActiveView === 'command' && (
             <MotionPage key="command" reduceMotion={reduceMotion}>
               {activeRole === 'Admin' ? (
                 <CommandView
@@ -1413,7 +1412,7 @@ export default function App() {
               )}
             </MotionPage>
           )}
-          {activeView === 'report' && (
+          {visibleActiveView === 'report' && (
             <MotionPage key="report" reduceMotion={reduceMotion}>
               <ReportView
                 draft={incidentDraft}
@@ -1429,7 +1428,7 @@ export default function App() {
               />
             </MotionPage>
           )}
-          {activeView === 'rescue' && (
+          {visibleActiveView === 'rescue' && (
             <MotionPage key="rescue" reduceMotion={reduceMotion}>
               <RescueView
                 role={activeRole}
@@ -1441,7 +1440,7 @@ export default function App() {
               />
             </MotionPage>
           )}
-          {activeView === 'facilities' && (
+          {visibleActiveView === 'facilities' && (
             <MotionPage key="facilities" reduceMotion={reduceMotion}>
               <FacilitiesView
                 role={activeRole}
@@ -1452,7 +1451,7 @@ export default function App() {
               />
             </MotionPage>
           )}
-          {activeView === 'coordination' && (
+          {visibleActiveView === 'coordination' && (
             <MotionPage key="coordination" reduceMotion={reduceMotion}>
               <CoordinationView
                 disasters={disasters}
@@ -1467,7 +1466,7 @@ export default function App() {
               />
             </MotionPage>
           )}
-          {activeView === 'access' && activeRole === 'Admin' && (
+          {visibleActiveView === 'access' && activeRole === 'Admin' && (
             <MotionPage key="access" reduceMotion={reduceMotion}>
               <UserAccessView
                 users={managedUsers}
@@ -1482,7 +1481,7 @@ export default function App() {
               />
             </MotionPage>
           )}
-          {activeView === 'response-hub' && (
+          {visibleActiveView === 'response-hub' && (
             <MotionPage key="response-hub" reduceMotion={reduceMotion}>
               <ResponseHubView
                 role={activeRole}
@@ -1719,7 +1718,7 @@ function UserAccessView({ users, currentUser, provisionDraft, setProvisionDraft,
   );
 }
 
-function MotionPage({ children, reduceMotion }) {
+function MotionPage({ children }) {
   return <div className="motion-page">{children}</div>;
 }
 
@@ -1851,7 +1850,7 @@ function readOfflineQueue() {
       .slice(-OFFLINE_QUEUE_LIMIT);
     if (current.length !== parsed.length) localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(current));
     return current;
-  } catch (_error) {
+  } catch {
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
     return [];
   }

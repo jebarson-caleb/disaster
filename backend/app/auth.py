@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from uuid import uuid4
 
@@ -11,7 +11,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
 from .models import AccountSecurity, AuditEvent, AuthSession, User
-
 
 COMMON_PASSWORDS = {
     "123456789",
@@ -23,13 +22,13 @@ COMMON_PASSWORDS = {
 
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def as_utc(value):
     if value is None:
         return None
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def digest(value):

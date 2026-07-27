@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
 from uuid import uuid4
 
@@ -18,10 +18,10 @@ from ..models import (
     Hospital,
     HospitalNotification,
     RescueRequest,
-    ResponseDispatch,
-    ResponderUnit,
     Resource,
     ResourceDistribution,
+    ResponderUnit,
+    ResponseDispatch,
     Shelter,
     SupplyRequest,
     User,
@@ -37,7 +37,7 @@ operations_bp = Blueprint("operations", __name__)
 @login_required()
 def bootstrap():
     """One round-trip snapshot for low-bandwidth field clients."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     alerts = (
         EmergencyAlert.query.filter_by(status="active")
         .filter(or_(EmergencyAlert.expires_at.is_(None), EmergencyAlert.expires_at > now))
@@ -96,7 +96,7 @@ def bootstrap():
                 "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
                 "emergency_hotline": current_app.config.get("EMERGENCY_HOTLINE", "112"),
             },
-            "server_time": datetime.now(timezone.utc).isoformat(),
+            "server_time": datetime.now(UTC).isoformat(),
         }
     )
 
@@ -112,7 +112,7 @@ def create_alert():
     if not 1 <= expires_in_hours <= 72:
         return jsonify({"error": "expires_in_hours must be between 1 and 72"}), 400
     alert = EmergencyAlert(
-        identifier=f"RESQ-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{uuid4().hex[:6].upper()}",
+        identifier=f"RESQ-{datetime.now(UTC):%Y%m%d%H%M%S}-{uuid4().hex[:6].upper()}",
         sender_id=request.user.id,
         event=data.get("event", "All-hazard emergency warning"),
         audience=data["audience"],
@@ -122,7 +122,7 @@ def create_alert():
         certainty=data.get("certainty", "likely"),
         message=data["message"],
         instruction=data["instruction"],
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=expires_in_hours),
+        expires_at=datetime.now(UTC) + timedelta(hours=expires_in_hours),
     )
     db.session.add(alert)
     db.session.commit()

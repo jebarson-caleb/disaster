@@ -2,7 +2,6 @@ import time
 
 import pyotp
 
-from app.extensions import db
 from app.models import MfaCredential
 from app.seed import seed_demo_data
 

@@ -2,7 +2,6 @@ from app.config import production_configuration_issues
 from app.extensions import db
 from app.seed import seed_demo_data
 
-
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
 
 

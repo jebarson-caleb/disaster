@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -25,7 +25,6 @@ from ..models import (
     WelfareCheck,
 )
 from ..services.dispatch_service import auto_dispatch_rescue
-
 
 community_bp = Blueprint("community", __name__)
 FIELD_ROLES = {"Admin", "Police", "Fire Service", "NGO", "Hospital", "Shelter", "Ambulance", "Volunteer"}
@@ -66,7 +65,7 @@ def welfare_payload(item):
 @community_bp.get("/national-alerts")
 def national_alerts():
     """Public country-wide incident, warning, and verified-news feed."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     alerts = (
         EmergencyAlert.query.filter_by(status="active")
         .filter(or_(EmergencyAlert.expires_at.is_(None), EmergencyAlert.expires_at > now))
@@ -194,7 +193,7 @@ def acknowledge_hospital_notification(notification_id):
     item = db.get_or_404(HospitalNotification, notification_id)
     item.status = "acknowledged"
     item.acknowledged_by_id = request.user.id
-    item.acknowledged_at = datetime.now(timezone.utc)
+    item.acknowledged_at = datetime.now(UTC)
     db.session.commit()
     return jsonify({"hospital_notification": item.to_dict()})
 
@@ -280,7 +279,7 @@ def create_donation():
         return jsonify({"error": "amount must be between 10 and 10000000"}), 400
     user = current_user()
     payment_base = current_app.config.get("DONATION_PAYMENT_URL", "")
-    reference = f"DON-{datetime.now(timezone.utc):%Y%m%d}-{uuid4().hex[:10].upper()}"
+    reference = f"DON-{datetime.now(UTC):%Y%m%d}-{uuid4().hex[:10].upper()}"
     item = Donation(
         campaign_id=campaign.id,
         donor_id=user.id if user else None,

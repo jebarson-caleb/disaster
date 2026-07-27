@@ -2,7 +2,17 @@ from flask import Blueprint, jsonify, request
 
 from ..auth import login_required
 from ..extensions import db
-from ..models import AiAssessment, Ambulance, Disaster, LocationPing, RescueRequest, RescueStatusHistory, ResponseDispatch, ResponderUnit, Volunteer
+from ..models import (
+    AiAssessment,
+    Ambulance,
+    Disaster,
+    LocationPing,
+    RescueRequest,
+    RescueStatusHistory,
+    ResponderUnit,
+    ResponseDispatch,
+    Volunteer,
+)
 from ..services.ai_service import damage_estimation, relief_prioritization
 from ..services.dispatch_service import auto_dispatch_rescue
 

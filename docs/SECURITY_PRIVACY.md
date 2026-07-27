@@ -12,6 +12,8 @@ Short-lived JWT bearer tokens remain available for controlled API clients. They 
 
 The API enforces roles, returns generic server errors with request IDs, caps request bodies, emits security headers, disables API caching, and records minimal authentication audit events without passwords or tokens. Production readiness rejects temporary databases, weak/equal secrets, insecure cookies, wildcard credentialed CORS, demo mode, and missing administrator bootstrap configuration. Offline emergency submissions are capped at 50, expire after 24 hours, synchronize when connectivity returns, and are cleared on logout/session expiry; beta operators should still avoid shared-device use for sensitive reports.
 
+Runtime dependencies are pinned and checked in CI with `pip-audit` and `npm audit`. Backend and frontend linting, migration drift detection, warning-free tests, a 75% backend coverage floor, and the production frontend build are release gates. Dependabot proposes weekly Python and npm updates and monthly GitHub Actions updates; every update must pass the same gates before merge.
+
 This design follows the current [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [OWASP Multifactor Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html), and [IETF RFC 6238](https://www.rfc-editor.org/rfc/rfc6238).
 
 ## Personal and sensitive data

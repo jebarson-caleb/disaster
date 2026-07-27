@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import Ambulance, HospitalNotification, LocationPing, ResponseDispatch, ResponderUnit, Volunteer
+from app.models import Ambulance, HospitalNotification, LocationPing, ResponderUnit, ResponseDispatch, Volunteer
 from app.seed import seed_demo_data
 
 

@@ -1,6 +1,7 @@
 backend/.venv/
 backend/.pytest_cache/
 backend/.pytest_*/
+backend/.coverage
 backend/instance/
 backend/__pycache__/
 backend/app/__pycache__/
@@ -11,3 +12,4 @@ frontend/dist/
 .vercel/
 *.pyc
 *.log
+.env.local

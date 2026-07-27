@@ -10,7 +10,6 @@ from .extensions import db
 from .models import AccountSecurity, RoleProfile, User
 from .seed import seed_demo_data
 
-
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
 BASELINE_REVISION = "20260721_01"
 SECURITY_REVISION = "20260721_02"

@@ -1,5 +1,7 @@
 # ResQ Command
 
+[![CI](https://github.com/jebarson-caleb/disaster/actions/workflows/ci.yml/badge.svg)](https://github.com/jebarson-caleb/disaster/actions/workflows/ci.yml)
+
 ResQ Command is a full-stack disaster-response platform for citizen reporting, rescue triage and dispatch, public warnings, hospitals, shelters, relief logistics, family welfare checks, supply requests, and donation pledges.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster&project-name=resq-command&repository-name=resq-command&env=DATABASE_URL%2CSECRET_KEY%2CJWT_SECRET_KEY%2CMFA_ENCRYPTION_KEY%2CBOOTSTRAP_ADMIN_EMAIL%2CBOOTSTRAP_ADMIN_PASSWORD&envDescription=Persistent%20PostgreSQL%2C%20two%20independent%2032%2B-character%20application%20secrets%2C%20a%20Fernet%20MFA%20key%2C%20and%20the%20first%20administrator.%20See%20the%20deployment%20guide.&envLink=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster%2Fblob%2Fmain%2Fdocs%2FBETA_DEPLOYMENT.md)
@@ -20,7 +22,8 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - Role authorization, an administrator User Access workspace, verified operational-account provisioning, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
 - Production login wall; demo data and role switching require explicit demo build/runtime flags
-- CI for backend tests and frontend production builds, plus automated dependency update proposals
+- CI for linting, migration drift, warning-free tests, backend coverage, production builds, and dependency vulnerability audits
+- Pinned runtime dependencies with automated weekly update proposals
 - Versioned, data-preserving database migrations with serialized PostgreSQL/MySQL startup upgrades
 
 These controls are aligned with the OWASP session and authentication guidance linked in [Security and privacy](docs/SECURITY_PRIVACY.md). This is beta software, not a certified public-warning or emergency-dispatch system.
@@ -46,7 +49,7 @@ cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 copy .env.example .env
 python run.py
 ```
@@ -64,8 +67,18 @@ Open `http://localhost:5173`. For the controlled local role-switching demo, keep
 ## Verification
 
 ```bash
-cd backend && pytest -q
-cd frontend && npm run build
+cd backend
+python -m ruff check .
+python -m pip_audit -r requirements-dev.txt
+flask --app run:app db upgrade
+flask --app run:app db check
+pytest -q -W error --cov=app --cov-report=term-missing --cov-fail-under=75
+
+cd ../frontend
+npm ci
+npm audit --audit-level=high
+npm run lint
+npm run build
 ```
 
 The liveness endpoint is `/api/v1/health`; the database/configuration readiness endpoint is `/api/v1/ready`.

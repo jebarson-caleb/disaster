@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import Disaster, Hospital, Shelter
+from app.models import Hospital, Shelter
 from app.seed import seed_demo_data
 
 
