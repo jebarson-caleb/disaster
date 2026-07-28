@@ -94,6 +94,7 @@ export const api = {
   provisionUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUserAccess: (id, payload) => request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   resetUserPassword: (id, payload) => request(`/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify(payload) }),
+  resetUserMfa: (id, payload) => request(`/admin/users/${id}/reset-mfa`, { method: 'POST', body: JSON.stringify(payload) }),
   createResource: (payload) => request('/admin/resources', { method: 'POST', body: JSON.stringify(payload) }),
   createResponder: (payload) => request('/admin/responders', { method: 'POST', body: JSON.stringify(payload) }),
   createDonationCampaign: (payload) => request('/admin/donation-campaigns', { method: 'POST', body: JSON.stringify(payload) }),

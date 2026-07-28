@@ -262,6 +262,7 @@ export default function App() {
   const [managedUsers, setManagedUsers] = useState([]);
   const [provisionDraft, setProvisionDraft] = useState(emptyProvisionDraft);
   const [resetDraft, setResetDraft] = useState({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
+  const [mfaResetDraft, setMfaResetDraft] = useState({ user_id: '', admin_password: '' });
   const [resourceDraft, setResourceDraft] = useState({ name: '', category: 'food', unit: 'units', available_quantity: 0, storage_location: '' });
   const [responderDraft, setResponderDraft] = useState({ name: '', unit_type: 'professional rescue', skills: '', contact_phone: '', latitude: '', longitude: '' });
   const [campaignDraft, setCampaignDraft] = useState({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
@@ -1270,6 +1271,26 @@ export default function App() {
     }
   }
 
+  async function submitMfaReset(event) {
+    event.preventDefault();
+    try {
+      const response = await api.resetUserMfa(mfaResetDraft.user_id, mfaResetDraft);
+      setManagedUsers((items) => items.map((item) => (
+        String(item.id) === String(mfaResetDraft.user_id)
+          ? response.user
+          : item
+      )));
+      setMfaResetDraft({ user_id: '', admin_password: '' });
+      setOperatorNotice(
+        response.mfa_setup_required
+          ? 'MFA reset completed; sessions were revoked and the user must enroll a new authenticator'
+          : 'MFA reset completed and all active sessions were revoked',
+      );
+    } catch (error) {
+      setOperatorNotice(`MFA reset failed: ${error.message}`);
+    }
+  }
+
   async function revokeAccountSession(session) {
     try {
       await revokeSession(session.id);
@@ -1672,6 +1693,9 @@ export default function App() {
                 resetDraft={resetDraft}
                 setResetDraft={setResetDraft}
                 onResetPassword={submitPasswordReset}
+                mfaResetDraft={mfaResetDraft}
+                setMfaResetDraft={setMfaResetDraft}
+                onResetMfa={submitMfaReset}
                 facilities={facilities}
               />
             </MotionPage>
@@ -1903,6 +1927,9 @@ function UserAccessView({
   resetDraft,
   setResetDraft,
   onResetPassword,
+  mfaResetDraft,
+  setMfaResetDraft,
+  onResetMfa,
   facilities,
 }) {
   const resetCandidates = users
@@ -2001,7 +2028,7 @@ function UserAccessView({
       </section>
 
       <section className="panel">
-        <PanelTitle eyebrow="Credential recovery" title="Reset another user’s password" />
+        <PanelTitle eyebrow="Credential recovery" title="Reset another user’s access" />
         <p className="muted-copy">Re-enter your administrator password. A reset revokes every active session and forces the selected user to replace the temporary password at next sign-in.</p>
         <form className="access-form" onSubmit={onResetPassword}>
           <Select
@@ -2015,6 +2042,18 @@ function UserAccessView({
           <Input label="Confirm new password" type="password" value={resetDraft.password_confirmation} onChange={(value) => setResetDraft({ ...resetDraft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit" disabled={!resetDraft.user_id}>Reset password</button>
         </form>
+        <div className="account-divider" />
+        <p className="muted-copy">If a user has lost every authenticator and recovery code, remove the enrolled factor. All sessions are revoked, and roles that require MFA must enroll a new authenticator before operational access resumes.</p>
+        <form className="access-form" onSubmit={onResetMfa}>
+          <Select
+            label="User with lost MFA"
+            value={mfaResetDraft.user_id}
+            options={[{ label: 'Select a user', value: '' }, ...resetCandidates]}
+            onChange={(value) => setMfaResetDraft({ ...mfaResetDraft, user_id: value })}
+          />
+          <Input label="Your administrator password" type="password" value={mfaResetDraft.admin_password} onChange={(value) => setMfaResetDraft({ ...mfaResetDraft, admin_password: value })} required autoComplete="current-password" />
+          <button className="primary-action" type="submit" disabled={!mfaResetDraft.user_id}>Reset MFA</button>
+        </form>
       </section>
 
       <section className="panel access-users-panel">
@@ -2026,6 +2065,7 @@ function UserAccessView({
                 <strong>{user.name}</strong>
                 <span>{user.email} · {user.role}{user.organization_name ? ` · ${user.organization_name}` : ''}</span>
                 {user.password_change_required && <span>Temporary password must be replaced</span>}
+                {user.mfa_required && <span>{user.mfa_enabled ? 'MFA enrolled' : 'MFA enrollment required'}</span>}
               </div>
               <StatusPill value={user.is_active ? user.verification_status : 'inactive'} />
               <div className="managed-user-actions">

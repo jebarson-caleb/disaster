@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## 1.1.1 - 2026-07-28
+
+### Added
+
+- Audited administrator-assisted MFA reset for users who have lost both their authenticator and recovery codes.
+- MFA enrollment state in the administrator access directory.
+
+### Changed
+
+- Authenticated security and administrator action limits are isolated per account so users on one shared office network cannot exhaust one another’s quotas.
+
+### Security
+
+- Administrator MFA resets require password re-authentication, revoke the target user’s sessions and pending challenges, and force privileged roles through fresh MFA enrollment.
+
 ## 1.1.0 - 2026-07-27
 
 ### Added

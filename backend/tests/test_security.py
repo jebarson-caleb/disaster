@@ -2,9 +2,11 @@ from types import SimpleNamespace
 
 from flask import request
 
-from app.auth import authenticated_rate_key
+from app.auth import authenticated_rate_key, utcnow
 from app.config import production_configuration_issues
 from app.extensions import db
+from app.mfa import begin_setup
+from app.models import MfaCredential, User
 from app.seed import seed_demo_data
 
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
@@ -239,3 +241,33 @@ def test_volunteer_requires_admin_verification(client, app):
         "/api/v1/auth/login",
         json={"email": "pending-volunteer@example.com", "password": "Reset-Volunteer-Password-49"},
     ).status_code == 200
+
+
+def test_admin_can_reset_another_users_lost_mfa(client, app, auth_headers):
+    with app.app_context():
+        police = User.query.filter_by(role="Police").first()
+        credential, _, _ = begin_setup(police)
+        credential.enabled_at = utcnow()
+        db.session.commit()
+        police_id = police.id
+
+    wrong_password = client.post(
+        f"/api/v1/admin/users/{police_id}/reset-mfa",
+        headers=auth_headers,
+        json={"admin_password": "not-the-administrator-password"},
+    )
+    assert wrong_password.status_code == 401
+    with app.app_context():
+        assert MfaCredential.query.filter_by(user_id=police_id).one_or_none() is not None
+
+    reset = client.post(
+        f"/api/v1/admin/users/{police_id}/reset-mfa",
+        headers=auth_headers,
+        json={"admin_password": "DemoPassword123!"},
+    )
+    assert reset.status_code == 200
+    assert reset.get_json()["mfa_reset"] is True
+    assert reset.get_json()["mfa_setup_required"] is True
+    assert reset.get_json()["user"]["mfa_enabled"] is False
+    with app.app_context():
+        assert MfaCredential.query.filter_by(user_id=police_id).one_or_none() is None

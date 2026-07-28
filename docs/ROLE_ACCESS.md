@@ -30,7 +30,8 @@ Hospital, shelter, and ambulance accounts must be linked to their managed record
 4. Deliver each temporary password through an approved secure channel; never send it in a public channel or commit it to source control.
 5. In **Operational Setup**, add resource inventory, professional responder units, and any verified donation campaign.
 6. Ask every user to replace the temporary password, enroll MFA when required, store recovery codes offline, and review active sessions.
-7. Deactivate departed or unverified users immediately. A deactivation or password reset revokes their active sessions.
+7. Deactivate departed or unverified users immediately. A deactivation, password reset, or administrator-assisted MFA reset revokes their active sessions.
+8. Use **User Access → Reset MFA** only after verifying the user out of band when every authenticator and recovery code is lost. The reset is audit logged; privileged roles remain locked until a new authenticator is enrolled.
 
 ## Acceptance evidence
 

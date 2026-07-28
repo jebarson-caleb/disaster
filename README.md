@@ -35,7 +35,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 ## Features
 
 - Role-aware workspaces for citizens, administrators, police, fire, hospitals, shelters, ambulances, NGOs, and volunteers
-- Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password recovery, and automatic session revocation
+- Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password and lost-MFA recovery, and automatic session revocation
 - Operational Setup workspace for live resource inventory, responder units, and verified donation campaigns
 - Incident reporting, deterministic damage scoring, rescue priority, automatic nearest-team/volunteer/ambulance dispatch, and hospital preparation
 - CAP-inspired public alerts, acknowledgements, India-wide alert aggregation, verified field updates, and safe-route advice
