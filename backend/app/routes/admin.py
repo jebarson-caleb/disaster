@@ -5,6 +5,7 @@ from sqlalchemy import func
 
 from ..auth import (
     audit_event,
+    authenticated_rate_key,
     hash_password,
     login_required,
     security_state,
@@ -39,7 +40,7 @@ FACILITY_ROLE_MODELS = {
 
 @admin_bp.post("/users")
 @login_required(roles=["Admin"])
-@limiter.limit("30 per hour")
+@limiter.limit("30 per hour", key_func=authenticated_rate_key)
 def provision_user():
     data = request.get_json() or {}
     required = ["name", "email", "phone", "role", "password"]
@@ -158,7 +159,7 @@ def update_user_access(user_id):
 
 @admin_bp.post("/users/<int:user_id>/reset-password")
 @login_required(roles=["Admin"])
-@limiter.limit("10 per hour")
+@limiter.limit("10 per hour", key_func=authenticated_rate_key)
 def reset_user_password(user_id):
     target = db.get_or_404(User, user_id)
     data = request.get_json(silent=True) or {}
@@ -188,7 +189,7 @@ def reset_user_password(user_id):
 
 @admin_bp.post("/resources")
 @login_required(roles=["Admin"])
-@limiter.limit("60 per hour")
+@limiter.limit("60 per hour", key_func=authenticated_rate_key)
 def create_resource():
     data = request.get_json(silent=True) or {}
     missing = [
@@ -219,7 +220,7 @@ def create_resource():
 
 @admin_bp.post("/responders")
 @login_required(roles=["Admin"])
-@limiter.limit("60 per hour")
+@limiter.limit("60 per hour", key_func=authenticated_rate_key)
 def create_responder():
     data = request.get_json(silent=True) or {}
     required = ["name", "unit_type", "skills", "contact_phone", "latitude", "longitude"]
@@ -251,7 +252,7 @@ def create_responder():
 
 @admin_bp.post("/donation-campaigns")
 @login_required(roles=["Admin"])
-@limiter.limit("30 per hour")
+@limiter.limit("30 per hour", key_func=authenticated_rate_key)
 def create_donation_campaign():
     data = request.get_json(silent=True) or {}
     required = ["title", "description", "goal_amount", "organizer"]

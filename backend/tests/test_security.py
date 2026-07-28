@@ -1,8 +1,22 @@
+from types import SimpleNamespace
+
+from flask import request
+
+from app.auth import authenticated_rate_key
 from app.config import production_configuration_issues
 from app.extensions import db
 from app.seed import seed_demo_data
 
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
+
+
+def test_authenticated_rate_limits_are_isolated_per_account(app):
+    with app.test_request_context("/", environ_base={"REMOTE_ADDR": "203.0.113.17"}):
+        assert authenticated_rate_key() == "ip:203.0.113.17"
+        request.user = SimpleNamespace(id=42)
+        assert authenticated_rate_key() == "user:42"
+        request.user = SimpleNamespace(id=84)
+        assert authenticated_rate_key() == "user:84"
 
 
 def test_cookie_session_csrf_logout_and_security_headers(client):

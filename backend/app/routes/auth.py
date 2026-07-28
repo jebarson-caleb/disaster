@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 from ..auth import (
     audit_event,
+    authenticated_rate_key,
     clear_session_cookies,
     hash_password,
     login_required,
@@ -232,7 +233,7 @@ def mfa_status():
 
 @auth_bp.post("/mfa/setup")
 @login_required()
-@limiter.limit("5 per hour")
+@limiter.limit("5 per hour", key_func=authenticated_rate_key)
 def begin_mfa_setup():
     data = request.get_json(silent=True) or {}
     if not verify_password(request.user.password_hash, str(data.get("current_password", ""))):
@@ -250,7 +251,7 @@ def begin_mfa_setup():
 
 @auth_bp.post("/mfa/confirm")
 @login_required()
-@limiter.limit("10 per hour")
+@limiter.limit("10 per hour", key_func=authenticated_rate_key)
 def confirm_mfa_setup():
     credential = MfaCredential.query.filter_by(user_id=request.user.id, enabled_at=None).first()
     code = (request.get_json(silent=True) or {}).get("code")
@@ -280,7 +281,7 @@ def confirm_mfa_setup():
 
 @auth_bp.post("/mfa/recovery-codes")
 @login_required()
-@limiter.limit("3 per hour")
+@limiter.limit("3 per hour", key_func=authenticated_rate_key)
 def regenerate_mfa_recovery_codes():
     data = request.get_json(silent=True) or {}
     credential = enabled_credential(request.user.id)
@@ -301,7 +302,7 @@ def regenerate_mfa_recovery_codes():
 
 @auth_bp.post("/mfa/disable")
 @login_required()
-@limiter.limit("3 per hour")
+@limiter.limit("3 per hour", key_func=authenticated_rate_key)
 def disable_mfa():
     data = request.get_json(silent=True) or {}
     credential = enabled_credential(request.user.id)
@@ -343,7 +344,7 @@ def logout():
 
 @auth_bp.post("/change-password")
 @login_required()
-@limiter.limit("5 per hour")
+@limiter.limit("5 per hour", key_func=authenticated_rate_key)
 def change_password():
     data = request.get_json(silent=True) or {}
     current_password = str(data.get("current_password", ""))

@@ -237,6 +237,14 @@ def audit_event(event_type, outcome, user_id=None, details=None):
     )
 
 
+def authenticated_rate_key():
+    """Rate-limit authenticated actions per account instead of shared network."""
+    user = getattr(request, "user", None)
+    if user is not None:
+        return f"user:{user.id}"
+    return f"ip:{request.remote_addr or 'unknown'}"
+
+
 def security_state(user):
     state = AccountSecurity.query.filter_by(user_id=user.id).first()
     if state is None:
