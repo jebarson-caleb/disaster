@@ -52,8 +52,14 @@ def provision_user():
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     if data["role"] not in VALID_ROLES:
         return jsonify({"error": "Invalid role"}), 400
+    name = str(data["name"]).strip()
+    phone = str(data["phone"]).strip()
+    if not name:
+        return jsonify({"error": "Name must not be blank"}), 400
+    if not phone:
+        return jsonify({"error": "Phone must not be blank"}), 400
     email = str(data["email"]).strip().lower()
-    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1] or len(email) > 160:
         return jsonify({"error": "A valid email address is required"}), 400
     password_error = validate_password(data["password"])
     if password_error:
@@ -67,9 +73,9 @@ def provision_user():
         return jsonify({"error": str(error)}), 400
 
     user = User(
-        name=str(data["name"]).strip()[:120],
+        name=name[:120],
         email=email,
-        phone=str(data["phone"]).strip()[:30],
+        phone=phone[:30],
         role=data["role"],
         password_hash=hash_password(data["password"]),
     )
@@ -155,6 +161,7 @@ def update_user_access(user_id):
         AuthSession.query.filter_by(user_id=target.id, revoked_at=None).update(
             {AuthSession.revoked_at: utcnow()}, synchronize_session=False
         )
+        MfaChallenge.query.filter_by(user_id=target.id).delete(synchronize_session=False)
     audit_event("admin.user_access_update", "success", request.user.id, f"target_user_id={target.id}")
     db.session.commit()
     return jsonify({"user": managed_user(target)})
@@ -185,6 +192,7 @@ def reset_user_password(user_id):
     AuthSession.query.filter_by(user_id=target.id, revoked_at=None).update(
         {AuthSession.revoked_at: utcnow()}, synchronize_session=False
     )
+    MfaChallenge.query.filter_by(user_id=target.id).delete(synchronize_session=False)
     audit_event("admin.password_reset", "success", request.user.id, f"target_user_id={target.id}")
     db.session.commit()
     return jsonify({"message": "Password reset and active sessions revoked"})

@@ -198,6 +198,7 @@ const emptyResponseHub = {
   responder_units: [],
 };
 const emptyAuthDraft = { name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' };
+const emptyPasswordDraft = { current_password: '', new_password: '', new_password_confirmation: '' };
 const emptyProvisionDraft = {
   name: '',
   email: '',
@@ -244,7 +245,7 @@ export default function App() {
   const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
   const [authMode, setAuthMode] = useState('login');
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
-  const [passwordDraft, setPasswordDraft] = useState({ current_password: '', new_password: '' });
+  const [passwordDraft, setPasswordDraft] = useState(emptyPasswordDraft);
   const [mfaChallenge, setMfaChallenge] = useState({ token: '', code: '' });
   const [mfaSession, setMfaSession] = useState({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
   const [mfaSetup, setMfaSetup] = useState({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
@@ -488,7 +489,7 @@ export default function App() {
       setPendingOperations([]);
       setCurrentUser(null);
       setAuthDraft(emptyAuthDraft);
-      setPasswordDraft({ current_password: '', new_password: '' });
+      setPasswordDraft(emptyPasswordDraft);
       setMfaChallenge({ token: '', code: '' });
       setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
       setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
@@ -656,6 +657,7 @@ export default function App() {
       created_at: 'Just now',
     };
     let next = optimistic;
+    let queuedOffline = false;
     try {
       const response = await api.createDisaster(incidentDraft);
       next = { ...response.disaster, score: response.damage_estimation.score, label: response.damage_estimation.label };
@@ -670,11 +672,17 @@ export default function App() {
         return;
       }
       queueOfflineOperation('disaster', incidentDraft);
+      next = { ...optimistic, sync_status: 'queued' };
+      queuedOffline = true;
       setConnectionState('offline');
     }
     setDisasters((items) => [next, ...items]);
     setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: DEMO_ENABLED ? 25 : 1 });
-    setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the national command view`);
+    setOperatorNotice(
+      queuedOffline
+        ? `${assessment.label} ${incidentDraft.disaster_type} report saved on this device and queued for reconnection`
+        : `${assessment.label} ${incidentDraft.disaster_type} report added to the live national command view`,
+    );
     setActiveView('command');
   }
 
@@ -697,6 +705,7 @@ export default function App() {
       created_at: 'Just now',
     };
     let next = optimistic;
+    let queuedOffline = false;
     try {
       const response = await api.createRescue(rescueDraft);
       next = response.rescue_request;
@@ -709,12 +718,20 @@ export default function App() {
         return;
       }
       queueOfflineOperation('rescue', rescueDraft);
+      next = { ...optimistic, sync_status: 'queued' };
+      queuedOffline = true;
       setConnectionState('offline');
     }
     setRescues((items) => [next, ...items]);
     setRescueDraft({ ...rescueDraft, victim_name: '', notes: '', trapped: false });
     setSelectedRescueId(next.id);
-    if (!next.assigned_unit) setOperatorNotice(`${priority.label} rescue request created for ${next.victim_name}`);
+    if (!next.assigned_unit) {
+      setOperatorNotice(
+        queuedOffline
+          ? `${priority.label} rescue request saved on this device and queued for reconnection`
+          : `${priority.label} rescue request created for ${next.victim_name}`,
+      );
+    }
     setActiveView('rescue');
   }
 
@@ -761,25 +778,14 @@ export default function App() {
         setOperatorNotice('No verified responder or ambulance is available. Register a unit before assigning this rescue.');
         return;
       }
-      setRescues((items) =>
-        items.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: nextStatus,
-                assigned_unit: unit,
-              }
-            : item,
-        ),
-      );
-      setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} with ${unit}`);
       try {
         const response = rescue.assigned_unit
           ? await api.updateRescue(id, { status: nextStatus, note: `${role} advanced the response` })
           : await api.assignRescue(id, { status: nextStatus, assigned_unit: unit });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+        setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} with ${unit}`);
       } catch (error) {
-        setOperatorNotice(`Local status updated; server sync failed: ${error.message}`);
+        setOperatorNotice(`Rescue status was not changed: ${error.message}`);
         if (isNetworkFailure(error)) setConnectionState('offline');
       }
       return;
@@ -791,15 +797,16 @@ export default function App() {
         setOperatorNotice(`${rescue.victim_name} is already marked rescued`);
         return;
       }
-      setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} by the assigned ambulance`);
       try {
         const response = await api.updateRescue(id, {
           status: nextStatus,
           note: 'Assigned ambulance advanced the response',
         });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+        setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} by the assigned ambulance`);
       } catch (error) {
-        setOperatorNotice(`Ambulance status could not be updated: ${error.message}`);
+        setOperatorNotice(`Rescue status was not changed: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
       }
       return;
     }
@@ -811,23 +818,13 @@ export default function App() {
         setOperatorNotice('No hospital is linked to this account. Ask an administrator to complete facility setup.');
         return;
       }
-      setRescues((items) =>
-        items.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: nextStatus,
-                assigned_unit: assignedUnit,
-              }
-            : item,
-        ),
-      );
-      setOperatorNotice(`${rescue.victim_name} accepted for hospital triage`);
       try {
         const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Accepted by hospital triage' });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+        setOperatorNotice(`${rescue.victim_name} accepted for hospital triage`);
       } catch (error) {
-        setOperatorNotice(`Triage updated locally; server sync failed: ${error.message}`);
+        setOperatorNotice(`Hospital triage status was not changed: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
       }
       return;
     }
@@ -839,23 +836,13 @@ export default function App() {
         setOperatorNotice('The volunteer account identity could not be loaded. Sign in again before checking in.');
         return;
       }
-      setRescues((items) =>
-        items.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: nextStatus,
-                assigned_unit: assignedUnit,
-              }
-            : item,
-        ),
-      );
-      setOperatorNotice(`Volunteer check-in recorded for ${rescue.victim_name}`);
       try {
         const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Volunteer check-in recorded' });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
+        setOperatorNotice(`Volunteer check-in recorded for ${rescue.victim_name}`);
       } catch (error) {
-        setOperatorNotice(`Check-in updated locally; server sync failed: ${error.message}`);
+        setOperatorNotice(`Volunteer check-in was not recorded: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
       }
       return;
     }
@@ -864,41 +851,31 @@ export default function App() {
   }
 
   async function updateHospital(id, delta) {
-    setFacilities((current) => ({
-      ...current,
-      hospitals: current.hospitals.map((item) =>
-        item.id === id ? { ...item, available_beds: clampNumber(item.available_beds + delta, 0, item.total_beds) } : item,
-      ),
-    }));
     const hospital = facilities.hospitals.find((item) => item.id === id);
     if (hospital) {
-      setOperatorNotice(`${hospital.name} capacity ${delta > 0 ? 'increased' : 'reduced'} by ${Math.abs(delta)} beds`);
       const availableBeds = clampNumber(hospital.available_beds + delta, 0, hospital.total_beds);
       try {
         const response = await api.updateHospital(id, { available_beds: availableBeds });
         setFacilities((current) => ({ ...current, hospitals: current.hospitals.map((item) => (item.id === id ? response.hospital : item)) }));
+        setOperatorNotice(`${hospital.name} capacity ${delta > 0 ? 'increased' : 'reduced'} by ${Math.abs(delta)} beds`);
       } catch (error) {
-        setOperatorNotice(`Hospital updated locally; server sync failed: ${error.message}`);
+        setOperatorNotice(`Hospital capacity was not changed: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
       }
     }
   }
 
   async function updateShelter(id, delta) {
-    setFacilities((current) => ({
-      ...current,
-      shelters: current.shelters.map((item) =>
-        item.id === id ? { ...item, available_capacity: clampNumber(item.available_capacity + delta, 0, item.total_capacity) } : item,
-      ),
-    }));
     const shelter = facilities.shelters.find((item) => item.id === id);
     if (shelter) {
-      setOperatorNotice(`${shelter.name} slots ${delta > 0 ? 'opened' : 'filled'} by ${Math.abs(delta)}`);
       const availableCapacity = clampNumber(shelter.available_capacity + delta, 0, shelter.total_capacity);
       try {
         const response = await api.updateShelter(id, { available_capacity: availableCapacity });
         setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? response.shelter : item)) }));
+        setOperatorNotice(`${shelter.name} slots ${delta > 0 ? 'opened' : 'filled'} by ${Math.abs(delta)}`);
       } catch (error) {
-        setOperatorNotice(`Shelter updated locally; server sync failed: ${error.message}`);
+        setOperatorNotice(`Shelter capacity was not changed: ${error.message}`);
+        if (isNetworkFailure(error)) setConnectionState('offline');
       }
     }
   }
@@ -907,16 +884,13 @@ export default function App() {
     const ambulance = facilities.ambulances.find((item) => item.id === id);
     if (!ambulance) return;
     const nextStatus = nextAmbulanceStatus(ambulance.status);
-    setFacilities((current) => ({
-      ...current,
-      ambulances: current.ambulances.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
-    }));
-    setOperatorNotice(`${ambulance.vehicle_number} marked ${nextStatus}`);
     try {
       const response = await api.updateAmbulance(id, { status: nextStatus });
       setFacilities((current) => ({ ...current, ambulances: current.ambulances.map((item) => (item.id === id ? response.ambulance : item)) }));
+      setOperatorNotice(`${ambulance.vehicle_number} marked ${nextStatus}`);
     } catch (error) {
-      setOperatorNotice(`Ambulance updated locally; server sync failed: ${error.message}`);
+      setOperatorNotice(`Ambulance status was not changed: ${error.message}`);
+      if (isNetworkFailure(error)) setConnectionState('offline');
     }
   }
 
@@ -1028,12 +1002,26 @@ export default function App() {
     }
   }
 
-  async function advanceSupplyRequest(item) {
+  async function advanceSupplyRequest(item, assignedUnit = '') {
     const statuses = ['requested', 'assigned', 'packing', 'en route', 'delivered'];
     const nextStatus = statuses[Math.min(statuses.length - 1, Math.max(0, statuses.indexOf(item.status)) + 1)];
+    const unit = item.assigned_unit || assignedUnit;
+    if (['assigned', 'packing', 'en route', 'delivered'].includes(nextStatus) && !unit) {
+      setOperatorNotice('Select a registered available response unit before advancing this request.');
+      return;
+    }
     try {
-      const response = await api.updateSupplyRequest(item.id, { status: nextStatus, assigned_unit: item.assigned_unit || 'Nearest relief logistics team' });
-      setResponseHub((current) => ({ ...current, supply_requests: current.supply_requests.map((entry) => (entry.id === item.id ? response.supply_request : entry)) }));
+      const response = await api.updateSupplyRequest(item.id, {
+        status: nextStatus,
+        ...(unit ? { assigned_unit: unit } : {}),
+      });
+      setResponseHub((current) => ({
+        ...current,
+        supply_requests: current.supply_requests.map((entry) => (entry.id === item.id ? response.supply_request : entry)),
+        responder_units: response.responder_unit
+          ? current.responder_units.map((entry) => (entry.id === response.responder_unit.id ? response.responder_unit : entry))
+          : current.responder_units,
+      }));
       setOperatorNotice(`Supply request #${item.id} moved to ${nextStatus}`);
     } catch (error) {
       setOperatorNotice(`Supply request update failed: ${error.message}`);
@@ -1278,10 +1266,17 @@ export default function App() {
 
   async function submitPasswordChange(event) {
     event.preventDefault();
+    if (passwordDraft.new_password !== passwordDraft.new_password_confirmation) {
+      setOperatorNotice('Password change failed: password confirmation does not match');
+      return;
+    }
     try {
-      const response = await changePassword(passwordDraft);
+      const response = await changePassword({
+        current_password: passwordDraft.current_password,
+        new_password: passwordDraft.new_password,
+      });
       setCurrentUser(response.user);
-      setPasswordDraft({ current_password: '', new_password: '' });
+      setPasswordDraft(emptyPasswordDraft);
       setMfaSession((current) => ({
         ...current,
         verified: Boolean(response.mfa_verified),
@@ -1437,7 +1432,7 @@ export default function App() {
     setPendingOperations([]);
     setCurrentUser(null);
     setAuthDraft(emptyAuthDraft);
-    setPasswordDraft({ current_password: '', new_password: '' });
+    setPasswordDraft(emptyPasswordDraft);
     setMfaChallenge({ token: '', code: '' });
     setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
     setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
@@ -1968,6 +1963,7 @@ function AccountPanel({
           )}
           <Input label="Current password" type="password" value={passwordDraft.current_password} onChange={(value) => setPasswordDraft({ ...passwordDraft, current_password: value })} required autoComplete="current-password" />
           <Input label="New password (15+ characters)" type="password" value={passwordDraft.new_password} onChange={(value) => setPasswordDraft({ ...passwordDraft, new_password: value })} required minLength={15} autoComplete="new-password" />
+          <Input label="Confirm new password" type="password" value={passwordDraft.new_password_confirmation} onChange={(value) => setPasswordDraft({ ...passwordDraft, new_password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit">Change password</button>
         </form>
       )}
@@ -3142,9 +3138,9 @@ function getResponseBoardColumns(disasters, rescues) {
     kicker: item.disaster_type,
     description: `${item.address}. ${item.people_affected} people affected.`,
     time: item.created_at,
-    updates: `${item.status} status`,
+    updates: item.sync_status === 'queued' ? 'Queued for reconnection' : `${item.status} status`,
     people: item.people_affected,
-    status: item.label,
+    status: item.sync_status === 'queued' ? 'Queued offline' : item.label,
     score: `${item.score}/100`,
   }));
 
@@ -3159,7 +3155,7 @@ function getResponseBoardColumns(disasters, rescues) {
       time: item.created_at,
       updates: item.trapped ? 'Trapped reported' : 'Not trapped',
       people: item.people_count,
-      status: item.priority_label,
+      status: item.sync_status === 'queued' ? 'Queued offline' : item.priority_label,
       score: `${item.priority_score}/100`,
       dark: index === 0,
     }));
@@ -3530,20 +3526,20 @@ function RescueView({ role, rescues, disasters, selectedRescueId, onAction, onSe
                   <span className="score-text">{item.priority_score}/100</span>
                 </td>
                 <td>
-                  <StatusPill value={item.status} />
+                  <StatusPill value={item.sync_status === 'queued' ? 'Queued offline' : item.status} />
                 </td>
                 <td>{item.assigned_unit || 'Unassigned'}</td>
                 <td>
                   <button
                     type="button"
                     className="compact-button"
-                    disabled={item.status === 'rescued'}
+                    disabled={item.status === 'rescued' || item.sync_status === 'queued'}
                     onClick={(event) => {
                       event.stopPropagation();
                       onAction(item.id, role);
                     }}
                   >
-                    {rescueActionLabel(role, item, canAssign)}
+                    {item.sync_status === 'queued' ? 'Waiting for connection' : rescueActionLabel(role, item, canAssign)}
                   </button>
                 </td>
               </tr>
@@ -3567,7 +3563,7 @@ function RescueView({ role, rescues, disasters, selectedRescueId, onAction, onSe
           </div>
           <div className="rescue-detail-meta">
             <StatusPill value={selectedRescue.priority_label} />
-            <StatusPill value={selectedRescue.status} />
+            <StatusPill value={selectedRescue.sync_status === 'queued' ? 'Queued offline' : selectedRescue.status} />
             <strong>{selectedRescue.assigned_unit || 'Awaiting unit'}</strong>
           </div>
         </section>
@@ -3711,6 +3707,7 @@ function ResponseHubView({
   const canHandleSupplies = ['Admin', 'NGO', 'Shelter', 'Police', 'Fire Service'].includes(role);
   const canPublishNews = role !== 'Citizen';
   const canSeeHospitalPrep = ['Admin', 'Hospital', 'Ambulance'].includes(role);
+  const canAcknowledgeHospitalPrep = ['Admin', 'Hospital'].includes(role);
   const campaign = hub.campaigns?.find((item) => Number(item.id) === Number(donationDraft.campaign_id)) || hub.campaigns?.[0];
   const hotline = hub.emergency_hotline || '112';
 
@@ -3834,12 +3831,39 @@ function ResponseHubView({
       {(canHandleWelfare || canHandleSupplies || canSeeHospitalPrep) && (
         <section className="hub-grid hub-grid-3">
           {canHandleWelfare && <ResponseCaseList title="Family welfare checks" eyebrow="Call responder queue" items={hub.welfare_checks || []} empty="No family checks waiting." onAdvance={onWelfareAdvance} primary="relative_name" secondary="last_known_location" />}
-          {canHandleSupplies && <ResponseCaseList title="Food and supply requests" eyebrow="Relief delivery queue" items={hub.supply_requests || []} empty="No supply requests waiting." onAdvance={onSupplyAdvance} primary="description" secondary="assigned_unit" />}
+          {canHandleSupplies && (
+            <ResponseCaseList
+              title="Food and supply requests"
+              eyebrow="Relief delivery queue"
+              items={hub.supply_requests || []}
+              empty="No supply requests waiting."
+              onAdvance={onSupplyAdvance}
+              primary="description"
+              secondary="assigned_unit"
+              assignmentOptions={(hub.responder_units || [])
+                .filter((item) => item.availability_status === 'available')
+                .map((item) => ({ label: `${item.name} · ${item.unit_type}`, value: item.name }))}
+            />
+          )}
           {canSeeHospitalPrep && (
             <section className="panel hub-panel">
               <PanelTitle eyebrow="Incoming patient early warning" title="Hospital preparation alerts" />
               <div className="hub-feed">
-                {(hub.hospital_notifications || []).map((item) => <article className="hub-feed-item" key={item.id}><div className="hub-item-heading"><div><strong>{item.expected_patients} incoming patient{item.expected_patients === 1 ? '' : 's'}</strong><span>Priority {item.priority} · rescue #{item.rescue_request_id}</span></div><StatusPill value={item.status} /></div><p>{item.message}</p><button className="compact-button" type="button" disabled={item.status === 'acknowledged'} onClick={() => onHospitalAcknowledge(item)}>{item.status === 'acknowledged' ? 'Preparation confirmed' : 'Acknowledge and prepare'}</button></article>)}
+                {(hub.hospital_notifications || []).map((item) => (
+                  <article className="hub-feed-item" key={item.id}>
+                    <div className="hub-item-heading">
+                      <div><strong>{item.expected_patients} incoming patient{item.expected_patients === 1 ? '' : 's'}</strong><span>Priority {item.priority} · rescue #{item.rescue_request_id}</span></div>
+                      <StatusPill value={item.status} />
+                    </div>
+                    <p>{item.message}</p>
+                    {canAcknowledgeHospitalPrep && (
+                      <button className="compact-button" type="button" disabled={item.status === 'acknowledged'} onClick={() => onHospitalAcknowledge(item)}>
+                        {item.status === 'acknowledged' ? 'Preparation confirmed' : 'Acknowledge and prepare'}
+                      </button>
+                    )}
+                    {!canAcknowledgeHospitalPrep && <small>Receiving-hospital acknowledgement is visible here when confirmed.</small>}
+                  </article>
+                ))}
                 {!(hub.hospital_notifications || []).length && <EmptyState title="No incoming notices" detail="Automatic rescue allocation will notify the nearest hospital here." />}
               </div>
             </section>
@@ -3881,18 +3905,45 @@ function ResponseHubView({
   );
 }
 
-function ResponseCaseList({ title, eyebrow, items, empty, onAdvance, primary, secondary }) {
+function ResponseCaseList({ title, eyebrow, items, empty, onAdvance, primary, secondary, assignmentOptions = null }) {
+  const [selectedAssignments, setSelectedAssignments] = useState({});
+  const usesRegisteredAssignments = Array.isArray(assignmentOptions);
   return (
     <section className="panel hub-panel">
       <PanelTitle eyebrow={eyebrow} title={title} />
       <div className="hub-feed">
-        {items.map((item) => (
-          <article className="hub-feed-item" key={item.id}>
-            <div className="hub-item-heading"><div><strong>{item[primary]}</strong><span>{item[secondary] || `Case #${item.id}`}</span></div><StatusPill value={item.status} /></div>
-            {item.responder_notes && <p>{item.responder_notes}</p>}
-            <button className="compact-button" type="button" disabled={['closed', 'delivered'].includes(item.status)} onClick={() => onAdvance(item)}>Advance response</button>
-          </article>
-        ))}
+        {items.map((item) => {
+          const needsAssignment = usesRegisteredAssignments && item.status === 'requested' && !item.assigned_unit;
+          const selectedAssignment = selectedAssignments[item.id] || '';
+          return (
+            <article className="hub-feed-item" key={item.id}>
+              <div className="hub-item-heading"><div><strong>{item[primary]}</strong><span>{item[secondary] || `Case #${item.id}`}</span></div><StatusPill value={item.status} /></div>
+              {item.responder_notes && <p>{item.responder_notes}</p>}
+              {needsAssignment && (
+                <>
+                  <Select
+                    label="Verified response unit"
+                    value={selectedAssignment}
+                    options={[
+                      { label: 'Choose an available unit', value: '' },
+                      ...assignmentOptions,
+                    ]}
+                    onChange={(value) => setSelectedAssignments((current) => ({ ...current, [item.id]: value }))}
+                  />
+                  {!assignmentOptions.length && <small>No registered response units are currently available.</small>}
+                </>
+              )}
+              <button
+                className="compact-button"
+                type="button"
+                disabled={['closed', 'delivered'].includes(item.status) || (needsAssignment && !selectedAssignment)}
+                onClick={() => onAdvance(item, selectedAssignment)}
+              >
+                Advance response
+              </button>
+            </article>
+          );
+        })}
         {!items.length && <EmptyState title="Queue clear" detail={empty} />}
       </div>
     </section>
@@ -3917,7 +3968,7 @@ function formatDateTime(value) {
 function FacilitiesView({ role, facilities, updateHospital, updateShelter, updateAmbulanceStatus }) {
   const showHospitals = ['Admin', 'Hospital', 'Ambulance', 'Police', 'Fire Service'].includes(role);
   const showShelters = ['Admin', 'Shelter', 'NGO', 'Citizen', 'Volunteer'].includes(role);
-  const showAmbulances = ['Admin', 'Ambulance', 'Hospital', 'Police', 'Fire Service'].includes(role);
+  const showAmbulances = ['Admin', 'Ambulance', 'Police', 'Fire Service'].includes(role);
 
   return (
     <section className="view-stack">

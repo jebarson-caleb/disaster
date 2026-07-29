@@ -19,6 +19,7 @@ from ..models import (
     LocationPing,
     Notification,
     RescueRequest,
+    ResponderUnit,
     ResponseDispatch,
     RoleProfile,
     SupplyRequest,
@@ -261,13 +262,35 @@ def update_supply_request(supply_id):
     status = data.get("status", item.status)
     if status not in {"requested", "assigned", "packing", "en route", "delivered", "cancelled"}:
         return jsonify({"error": "Invalid supply-request status"}), 400
-    item.status = status
+    assigned_unit = item.assigned_unit
+    selected_unit = ResponderUnit.query.filter_by(name=assigned_unit).first() if assigned_unit else None
     if "assigned_unit" in data:
-        item.assigned_unit = str(data["assigned_unit"]).strip()
+        assigned_unit = str(data["assigned_unit"]).strip()
+        if not assigned_unit:
+            return jsonify({"error": "assigned_unit must not be blank"}), 400
+        candidate = ResponderUnit.query.filter_by(name=assigned_unit).first()
+        if candidate is None:
+            return jsonify({"error": "assigned_unit must match a registered responder unit"}), 400
+        if item.assigned_unit != assigned_unit and candidate.availability_status != "available":
+            return jsonify({"error": "The selected responder unit is not available"}), 409
+        if selected_unit is not None and selected_unit.id != candidate.id:
+            selected_unit.availability_status = "available"
+        selected_unit = candidate
+    if status in {"assigned", "packing", "en route", "delivered"} and not assigned_unit:
+        return jsonify({"error": "Assign a registered responder unit before advancing this request"}), 400
+    if selected_unit is not None:
+        selected_unit.availability_status = "available" if status in {"delivered", "cancelled"} else "dispatched"
+    item.status = status
+    item.assigned_unit = assigned_unit
     if "responder_notes" in data:
         item.responder_notes = str(data["responder_notes"]).strip()
     db.session.commit()
-    return jsonify({"supply_request": item.to_dict()})
+    return jsonify(
+        {
+            "supply_request": item.to_dict(),
+            "responder_unit": selected_unit.to_dict() if selected_unit is not None else None,
+        }
+    )
 
 
 @community_bp.get("/donation-campaigns")

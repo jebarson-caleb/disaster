@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import Hospital, Shelter
+from app.models import Ambulance, Hospital, ResponderUnit, ResponseDispatch, RoleProfile, Shelter, User, Volunteer
 from app.seed import seed_demo_data
 
 
@@ -28,7 +28,56 @@ def test_register_login_and_me(client):
     assert protected_registration.status_code == 403
 
 
-def test_disaster_and_rescue_flow(client, auth_headers):
+def test_registration_validates_identity_and_optional_coordinates(client, app):
+    base = {
+        "name": "Volunteer Applicant",
+        "email": "volunteer-validation@example.com",
+        "phone": "9000000111",
+        "role": "Volunteer",
+        "password": "Volunteer-Private-Password-91",
+    }
+    invalid_payloads = [
+        {**base, "name": " "},
+        {**base, "phone": " "},
+        {**base, "latitude": "north", "longitude": 80.2},
+        {**base, "latitude": 13.0},
+        {**base, "latitude": 91, "longitude": 80.2},
+    ]
+    for index, payload in enumerate(invalid_payloads):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={**payload, "email": f"invalid-volunteer-{index}@example.com"},
+        )
+        assert response.status_code == 400
+
+    accepted = client.post(
+        "/api/v1/auth/register",
+        json={**base, "latitude": 13.0, "longitude": 80.2},
+    )
+    assert accepted.status_code == 202
+    with app.app_context():
+        user = User.query.filter_by(email=base["email"]).one()
+        profile = RoleProfile.query.filter_by(user_id=user.id).one()
+        assert (profile.latitude, profile.longitude) == (13.0, 80.2)
+
+
+def test_admin_provisioning_rejects_blank_identity_fields(client, auth_headers):
+    payload = {
+        "name": " ",
+        "email": "blank-provisioned@example.com",
+        "phone": "9000000112",
+        "role": "Police",
+        "password": "Temporary-Police-Password-92",
+    }
+    assert client.post("/api/v1/admin/users", headers=auth_headers, json=payload).status_code == 400
+    assert client.post(
+        "/api/v1/admin/users",
+        headers=auth_headers,
+        json={**payload, "name": "Provisioned Police", "phone": " "},
+    ).status_code == 400
+
+
+def test_disaster_and_rescue_flow(client, app, auth_headers):
     disaster_response = client.post(
         "/api/v1/disasters",
         headers=auth_headers,
@@ -47,6 +96,12 @@ def test_disaster_and_rescue_flow(client, auth_headers):
     disaster = disaster_response.get_json()["disaster"]
     assert disaster_response.get_json()["damage_estimation"]["label"] in {"High", "Critical"}
 
+    with app.app_context():
+        ResponderUnit.query.update({"availability_status": "dispatched"})
+        Volunteer.query.update({"availability_status": "assigned"})
+        Ambulance.query.update({"status": "maintenance"})
+        db.session.commit()
+
     rescue_response = client.post(
         "/api/v1/rescue-requests",
         headers=auth_headers,
@@ -64,15 +119,39 @@ def test_disaster_and_rescue_flow(client, auth_headers):
     )
     assert rescue_response.status_code == 201
     assert rescue_response.get_json()["priority"]["label"] == "Critical"
+    assert rescue_response.get_json()["rescue_request"]["status"] == "pending"
 
     request_id = rescue_response.get_json()["rescue_request"]["id"]
+    invalid_assignment = client.patch(
+        f"/api/v1/rescue-requests/{request_id}/assign",
+        headers=auth_headers,
+        json={"assigned_unit": "Unregistered Fire Team"},
+    )
+    assert invalid_assignment.status_code == 409
+
+    with app.app_context():
+        responder = ResponderUnit.query.order_by(ResponderUnit.id).first()
+        responder.availability_status = "available"
+        responder_id = responder.id
+        responder_name = responder.name
+        db.session.commit()
+
     assign = client.patch(
         f"/api/v1/rescue-requests/{request_id}/assign",
         headers=auth_headers,
-        json={"assigned_unit": "Fire Rescue Team 2"},
+        json={"assigned_unit": responder_name, "status": "assigned"},
     )
     assert assign.status_code == 200
     assert assign.get_json()["rescue_request"]["status"] == "assigned"
+    assert assign.get_json()["dispatch"]["responder_name"] == responder_name
+    with app.app_context():
+        assert db.session.get(ResponderUnit, responder_id).availability_status == "dispatched"
+        assert ResponseDispatch.query.filter_by(
+            rescue_request_id=request_id,
+            responder_id=responder_id,
+            responder_type="rescue_unit",
+            status="assigned",
+        ).one()
 
 
 def test_facility_capacity_updates(client, app, auth_headers):

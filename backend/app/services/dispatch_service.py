@@ -85,3 +85,52 @@ def auto_dispatch_rescue(rescue, disaster):
         rescue.assigned_unit = " + ".join(assigned_names)
         rescue.status = "assigned"
     return result
+
+
+def dispatch_registered_asset(rescue, asset_name):
+    """Reserve one registered, available professional unit or ambulance."""
+    normalized_name = str(asset_name or "").strip()
+    if not normalized_name:
+        raise ValueError("assigned_unit is required")
+    if ResponseDispatch.query.filter_by(rescue_request_id=rescue.id, status="assigned").first():
+        raise ValueError("This rescue already has an active dispatch")
+
+    unit = ResponderUnit.query.filter_by(name=normalized_name).first()
+    if unit is not None:
+        if unit.availability_status != "available":
+            raise ValueError("The selected responder unit is not available")
+        unit.availability_status = "dispatched"
+        responder_type = "rescue_unit"
+        responder_id = unit.id
+        responder_name = unit.name
+        responder_distance = round(
+            distance_km(rescue.latitude, rescue.longitude, unit.latitude, unit.longitude),
+            1,
+        )
+    else:
+        ambulance = Ambulance.query.filter_by(vehicle_number=normalized_name).first()
+        if ambulance is None:
+            raise ValueError("assigned_unit must match a registered responder unit or ambulance")
+        if ambulance.status != "available":
+            raise ValueError("The selected ambulance is not available")
+        ambulance.status = "dispatched"
+        responder_type = "ambulance"
+        responder_id = ambulance.id
+        responder_name = ambulance.vehicle_number
+        responder_distance = round(
+            distance_km(rescue.latitude, rescue.longitude, ambulance.latitude, ambulance.longitude),
+            1,
+        )
+        db.session.add(AmbulanceDispatch(ambulance_id=ambulance.id, rescue_request_id=rescue.id))
+
+    dispatch = ResponseDispatch(
+        rescue_request_id=rescue.id,
+        responder_type=responder_type,
+        responder_id=responder_id,
+        responder_name=responder_name,
+        distance_km=responder_distance,
+    )
+    db.session.add(dispatch)
+    rescue.assigned_unit = responder_name
+    rescue.status = "assigned"
+    return dispatch

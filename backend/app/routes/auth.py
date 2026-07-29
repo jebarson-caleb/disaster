@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from math import isfinite
 
 from flask import Blueprint, jsonify, request
 
@@ -27,7 +28,7 @@ from ..mfa import (
     verify_factor,
     verify_totp,
 )
-from ..models import AccountSecurity, AuthSession, MfaCredential, RoleProfile, User, Volunteer
+from ..models import AccountSecurity, AuthSession, MfaChallenge, MfaCredential, RoleProfile, User, Volunteer
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -66,12 +67,25 @@ def register():
         return jsonify({"error": password_error}), 400
     if User.query.filter_by(email=email).first():
         return jsonify({"error": "Email already registered"}), 409
+    name = str(data["name"]).strip()
+    phone = str(data["phone"]).strip()
+    if not name:
+        return jsonify({"error": "Name must not be blank"}), 400
+    if not phone:
+        return jsonify({"error": "Phone must not be blank"}), 400
+    try:
+        latitude = _optional_coordinate(data.get("latitude"), "latitude", -90, 90)
+        longitude = _optional_coordinate(data.get("longitude"), "longitude", -180, 180)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    if (latitude is None) != (longitude is None):
+        return jsonify({"error": "Latitude and longitude must be supplied together"}), 400
 
     requires_verification = data["role"] == "Volunteer"
     user = User(
-        name=str(data["name"]).strip()[:120],
+        name=name[:120],
         email=email,
-        phone=str(data["phone"]).strip()[:30],
+        phone=phone[:30],
         role=data["role"],
         password_hash=hash_password(data["password"]),
         is_active=not requires_verification,
@@ -83,8 +97,8 @@ def register():
             user_id=user.id,
             organization_name=str(data.get("organization_name") or "")[:160] or None,
             address=str(data.get("address") or "")[:255] or None,
-            latitude=data.get("latitude"),
-            longitude=data.get("longitude"),
+            latitude=latitude,
+            longitude=longitude,
         )
     )
     security_state(user)
@@ -94,8 +108,8 @@ def register():
                 user_id=user.id,
                 skills=str(data.get("skills") or "general relief support")[:255],
                 availability_status="pending verification",
-                latitude=float(data["latitude"]) if data.get("latitude") not in {None, ""} else None,
-                longitude=float(data["longitude"]) if data.get("longitude") not in {None, ""} else None,
+                latitude=latitude,
+                longitude=longitude,
             )
         )
     if requires_verification:
@@ -368,6 +382,7 @@ def change_password():
         AuthSession.id != request.auth_session.id,
         AuthSession.revoked_at.is_(None),
     ).update({AuthSession.revoked_at: utcnow()}, synchronize_session=False)
+    MfaChallenge.query.filter_by(user_id=request.user.id).delete(synchronize_session=False)
     request.auth_session.revoked_at = utcnow()
     response = session_response(request.user, mfa_state=request.auth_session.mfa_state)
     audit_event("account.password_change", "success", request.user.id)
@@ -408,6 +423,7 @@ def revoke_session(session_id):
     response = jsonify({"message": "Session revoked"})
     if auth_session.id == request.auth_session.id:
         clear_session_cookies(response)
+        response.headers["Clear-Site-Data"] = '"cache", "cookies", "storage"'
     return response
 
 
@@ -435,3 +451,15 @@ def public_user(user):
         "password_change_required": bool(state and state.must_change_password),
         "managed_facility": managed_facility,
     }
+
+
+def _optional_coordinate(value, name, minimum, maximum):
+    if value in {None, ""}:
+        return None
+    try:
+        coordinate = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must be a number") from error
+    if not isfinite(coordinate) or not minimum <= coordinate <= maximum:
+        raise ValueError(f"{name} is outside valid bounds")
+    return coordinate

@@ -147,7 +147,7 @@ def bootstrap():
                 "dispatches": [item.to_dict() for item in dispatch_query.limit(200).all()]
                 if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"}
                 else [],
-                "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Ambulance", "Volunteer"} else [],
+                "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Shelter", "Ambulance", "Volunteer"} else [],
                 "emergency_hotline": current_app.config.get("EMERGENCY_HOTLINE", "112"),
             },
             "server_time": datetime.now(UTC).isoformat(),

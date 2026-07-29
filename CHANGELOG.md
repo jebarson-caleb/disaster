@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## 1.1.3 - 2026-07-29
+
+### Added
+
+- Password confirmation and optional-coordinate validation in public and first-login account flows.
+- Production smoke probes for demo-data leakage, disabled demo sessions, malformed JSON bodies, privileged self-registration, public feeds, readiness, and security headers.
+- Regression coverage for idle/absolute session expiry and MFA-challenge invalidation across password changes, administrator resets, and account deactivation.
+
+### Changed
+
+- Rescue and supply assignment now reserves only registered, currently available operational assets and exposes the server-confirmed asset state to coordinators.
+- Rescue, ambulance, hospital, shelter, volunteer, and facility actions update the interface only after the API confirms the mutation.
+- Offline rescue and incident submissions are visibly marked as device-queued until synchronization succeeds.
+
+### Security
+
+- Password rotation, administrator password reset, and deactivation invalidate every pending password-derived MFA challenge.
+- Current-device session revocation instructs the browser to clear cookies, cache, and storage.
+- JSON API endpoints reject non-object request bodies before route processing.
+
 ## 1.1.2 - 2026-07-29
 
 ### Added

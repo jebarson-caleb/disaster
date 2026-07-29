@@ -135,13 +135,49 @@ def test_isolated_survivor_supply_request_and_device_location(client, app):
     assert supply["status"] == "requested"
 
     ngo_headers = demo_headers(client, "NGO")
+    missing_assignment = client.patch(
+        f"/api/v1/supply-requests/{supply['id']}",
+        headers=ngo_headers,
+        json={"status": "assigned"},
+    )
+    assert missing_assignment.status_code == 400
+    unregistered_assignment = client.patch(
+        f"/api/v1/supply-requests/{supply['id']}",
+        headers=ngo_headers,
+        json={"status": "assigned", "assigned_unit": "Unregistered Relief Team"},
+    )
+    assert unregistered_assignment.status_code == 400
+
+    with app.app_context():
+        responder = ResponderUnit.query.filter_by(availability_status="available").order_by(ResponderUnit.id).first()
+        responder_id = responder.id
+        responder_name = responder.name
+
     updated = client.patch(
         f"/api/v1/supply-requests/{supply['id']}",
         headers=ngo_headers,
-        json={"status": "en route", "assigned_unit": "Relief Bike Team 3"},
+        json={"status": "assigned", "assigned_unit": responder_name},
     )
     assert updated.status_code == 200
-    assert updated.get_json()["supply_request"]["assigned_unit"] == "Relief Bike Team 3"
+    assert updated.get_json()["supply_request"]["assigned_unit"] == responder_name
+    assert updated.get_json()["responder_unit"]["availability_status"] == "dispatched"
+    with app.app_context():
+        assert db.session.get(ResponderUnit, responder_id).availability_status == "dispatched"
+
+    delivered = client.patch(
+        f"/api/v1/supply-requests/{supply['id']}",
+        headers=ngo_headers,
+        json={"status": "delivered"},
+    )
+    assert delivered.status_code == 200
+    assert delivered.get_json()["supply_request"]["status"] == "delivered"
+    assert delivered.get_json()["responder_unit"]["availability_status"] == "available"
+    with app.app_context():
+        assert db.session.get(ResponderUnit, responder_id).availability_status == "available"
+
+    shelter_headers = demo_headers(client, "Shelter")
+    shelter_hub = client.get("/api/v1/operations/bootstrap", headers=shelter_headers).get_json()["response_hub"]
+    assert any(item["id"] == responder_id for item in shelter_hub["responder_units"])
 
     denied = client.post("/api/v1/location-pings", headers=citizen_headers, json={"latitude": 1, "longitude": 2})
     assert denied.status_code == 400

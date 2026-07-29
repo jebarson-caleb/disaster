@@ -16,7 +16,7 @@ from ..models import (
     Volunteer,
 )
 from ..services.ai_service import damage_estimation, relief_prioritization
-from ..services.dispatch_service import auto_dispatch_rescue
+from ..services.dispatch_service import auto_dispatch_rescue, dispatch_registered_asset
 
 disasters_bp = Blueprint("disasters", __name__)
 VALID_RESCUE_STATUSES = {"pending", "assigned", "en route", "triage", "rescued", "cancelled"}
@@ -187,13 +187,15 @@ def assign_rescue_request(request_id):
     data = request.get_json() or {}
     if not data.get("assigned_unit"):
         return jsonify({"error": "assigned_unit is required"}), 400
-    rescue.assigned_unit = data["assigned_unit"]
-    rescue.status = data.get("status", "assigned")
-    if rescue.status not in VALID_RESCUE_STATUSES:
-        return jsonify({"error": "Invalid rescue status"}), 400
+    if data.get("status", "assigned") != "assigned":
+        return jsonify({"error": "A new dispatch must start with assigned status"}), 400
+    try:
+        dispatch = dispatch_registered_asset(rescue, data["assigned_unit"])
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
     db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=rescue.status, note=f"Assigned to {rescue.assigned_unit}", changed_by_id=request.user.id))
     db.session.commit()
-    return jsonify({"rescue_request": rescue.to_dict()})
+    return jsonify({"rescue_request": rescue.to_dict(), "dispatch": dispatch.to_dict()})
 
 
 def _scoped_rescue_query(query, user):

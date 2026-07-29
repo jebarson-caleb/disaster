@@ -50,7 +50,14 @@ def create_app(config_object=Config):
     def request_context_and_csrf():
         supplied = request.headers.get("X-Request-ID", "")
         g.request_id = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
-        return enforce_csrf()
+        csrf_error = enforce_csrf()
+        if csrf_error is not None:
+            return csrf_error
+        if request.is_json:
+            payload = request.get_json(silent=True)
+            if payload is not None and not isinstance(payload, dict):
+                return jsonify({"error": "JSON request body must be an object"}), 400
+        return None
 
     @app.after_request
     def secure_response(response):

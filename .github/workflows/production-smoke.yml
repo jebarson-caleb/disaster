@@ -45,6 +45,17 @@ jobs:
             --dump-header root.headers \
             --output root.html
           grep -q 'id="root"' root.html
+          main_asset="$(
+            grep -oE 'src="/assets/[^"]+\.js"' root.html \
+              | head -n 1 \
+              | cut -d '"' -f 2
+          )"
+          test -n "$main_asset"
+          curl "${curl_args[@]}" "$BASE_URL$main_asset" --output client.js
+          if grep -Eiq 'DemoPassword123|admin@rescue\.local|Velachery Govt|Meena Kumar|Rajiv Gandhi Govt' client.js; then
+            echo "Known demo credentials or records were found in the production client bundle."
+            exit 1
+          fi
 
           curl "${curl_args[@]}" "$BASE_URL/api/v1/health" \
             --dump-header health.headers \
@@ -52,6 +63,9 @@ jobs:
           curl "${curl_args[@]}" "$BASE_URL/api/v1/ready" \
             --dump-header ready.headers \
             --output ready.json
+          curl "${curl_args[@]}" "$BASE_URL/api/v1/national-alerts" \
+            --dump-header public.headers \
+            --output public.json
 
           auth_status="$(
             curl --silent --show-error --location \
@@ -62,6 +76,36 @@ jobs:
           )"
           test "$auth_status" = "401"
 
+          demo_status="$(
+            curl --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data '{"role":"Admin"}' \
+              --output demo.json \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/v1/auth/demo-session"
+          )"
+          test "$demo_status" = "404"
+
+          malformed_status="$(
+            curl --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data '["invalid-login-shape"]' \
+              --output malformed.json \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/v1/auth/login"
+          )"
+          test "$malformed_status" = "400"
+
+          privileged_registration_status="$(
+            curl --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data '{"name":"Smoke Probe","email":"smoke-probe@example.invalid","phone":"0000000000","role":"Admin","password":"NonPersistent-Smoke-Password-91"}' \
+              --output privileged-registration.json \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/v1/auth/register"
+          )"
+          test "$privileged_registration_status" = "403"
+
       - name: Validate responses and security headers
         shell: python {0}
         run: |
@@ -70,11 +114,16 @@ jobs:
 
           health = json.loads(Path("health.json").read_text())
           readiness = json.loads(Path("ready.json").read_text())
+          public_feed = json.loads(Path("public.json").read_text())
 
           assert health["status"] == "ok", health
           assert readiness["status"] == "ready", readiness
           assert readiness["checks"]["configuration"] is True, readiness
           assert readiness["checks"]["database"] is True, readiness
+          assert public_feed["country"] == "India", public_feed
+          assert isinstance(public_feed["alerts"], list), public_feed
+          assert isinstance(public_feed["disasters"], list), public_feed
+          assert isinstance(public_feed["news_updates"], list), public_feed
 
           headers = Path("ready.headers").read_text().lower()
           required_headers = {

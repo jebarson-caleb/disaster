@@ -1,12 +1,14 @@
+from datetime import timedelta
 from types import SimpleNamespace
 
+import pyotp
 from flask import request
 
 from app.auth import authenticated_rate_key, utcnow
 from app.config import production_configuration_issues
 from app.extensions import db
 from app.mfa import begin_setup
-from app.models import MfaCredential, User
+from app.models import AuthSession, MfaChallenge, MfaCredential, User
 from app.seed import seed_demo_data
 
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
@@ -48,6 +50,18 @@ def test_cookie_session_csrf_logout_and_security_headers(client):
     assert logout.status_code == 200
     assert '"storage"' in logout.headers["Clear-Site-Data"]
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_api_rejects_non_object_json_without_server_error(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json=["not", "an", "object"],
+        headers={"X-Request-ID": "invalid-json-shape-001"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "JSON request body must be an object"}
+    assert response.headers["X-Request-ID"] == "invalid-json-shape-001"
 
 
 def test_password_policy_and_account_lockout(client, app):
@@ -176,6 +190,63 @@ def test_user_can_review_and_revoke_other_active_sessions(client, app):
     assert client.get("/api/v1/auth/me").status_code == 200
 
 
+def test_revoking_current_session_clears_browser_state(client):
+    registered = client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Current Session Owner",
+            "email": "current-session@example.com",
+            "phone": "9000000778",
+            "role": "Citizen",
+            "password": STRONG_PASSWORD,
+        },
+    )
+    assert registered.status_code == 201
+    current = next(item for item in client.get("/api/v1/auth/sessions").get_json()["sessions"] if item["current"])
+
+    revoked = client.delete(
+        f"/api/v1/auth/sessions/{current['id']}",
+        headers={"X-CSRF-Token": client.get_cookie("resq_csrf").value},
+    )
+
+    assert revoked.status_code == 200
+    assert revoked.headers["Clear-Site-Data"] == '"cache", "cookies", "storage"'
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_idle_and_absolute_session_expiry_are_enforced(client, app):
+    registered = client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Expiring Session Owner",
+            "email": "expiring-session@example.com",
+            "phone": "9000000779",
+            "role": "Citizen",
+            "password": STRONG_PASSWORD,
+        },
+    )
+    assert registered.status_code == 201
+    with app.app_context():
+        auth_session = AuthSession.query.filter_by(user_id=registered.get_json()["user"]["id"]).one()
+        auth_session.idle_expires_at = utcnow() - timedelta(seconds=1)
+        db.session.commit()
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+    relogged = client.post(
+        "/api/v1/auth/login",
+        json={"email": "expiring-session@example.com", "password": STRONG_PASSWORD},
+    )
+    assert relogged.status_code == 200
+    with app.app_context():
+        auth_session = AuthSession.query.filter_by(
+            user_id=relogged.get_json()["user"]["id"],
+            revoked_at=None,
+        ).order_by(AuthSession.id.desc()).first()
+        auth_session.absolute_expires_at = utcnow() - timedelta(seconds=1)
+        db.session.commit()
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
 def test_volunteer_requires_admin_verification(client, app):
     with app.app_context():
         seed_demo_data()
@@ -271,3 +342,96 @@ def test_admin_can_reset_another_users_lost_mfa(client, app, auth_headers):
     assert reset.get_json()["user"]["mfa_enabled"] is False
     with app.app_context():
         assert MfaCredential.query.filter_by(user_id=police_id).one_or_none() is None
+
+
+def test_password_rotation_invalidates_password_derived_mfa_challenges(client, app, auth_headers):
+    with app.app_context():
+        administrator = User.query.filter_by(role="Admin").one()
+        credential, secret, _ = begin_setup(administrator)
+        credential.enabled_at = utcnow()
+        db.session.commit()
+        administrator_id = administrator.id
+
+    challenger = app.test_client()
+    pending = challenger.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@rescue.local", "password": "DemoPassword123!"},
+    )
+    assert pending.status_code == 202
+    challenge_token = pending.get_json()["challenge_token"]
+
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        headers=auth_headers,
+        json={
+            "current_password": "DemoPassword123!",
+            "new_password": "Rotated-Administrator-Password-84",
+        },
+    )
+    assert changed.status_code == 200
+    with app.app_context():
+        assert MfaChallenge.query.filter_by(user_id=administrator_id).count() == 0
+
+    stale = challenger.post(
+        "/api/v1/auth/mfa/challenge",
+        json={"challenge_token": challenge_token, "code": pyotp.TOTP(secret).now()},
+    )
+    assert stale.status_code == 401
+
+
+def test_admin_reset_and_deactivation_invalidate_pending_mfa_challenges(client, app, auth_headers):
+    with app.app_context():
+        police = User.query.filter_by(role="Police").one()
+        credential, secret, _ = begin_setup(police)
+        credential.enabled_at = utcnow()
+        db.session.commit()
+        police_id = police.id
+
+    challenger = app.test_client()
+    pending_reset = challenger.post(
+        "/api/v1/auth/login",
+        json={"email": "police@rescue.local", "password": "DemoPassword123!"},
+    )
+    assert pending_reset.status_code == 202
+
+    reset = client.post(
+        f"/api/v1/admin/users/{police_id}/reset-password",
+        headers=auth_headers,
+        json={
+            "admin_password": "DemoPassword123!",
+            "new_password": "Reset-Police-Password-85",
+        },
+    )
+    assert reset.status_code == 200
+    stale_reset = challenger.post(
+        "/api/v1/auth/mfa/challenge",
+        json={
+            "challenge_token": pending_reset.get_json()["challenge_token"],
+            "code": pyotp.TOTP(secret).now(),
+        },
+    )
+    assert stale_reset.status_code == 401
+
+    pending_deactivation = challenger.post(
+        "/api/v1/auth/login",
+        json={"email": "police@rescue.local", "password": "Reset-Police-Password-85"},
+    )
+    assert pending_deactivation.status_code == 202
+    assert client.patch(
+        f"/api/v1/admin/users/{police_id}",
+        headers=auth_headers,
+        json={"is_active": False},
+    ).status_code == 200
+    assert client.patch(
+        f"/api/v1/admin/users/{police_id}",
+        headers=auth_headers,
+        json={"is_active": True},
+    ).status_code == 200
+    stale_deactivation = challenger.post(
+        "/api/v1/auth/mfa/challenge",
+        json={
+            "challenge_token": pending_deactivation.get_json()["challenge_token"],
+            "code": pyotp.TOTP(secret).now(),
+        },
+    )
+    assert stale_deactivation.status_code == 401

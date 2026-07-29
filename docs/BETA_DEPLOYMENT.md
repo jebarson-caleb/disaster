@@ -57,10 +57,12 @@ After deployment:
 5. Enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes.
 6. Open **User Access** and provision one account for each operational role in use. Hospital, shelter, and ambulance accounts must be assigned to an existing facility or create their facility atomically. Confirm every issued password must be replaced on first sign-in.
 7. For hospital, shelter, and ambulance accounts, confirm the workspace shows only the assigned operational record and rejects attempts to update another facility. For citizens, confirm rescue lists contain only cases created by that citizen.
-8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions.
+8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions. Manual rescue and supply assignment must accept only a registered available asset, reserve it while active, and release it after completion or cancellation.
 9. Test account deactivation/reactivation, administrator-assisted password reset, active-session revocation, a non-critical alert, Citizen registration and tracking, mobile layout, location consent denial/approval, offline submission/reconnect, and the emergency hotline.
 
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
+
+The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers.
 
 ## Real-user cutover and acceptance-data removal
 
