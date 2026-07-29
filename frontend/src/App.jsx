@@ -197,6 +197,7 @@ const emptyResponseHub = {
   dispatches: [],
   responder_units: [],
 };
+const emptyAuthDraft = { name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' };
 const emptyProvisionDraft = {
   name: '',
   email: '',
@@ -242,7 +243,7 @@ export default function App() {
   const [sessionMode, setSessionMode] = useState(DEMO_ENABLED ? 'demo' : 'checking');
   const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
   const [authMode, setAuthMode] = useState('login');
-  const [authDraft, setAuthDraft] = useState({ name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' });
+  const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
   const [passwordDraft, setPasswordDraft] = useState({ current_password: '', new_password: '' });
   const [mfaChallenge, setMfaChallenge] = useState({ token: '', code: '' });
   const [mfaSession, setMfaSession] = useState({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
@@ -486,9 +487,16 @@ export default function App() {
       localStorage.removeItem(OFFLINE_QUEUE_KEY);
       setPendingOperations([]);
       setCurrentUser(null);
+      setAuthDraft(emptyAuthDraft);
+      setPasswordDraft({ current_password: '', new_password: '' });
       setMfaChallenge({ token: '', code: '' });
       setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
       setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
+      setMfaAction({ current_password: '', code: '' });
+      setAccountSessions([]);
+      setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
+      setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
+      setMfaResetDraft({ user_id: '', admin_password: '' });
       setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
       setShowAccountPanel(!DEMO_ENABLED);
       setActiveRole('Citizen');
@@ -1204,6 +1212,7 @@ export default function App() {
         recovery_codes_remaining: 0,
       });
       setMfaChallenge({ token: '', code: '' });
+      setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
       const passwordRequired = Boolean(session.user.password_change_required);
       setShowAccountPanel(passwordRequired);
       setOperatorNotice(
@@ -1427,11 +1436,16 @@ export default function App() {
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
     setPendingOperations([]);
     setCurrentUser(null);
+    setAuthDraft(emptyAuthDraft);
+    setPasswordDraft({ current_password: '', new_password: '' });
     setMfaChallenge({ token: '', code: '' });
     setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
     setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
     setMfaAction({ current_password: '', code: '' });
     setAccountSessions([]);
+    setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
+    setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
+    setMfaResetDraft({ user_id: '', admin_password: '' });
     setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
     setShowAccountPanel(!DEMO_ENABLED);
     setActiveRole('Citizen');
