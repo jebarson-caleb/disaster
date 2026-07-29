@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## 1.1.2 - 2026-07-29
+
+### Added
+
+- Dry-run-first, dependency-guarded production acceptance-data cleanup with retained anonymized audit history.
+- Regression coverage proving cleanup refuses to delete accounts or facilities referenced by operational records.
+
+### Changed
+
+- Production client state now begins empty and is populated only by the authenticated live API; demo incidents, teams, facilities, inventory, trends, ETAs, and readiness values remain isolated to explicit demo mode.
+- Manual rescue assignment now selects only registered available responder units or ambulances.
+- Live readiness and response trends are calculated from current operational records instead of presentation fixtures.
+
+### Operations
+
+- Removed the marked production acceptance accounts and facilities after a clean dependency preview and revoked their sessions while retaining anonymized security events.
+- Verified the Vercel Marketplace Neon resource is installed, attached, and available.
+
 ## 1.1.1 - 2026-07-28
 
 ### Added

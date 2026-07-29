@@ -62,6 +62,44 @@ After deployment:
 
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
+## Real-user cutover and acceptance-data removal
+
+Never delete production-looking rows with an ad hoc SQL statement. The checked-in maintenance command recognizes only the exact `.training@resq-command.local` acceptance cohort and the three explicitly named training facilities. It blocks if any target is linked to an incident, rescue, dispatch, welfare case, supply request, donation, location ping, alert, news update, or other operational record. Security audit rows are retained with their deleted user reference anonymized.
+
+Run the read-only preview first with the production environment loaded:
+
+```bash
+cd backend
+vercel env run -e production -- python -m scripts.purge_training_data
+```
+
+Proceed only when `state` is `ready`, `problems` and `blockers` are empty, and every listed email/facility is an intended acceptance fixture:
+
+```bash
+vercel env run -e production -- python -m scripts.purge_training_data \
+  --execute --confirmation PURGE_TRAINING_DATA
+vercel env run -e production -- python -m scripts.purge_training_data
+```
+
+The final preview must report `state: already_clean`. Keep demo seed code and test fixtures in source control; they are required for deterministic CI and local demonstrations, but `DEMO_MODE=false` and an unset `VITE_DEMO_MODE` prevent them from entering a public runtime.
+
+After cleanup, keep the bootstrap administrator as the only initial identity. Citizens and volunteers may register through the public account flow; volunteers remain pending until an administrator verifies them. Provision every privileged or facility role through **User Access**, using unique real email/phone details, first-login password replacement, and mandatory MFA.
+
+## Integration cutover matrix
+
+| Capability | Live requirement | Safe fallback |
+| --- | --- | --- |
+| Application hosting | Vercel Services project with frontend and backend services | None; both services are required |
+| Persistent database | Attached managed PostgreSQL/Neon resource and pooled TLS `DATABASE_URL` | None; readiness rejects SQLite in production |
+| Maps | Browser access to OpenStreetMap tiles; external navigation is advisory | Typed coordinates and address remain available |
+| Shared throttling | TLS Redis URL in `RATELIMIT_STORAGE_URI` for horizontally scaled traffic | Per-instance throttling plus database-backed account lockout |
+| Public alert delivery | Approved SMS/siren/radio provider, recipient governance, credentials, and a delivery adapter | CAP-inspired alert and acknowledgement records inside the authenticated application only |
+| Online donations | Approved hosted checkout in `DONATION_PAYMENT_URL` plus the provider's independent settlement/reconciliation process | Auditable pledge records; no money is represented as collected |
+| AI explanations | Reachable, privacy-approved Ollama service in `OLLAMA_BASE_URL` | Deterministic, tested scoring without transmitting personal data |
+| Email recovery/verification | Approved transactional-email provider, verified sending domain, templates, and support ownership | Administrator-assisted password reset with re-authentication and session revocation |
+
+Do not label an optional provider as integrated merely because an environment-variable slot exists. Activation requires provider credentials, contractual/organizational approval, a non-production delivery test, failure/retry monitoring, and a production reconciliation test. Provider secrets must remain in Vercel environment storage and never appear in source control or browser payloads.
+
 ## Operational boundaries
 
 - Call/SMS/siren/radio values are coordination records; actual delivery needs an approved communications provider and credentials.

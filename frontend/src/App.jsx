@@ -95,27 +95,6 @@ const dashboardTabs = [
 const softSpring = { type: 'spring', stiffness: 420, damping: 34, mass: 0.8 };
 const quickFade = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 
-const earlyWarningPillars = [
-  { name: 'Risk knowledge', score: 82, detail: 'Loss history, exposure and vulnerable groups mapped', icon: Database },
-  { name: 'Monitoring', score: 76, detail: 'Weather, field reports and incident sensors tracked', icon: Wifi },
-  { name: 'Communication', score: 88, detail: 'SMS, siren, radio and volunteer relay prepared', icon: Megaphone },
-  { name: 'Preparedness', score: 71, detail: 'Shelter, hospital and resource readiness reviewed', icon: ClipboardList },
-];
-
-const resourceInventory = [
-  { name: 'Rescue boats', available: 14, total: 18, unit: 'boats', tone: 'blue' },
-  { name: 'Rice meal packets', available: 3200, total: 5200, unit: 'packs', tone: 'green' },
-  { name: 'Medicine kits', available: 960, total: 1400, unit: 'kits', tone: 'orange' },
-  { name: 'Drinking water cans', available: 2100, total: 3200, unit: 'cans', tone: 'cyan' },
-];
-
-const fieldTeams = [
-  { name: 'TNDRF Boat Unit 2', status: 'assigned', eta: '12 min', location: 'Velachery lake bund', load: 84 },
-  { name: 'Tamil Nadu Fire Rescue Team 4', status: 'mobilizing', eta: '18 min', location: 'Cuddalore coast road', load: 62 },
-  { name: 'Greater Chennai Volunteer Team A', status: 'en route', eta: '9 min', location: 'Velachery relief camp', load: 57 },
-  { name: '108 Ambulance Triage Van', status: 'available', eta: 'ready', location: 'Rajiv Gandhi Govt General Hospital', load: 31 },
-];
-
 const standardsFeatures = [
   { label: 'CAP alert templates', detail: 'All-hazard public warnings across SMS, siren, radio and web.', icon: Megaphone },
   { label: 'Incident command roles', detail: 'Clear ownership for command, operations, logistics and medical.', icon: RadioTower },
@@ -124,7 +103,7 @@ const standardsFeatures = [
   { label: 'Situation reports', detail: 'Share verified updates, constraints and next operational needs.', icon: ClipboardList },
 ];
 
-const responseTrend = [
+const demoResponseTrend = [
   { time: '08:00', reports: 4, rescued: 1 },
   { time: '09:00', reports: 9, rescued: 3 },
   { time: '10:00', reports: 14, rescued: 6 },
@@ -207,6 +186,17 @@ const OFFLINE_QUEUE_KEY = 'resq-command-offline-queue';
 const OFFLINE_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const OFFLINE_QUEUE_LIMIT = 50;
 const DEMO_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
+const emptyFacilities = { hospitals: [], shelters: [], ambulances: [] };
+const emptyResponseHub = {
+  emergency_hotline: '112',
+  news_updates: [],
+  welfare_checks: [],
+  hospital_notifications: [],
+  supply_requests: [],
+  campaigns: [],
+  dispatches: [],
+  responder_units: [],
+};
 const emptyProvisionDraft = {
   name: '',
   email: '',
@@ -269,46 +259,85 @@ export default function App() {
   const [pendingOperations, setPendingOperations] = useState(() => readOfflineQueue());
   const [routeResult, setRouteResult] = useState(null);
   const [coordinationData, setCoordinationData] = useState({ volunteers: [], distributions: [], assignments: [] });
-  const [disasters, setDisasters] = useState(initialDisasters);
-  const [rescues, setRescues] = useState(initialRescues);
-  const [facilities, setFacilities] = useState(initialFacilities);
+  const [disasters, setDisasters] = useState(() => (DEMO_ENABLED ? initialDisasters : []));
+  const [rescues, setRescues] = useState(() => (DEMO_ENABLED ? initialRescues : []));
+  const [facilities, setFacilities] = useState(() => (DEMO_ENABLED ? initialFacilities : emptyFacilities));
   const [resources, setResources] = useState([]);
-  const [alerts, setAlerts] = useState(initialAlerts);
-  const [responseHub, setResponseHub] = useState(initialResponseHub);
+  const [alerts, setAlerts] = useState(() => (DEMO_ENABLED ? initialAlerts : []));
+  const [responseHub, setResponseHub] = useState(() => (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
   const [alertDraft, setAlertDraft] = useState({
-    audience: 'Chennai Zone 13 - Adyar / Velachery',
-    channel: 'SMS + siren + volunteer relay',
-    message: 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.',
-    instruction: 'Use the marked evacuation corridor, assist children and older adults, and acknowledge this warning when safe.',
+    audience: DEMO_ENABLED ? 'Chennai Zone 13 - Adyar / Velachery' : '',
+    channel: DEMO_ENABLED ? 'SMS + siren + volunteer relay' : '',
+    message: DEMO_ENABLED ? 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.' : '',
+    instruction: DEMO_ENABLED ? 'Use the marked evacuation corridor, assist children and older adults, and acknowledge this warning when safe.' : '',
   });
   const [incidentDraft, setIncidentDraft] = useState({
     title: '',
     disaster_type: 'flood',
     address: '',
     description: '',
-    latitude: 12.9798,
-    longitude: 80.2209,
-    people_affected: 25,
+    latitude: DEMO_ENABLED ? 12.9798 : '',
+    longitude: DEMO_ENABLED ? 80.2209 : '',
+    people_affected: DEMO_ENABLED ? 25 : 1,
     severity_hint: 'medium',
   });
   const [rescueDraft, setRescueDraft] = useState({
-    disaster_id: 1,
+    disaster_id: '',
     victim_name: '',
-    victim_age: 30,
+    victim_age: '',
     people_count: 1,
     condition: 'injured',
     trapped: false,
     vulnerable_people: 0,
-    latitude: 12.9806,
-    longitude: 80.2194,
+    latitude: DEMO_ENABLED ? 12.9806 : '',
+    longitude: DEMO_ENABLED ? 80.2194 : '',
     notes: '',
   });
-  const [distributionDraft, setDistributionDraft] = useState({ resource_id: 1, disaster_id: 1, quantity: 25, destination: 'Velachery Govt School Relief Camp' });
-  const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: 1, disaster_id: 1, task: 'Support evacuation and first-aid desk' });
-  const [welfareDraft, setWelfareDraft] = useState({ disaster_id: 1, relative_name: '', relative_phone: '', relationship: '', last_known_location: '', requester_phone: '', consent_to_contact: false });
-  const [supplyDraft, setSupplyDraft] = useState({ disaster_id: 1, category: 'food and water', description: '', people_count: 1, urgency: 'high', contact_phone: '', latitude: 12.9806, longitude: 80.2194, location_accuracy: '', location_consent: false });
-  const [donationDraft, setDonationDraft] = useState({ campaign_id: 1, donor_name: '', donor_email: '', amount: 500, anonymous: false, message: '' });
-  const [newsDraft, setNewsDraft] = useState({ disaster_id: 1, headline: '', summary: '', source_name: 'Verified field desk', stream_url: '', state: '', district: '', is_live: true });
+  const [distributionDraft, setDistributionDraft] = useState({ resource_id: '', disaster_id: '', quantity: DEMO_ENABLED ? 25 : 1, destination: DEMO_ENABLED ? 'Velachery Govt School Relief Camp' : '' });
+  const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: '', disaster_id: '', task: DEMO_ENABLED ? 'Support evacuation and first-aid desk' : '' });
+  const [welfareDraft, setWelfareDraft] = useState({ disaster_id: '', relative_name: '', relative_phone: '', relationship: '', last_known_location: '', requester_phone: '', consent_to_contact: false });
+  const [supplyDraft, setSupplyDraft] = useState({ disaster_id: '', category: 'food and water', description: '', people_count: 1, urgency: 'high', contact_phone: '', latitude: DEMO_ENABLED ? 12.9806 : '', longitude: DEMO_ENABLED ? 80.2194 : '', location_accuracy: '', location_consent: false });
+  const [donationDraft, setDonationDraft] = useState({ campaign_id: '', donor_name: '', donor_email: '', amount: '', anonymous: false, message: '' });
+  const [newsDraft, setNewsDraft] = useState({ disaster_id: '', headline: '', summary: '', source_name: '', stream_url: '', state: '', district: '', is_live: true });
+
+  const readinessPillars = useMemo(() => {
+    const completeDisasters = disasters.filter((item) => (
+      item.address && Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude))
+    )).length;
+    const completeAlerts = alerts.filter((item) => item.audience && item.channel && item.message && item.instruction).length;
+    const preparednessChecks = [
+      facilities.hospitals.length > 0,
+      facilities.shelters.length > 0,
+      facilities.ambulances.length > 0,
+      resources.length > 0,
+    ];
+    return [
+      {
+        name: 'Risk knowledge',
+        score: disasters.length ? Math.round((completeDisasters / disasters.length) * 100) : 0,
+        detail: disasters.length ? `${completeDisasters} of ${disasters.length} incidents have mapped locations` : 'No live incidents have been recorded',
+        icon: Database,
+      },
+      {
+        name: 'Monitoring',
+        score: connectionState === 'online' ? 100 : 0,
+        detail: connectionState === 'online' ? 'Live operations API and database are connected' : 'Live operations connection is unavailable',
+        icon: Wifi,
+      },
+      {
+        name: 'Communication',
+        score: alerts.length ? Math.round((completeAlerts / alerts.length) * 100) : 0,
+        detail: alerts.length ? `${completeAlerts} of ${alerts.length} active alerts contain complete instructions` : 'No active public warnings have been issued',
+        icon: Megaphone,
+      },
+      {
+        name: 'Preparedness',
+        score: Math.round((preparednessChecks.filter(Boolean).length / preparednessChecks.length) * 100),
+        detail: `${preparednessChecks.filter(Boolean).length} of ${preparednessChecks.length} facility and inventory groups configured`,
+        icon: ClipboardList,
+      },
+    ];
+  }, [alerts, connectionState, disasters, facilities, resources]);
 
   const metrics = useMemo(() => {
     const pending = rescues.filter((item) => item.status === 'pending').length;
@@ -321,7 +350,7 @@ export default function App() {
     const availableAmbulances = facilities.ambulances.filter((item) => item.status === 'available').length;
     const affectedPeople = disasters.reduce((sum, item) => sum + Number(item.people_affected || 0), 0);
     const avgPriority = Math.round(rescues.reduce((sum, item) => sum + item.priority_score, 0) / Math.max(1, rescues.length));
-    const readinessScore = Math.round(earlyWarningPillars.reduce((sum, item) => sum + item.score, 0) / earlyWarningPillars.length);
+    const readinessScore = Math.round(readinessPillars.reduce((sum, item) => sum + item.score, 0) / readinessPillars.length);
     return {
       pending,
       assigned,
@@ -335,7 +364,7 @@ export default function App() {
       avgPriority,
       readinessScore,
     };
-  }, [rescues, facilities, disasters]);
+  }, [rescues, facilities, disasters, readinessPillars]);
 
   const priorityChart = useMemo(() => {
     const labels = ['Critical', 'High', 'Medium', 'Low'];
@@ -355,8 +384,9 @@ export default function App() {
     };
   }, [disasters]);
 
-  const trendChart = useMemo(
-    () => ({
+  const trendChart = useMemo(() => {
+    const responseTrend = DEMO_ENABLED ? demoResponseTrend : buildHourlyResponseTrend(disasters, rescues);
+    return {
       labels: responseTrend.map((item) => item.time),
       datasets: [
         {
@@ -378,9 +408,8 @@ export default function App() {
           pointRadius: 3,
         },
       ],
-    }),
-    [],
-  );
+    };
+  }, [disasters, rescues]);
 
   const disasterLookup = useMemo(() => new Map(disasters.map((item) => [Number(item.id), item])), [disasters]);
   const filteredDisasters = useMemo(
@@ -545,10 +574,11 @@ export default function App() {
         setResources(snapshot.resources || []);
         if (coordination) {
           setCoordinationData(coordination);
-          alignCoordinationDrafts(snapshot, coordination);
+          alignOperationalDrafts(snapshot, coordination);
         }
         setAlerts(snapshot.alerts.map(normalizeAlert));
-        setResponseHub(snapshot.response_hub || initialResponseHub);
+        if (!coordination) alignOperationalDrafts(snapshot);
+        setResponseHub(snapshot.response_hub || (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
         setConnectionState('online');
         setOperatorNotice(`${session.user.name} connected to the live response API${sessionMode === 'demo' ? ' in demo mode' : ''}`);
       } catch (error) {
@@ -580,10 +610,11 @@ export default function App() {
             setResources(snapshot.resources || []);
             if (coordination) {
               setCoordinationData(coordination);
-              alignCoordinationDrafts(snapshot, coordination);
+              alignOperationalDrafts(snapshot, coordination);
             }
             setAlerts(snapshot.alerts.map(normalizeAlert));
-            setResponseHub(snapshot.response_hub || initialResponseHub);
+            if (!coordination) alignOperationalDrafts(snapshot);
+            setResponseHub(snapshot.response_hub || (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
             setConnectionState('online');
             return flushOfflineQueue();
           })
@@ -618,6 +649,10 @@ export default function App() {
     try {
       const response = await api.createDisaster(incidentDraft);
       next = { ...response.disaster, score: response.damage_estimation.score, label: response.damage_estimation.label };
+      setRescueDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
+      setWelfareDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
+      setSupplyDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
+      setNewsDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
       setConnectionState('online');
     } catch (error) {
       if (!isNetworkFailure(error)) {
@@ -628,7 +663,7 @@ export default function App() {
       setConnectionState('offline');
     }
     setDisasters((items) => [next, ...items]);
-    setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: 25 });
+    setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: DEMO_ENABLED ? 25 : 1 });
     setOperatorNotice(`${assessment.label} ${incidentDraft.disaster_type} report added to the national command view`);
     setActiveView('command');
   }
@@ -705,7 +740,17 @@ export default function App() {
         setOperatorNotice(`${rescue.victim_name} is already marked rescued`);
         return;
       }
-      const unit = rescue.assigned_unit || recommendedUnitForRescue(rescue, disaster, role);
+      const unit = rescue.assigned_unit || recommendedUnitForRescue(
+        rescue,
+        disaster,
+        role,
+        responseHub.responder_units || [],
+        facilities.ambulances,
+      );
+      if (!unit) {
+        setOperatorNotice('No verified responder or ambulance is available. Register a unit before assigning this rescue.');
+        return;
+      }
       setRescues((items) =>
         items.map((item) =>
           item.id === id
@@ -751,7 +796,11 @@ export default function App() {
 
     if (role === 'Hospital') {
       const nextStatus = rescue.status === 'rescued' ? rescue.status : 'triage';
-      const assignedUnit = rescue.assigned_unit || 'Rajiv Gandhi Govt General Hospital triage desk';
+      const assignedUnit = rescue.assigned_unit || (facilities.hospitals[0]?.name ? `${facilities.hospitals[0].name} triage desk` : '');
+      if (!assignedUnit) {
+        setOperatorNotice('No hospital is linked to this account. Ask an administrator to complete facility setup.');
+        return;
+      }
       setRescues((items) =>
         items.map((item) =>
           item.id === id
@@ -775,7 +824,11 @@ export default function App() {
 
     if (role === 'Volunteer') {
       const nextStatus = rescue.status === 'rescued' ? rescue.status : 'en route';
-      const assignedUnit = rescue.assigned_unit || 'Greater Chennai Volunteer Team A';
+      const assignedUnit = rescue.assigned_unit || currentUserName;
+      if (!assignedUnit) {
+        setOperatorNotice('The volunteer account identity could not be loaded. Sign in again before checking in.');
+        return;
+      }
       setRescues((items) =>
         items.map((item) =>
           item.id === id
@@ -885,7 +938,7 @@ export default function App() {
       const coordination = await api.coordination();
       setCoordinationData(coordination);
       setResources(coordination.resources);
-      alignCoordinationDrafts({ disasters, resources: coordination.resources }, coordination);
+      alignOperationalDrafts({ disasters, resources: coordination.resources, response_hub: responseHub }, coordination);
       setOperatorNotice(`Relief inventory dispatched to ${distributionDraft.destination}`);
     } catch (error) {
       setOperatorNotice(`Distribution could not be planned: ${error.message}`);
@@ -898,7 +951,7 @@ export default function App() {
       await api.createVolunteerAssignment(volunteerDraft);
       const coordination = await api.coordination();
       setCoordinationData(coordination);
-      alignCoordinationDrafts({ disasters, resources }, coordination);
+      alignOperationalDrafts({ disasters, resources, response_hub: responseHub }, coordination);
       setOperatorNotice('Volunteer assignment created and availability updated');
     } catch (error) {
       setOperatorNotice(`Volunteer could not be assigned: ${error.message}`);
@@ -1016,18 +1069,33 @@ export default function App() {
     }
   }
 
-  function alignCoordinationDrafts(snapshot, coordination) {
+  function alignOperationalDrafts(snapshot, coordination = null) {
     const firstDisasterId = snapshot.disasters?.[0]?.id;
     const firstResourceId = snapshot.resources?.[0]?.id;
-    const firstVolunteerId = coordination.volunteers?.find((item) => item.availability_status === 'available')?.id;
+    const firstCampaignId = snapshot.response_hub?.campaigns?.[0]?.id;
+    const firstVolunteerId = coordination?.volunteers?.find((item) => item.availability_status === 'available')?.id;
+    const keepDisasterId = (current) => (
+      snapshot.disasters?.some((item) => Number(item.id) === Number(current)) ? current : firstDisasterId ?? ''
+    );
+    setRescueDraft((current) => ({ ...current, disaster_id: keepDisasterId(current.disaster_id) }));
+    setWelfareDraft((current) => ({ ...current, disaster_id: keepDisasterId(current.disaster_id) }));
+    setSupplyDraft((current) => ({ ...current, disaster_id: keepDisasterId(current.disaster_id) }));
+    setNewsDraft((current) => ({ ...current, disaster_id: keepDisasterId(current.disaster_id) }));
+    setDonationDraft((current) => ({
+      ...current,
+      campaign_id: snapshot.response_hub?.campaigns?.some((item) => Number(item.id) === Number(current.campaign_id))
+        ? current.campaign_id
+        : firstCampaignId ?? '',
+    }));
+    if (!coordination) return;
     setDistributionDraft((current) => ({
       ...current,
-      disaster_id: snapshot.disasters?.some((item) => Number(item.id) === Number(current.disaster_id)) ? current.disaster_id : firstDisasterId ?? '',
+      disaster_id: keepDisasterId(current.disaster_id),
       resource_id: snapshot.resources?.some((item) => Number(item.id) === Number(current.resource_id)) ? current.resource_id : firstResourceId ?? '',
     }));
     setVolunteerDraft((current) => ({
       ...current,
-      disaster_id: snapshot.disasters?.some((item) => Number(item.id) === Number(current.disaster_id)) ? current.disaster_id : firstDisasterId ?? '',
+      disaster_id: keepDisasterId(current.disaster_id),
       volunteer_id: coordination.volunteers?.some((item) => Number(item.id) === Number(current.volunteer_id) && item.availability_status === 'available')
         ? current.volunteer_id
         : firstVolunteerId ?? '',
@@ -1340,6 +1408,7 @@ export default function App() {
         ...current,
         campaigns: [response.campaign, ...(current.campaigns || [])],
       }));
+      setDonationDraft((current) => ({ ...current, campaign_id: current.campaign_id || response.campaign.id }));
       setCampaignDraft({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
       setOperatorNotice(`${response.campaign.title} opened for verified pledges`);
     } catch (error) {
@@ -1600,6 +1669,8 @@ export default function App() {
                   rescues={sortedRescues}
                   facilities={facilities}
                   resources={resources}
+                  readinessPillars={readinessPillars}
+                  fieldTeams={responseHub.responder_units || []}
                   priorityChart={priorityChart}
                   disasterChart={disasterChart}
                   trendChart={trendChart}
@@ -1621,6 +1692,9 @@ export default function App() {
                   rescues={visibleRescues}
                   facilities={facilities}
                   alerts={alerts}
+                  resources={resources}
+                  responseHub={responseHub}
+                  coordination={coordinationData}
                   setActiveView={setActiveView}
                   onAcknowledge={acknowledgeAlert}
                 />
@@ -2243,12 +2317,21 @@ function nextRescueStatus(status) {
   return null;
 }
 
-function recommendedUnitForRescue(rescue, disaster, role) {
-  if (role === 'Ambulance' || rescue.condition === 'critical' || rescue.priority_label === 'Critical') return '108 Ambulance TN-01-ER-108';
-  if (disaster?.disaster_type === 'flood' || disaster?.disaster_type === 'cyclone') return 'TNDRF Boat Unit 2';
-  if (disaster?.disaster_type === 'fire') return 'Tamil Nadu Fire Rescue Team 4';
-  if (role === 'NGO') return 'Greater Chennai Volunteer Team A';
-  return 'District Rescue Coordination Team';
+function recommendedUnitForRescue(rescue, disaster, role, responderUnits, ambulances) {
+  const availableAmbulance = ambulances.find((item) => item.status === 'available');
+  const needsAmbulance = role === 'Ambulance' || rescue.condition === 'critical' || rescue.priority_label === 'Critical';
+  if (needsAmbulance && availableAmbulance) return availableAmbulance.vehicle_number;
+
+  const availableUnits = responderUnits.filter((item) => item.availability_status === 'available');
+  const preferredType = disaster?.disaster_type === 'fire'
+    ? 'fire'
+    : ['flood', 'cyclone'].includes(disaster?.disaster_type)
+      ? 'rescue'
+      : role === 'NGO'
+        ? 'relief'
+        : '';
+  const preferred = availableUnits.find((item) => normalizeValue(`${item.unit_type} ${item.skills}`).includes(preferredType));
+  return preferred?.name || availableUnits[0]?.name || availableAmbulance?.vehicle_number || null;
 }
 
 function nextAmbulanceStatus(status) {
@@ -2310,6 +2393,30 @@ function normalizeDisaster(disaster) {
   };
 }
 
+function buildHourlyResponseTrend(disasters, rescues) {
+  const currentHour = new Date();
+  currentHour.setMinutes(0, 0, 0);
+  const buckets = Array.from({ length: 6 }, (_, index) => {
+    const start = new Date(currentHour.getTime() - (5 - index) * 60 * 60 * 1000);
+    return {
+      start,
+      end: new Date(start.getTime() + 60 * 60 * 1000),
+      time: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      reports: 0,
+      rescued: 0,
+    };
+  });
+  const addToBucket = (timestamp, field) => {
+    const time = new Date(timestamp);
+    if (Number.isNaN(time.getTime())) return;
+    const bucket = buckets.find((item) => time >= item.start && time < item.end);
+    if (bucket) bucket[field] += 1;
+  };
+  disasters.forEach((item) => addToBucket(item.created_at, 'reports'));
+  rescues.filter((item) => item.status === 'rescued').forEach((item) => addToBucket(item.updated_at || item.created_at, 'rescued'));
+  return buckets.map(({ time, reports, rescued }) => ({ time, reports, rescued }));
+}
+
 function EmptyState({ title, detail }) {
   return (
     <div className="empty-state">
@@ -2319,8 +2426,8 @@ function EmptyState({ title, detail }) {
   );
 }
 
-function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, setActiveView, onAcknowledge }) {
-  const workspace = getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts });
+function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination, setActiveView, onAcknowledge }) {
+  const workspace = getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination });
   const HeroIcon = workspace.icon;
 
   return (
@@ -2423,12 +2530,18 @@ function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, 
   );
 }
 
-function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts }) {
+function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination }) {
   const topRescue = rescues[0];
   const activeDisaster = disasters[0];
   const firstHospital = facilities.hospitals[0];
   const firstShelter = facilities.shelters[0];
   const firstAmbulance = facilities.ambulances[0];
+  const responderUnits = responseHub?.responder_units || [];
+  const volunteers = coordination?.volunteers || [];
+  const availableResources = resources.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
+  const foodResources = resources.filter((item) => /food|rice|meal|water/i.test(`${item.category} ${item.name}`));
+  const medicineResources = resources.filter((item) => /medic|health|first aid/i.test(`${item.category} ${item.name}`));
+  const resourceQuantity = (items) => items.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
   const base = {
     Citizen: {
       icon: Home,
@@ -2436,7 +2549,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       title: 'Get help, follow warnings and reach safe shelter',
       summary: 'Focused on emergency reporting, rescue tracking, official alerts and nearby capacity.',
       metrics: [
-        { label: 'Nearest shelter slots', value: metrics.shelterCapacity, detail: `${firstShelter?.name || 'Relief camp'} currently receiving people` },
+        { label: 'Nearest shelter slots', value: metrics.shelterCapacity, detail: firstShelter?.name || 'No shelter registered' },
         { label: 'Hospital beds visible', value: metrics.beds, detail: 'For emergency referral and ambulance handoff' },
         { label: 'Active warnings', value: alerts.length, detail: 'Official messages in your area' },
         { label: 'My request status', value: topRescue?.status || 'None', detail: topRescue?.assigned_unit || 'No active dispatch assigned' },
@@ -2445,13 +2558,13 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       second: { eyebrow: 'Nearby support', title: 'Where to go next' },
       tasks: [
         { title: 'Report urgent help with exact location', detail: 'Use the report form before phone battery or network drops.', status: 'High' },
-        { title: 'Move vulnerable people first', detail: 'Children, elderly and injured people should move to open shelter.', status: 'Active' },
-        { title: 'Follow official alert channel', detail: alerts[0]?.message || 'Await updated warning from command.', status: 'Live' },
+        { title: 'Move vulnerable people first', detail: 'Children, elderly and injured people should move to a verified open shelter.', status: 'Guidance' },
+        { title: 'Follow official alert channel', detail: alerts[0]?.message || 'Await an updated warning from command.', status: alerts.length ? 'Active alert' : 'Waiting' },
       ],
       signals: [
         { label: 'Open shelter', value: firstShelter?.available_capacity || 0, detail: firstShelter?.name || 'Shelter capacity', icon: Home },
-        { label: 'Medical support', value: firstShelter?.medical_support ? 'Yes' : 'Basic', detail: 'Shelter medical assistance status', icon: HeartPulse },
-        { label: 'Emergency route', value: 'Open', detail: activeDisaster?.address || 'Nearest safe route', icon: Navigation },
+        { label: 'Medical support', value: firstShelter ? (firstShelter.medical_support ? 'Yes' : 'No') : 'Not registered', detail: 'Shelter medical assistance status', icon: HeartPulse },
+        { label: 'Emergency route', value: activeDisaster ? 'Verify locally' : 'No incident', detail: activeDisaster?.address || 'No route has been recorded', icon: Navigation },
       ],
       actions: [
         { label: 'Report emergency', view: 'report', icon: MapPin },
@@ -2473,14 +2586,14 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       focus: { eyebrow: 'Triage operations', title: 'Hospital action board' },
       second: { eyebrow: 'Capacity signals', title: 'Surge readiness' },
       tasks: [
-        { title: 'Activate triage desk', detail: 'Tag critical, delayed and walking wounded arrivals.', status: 'Active' },
-        { title: 'Prepare overflow care area', detail: 'Use auditorium/lobby plan if emergency demand rises.', status: 'High' },
-        { title: 'Coordinate patient transfer', detail: 'Share capacity with ambulance and command users.', status: 'Live' },
+        { title: 'Activate triage desk', detail: 'Tag critical, delayed and walking wounded arrivals.', status: 'Checklist' },
+        { title: 'Prepare overflow care area', detail: 'Use the approved overflow plan if emergency demand rises.', status: 'Review' },
+        { title: 'Coordinate patient transfer', detail: 'Share capacity with ambulance and command users.', status: firstHospital ? 'Configured' : 'Missing' },
       ],
       signals: [
         { label: firstHospital?.name || 'Hospital', value: firstHospital?.available_beds || 0, detail: 'Available beds', icon: Building2 },
         { label: 'Emergency capacity', value: firstHospital?.emergency_capacity || 0, detail: 'Immediate intake capacity', icon: Siren },
-        { label: 'Referral route', value: 'Ready', detail: 'Interfacility transfer plan', icon: Navigation },
+        { label: 'Referral route', value: 'Not recorded', detail: 'Confirm the interfacility transfer plan offline', icon: Navigation },
       ],
       actions: [
         { label: 'Update capacity', view: 'facilities', icon: Building2 },
@@ -2495,21 +2608,21 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       summary: 'Focused on available slots, food/medical support, arrivals and unmet shelter needs.',
       metrics: [
         { label: 'Available slots', value: metrics.shelterCapacity, detail: `${metrics.totalShelterCapacity} total capacity` },
-        { label: 'Food support', value: firstShelter?.food_available ? 'Ready' : 'Low', detail: 'Camp meal distribution status' },
-        { label: 'Medical support', value: firstShelter?.medical_support ? 'On site' : 'Referral', detail: 'Basic triage capability' },
+        { label: 'Food support', value: firstShelter ? (firstShelter.food_available ? 'Available' : 'Unavailable') : 'Not registered', detail: 'Camp meal distribution status' },
+        { label: 'Medical support', value: firstShelter ? (firstShelter.medical_support ? 'On site' : 'Referral') : 'Not registered', detail: 'Basic triage capability' },
         { label: 'Expected arrivals', value: metrics.pending + metrics.assigned, detail: 'From active rescue queue' },
       ],
       focus: { eyebrow: 'Relief camp intake', title: 'Shelter action board' },
       second: { eyebrow: 'Camp signals', title: 'Capacity and supplies' },
       tasks: [
-        { title: 'Update available capacity', detail: 'Keep command and citizens aware of free slots.', status: 'Live' },
-        { title: 'Prepare family intake desk', detail: 'Record vulnerable people and medical needs.', status: 'Active' },
+        { title: 'Update available capacity', detail: 'Keep command and citizens aware of free slots.', status: firstShelter ? 'Configured' : 'Missing' },
+        { title: 'Prepare family intake desk', detail: 'Record vulnerable people and medical needs.', status: 'Checklist' },
         { title: 'Flag supply shortage early', detail: 'Request food, water, blankets or medicines before stockout.', status: 'Medium' },
       ],
       signals: [
         { label: firstShelter?.name || 'Relief shelter', value: firstShelter?.available_capacity || 0, detail: 'Slots available', icon: Home },
-        { label: 'Food', value: firstShelter?.food_available ? 'Ready' : 'Low', detail: 'Meal support status', icon: Package },
-        { label: 'Medical', value: firstShelter?.medical_support ? 'Ready' : 'Referral', detail: 'Health desk availability', icon: HeartPulse },
+        { label: 'Food', value: firstShelter ? (firstShelter.food_available ? 'Available' : 'Unavailable') : 'Not registered', detail: 'Meal support status', icon: Package },
+        { label: 'Medical', value: firstShelter ? (firstShelter.medical_support ? 'Available' : 'Referral') : 'Not registered', detail: 'Health desk availability', icon: HeartPulse },
       ],
       actions: [
         { label: 'Update capacity', view: 'facilities', icon: Home },
@@ -2526,17 +2639,17 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
         { label: 'Assigned calls', value: metrics.assigned, detail: 'Active dispatches and en-route cases' },
         { label: 'Top priority', value: topRescue?.priority_label || 'None', detail: topRescue?.victim_name || 'No active call' },
         { label: 'Receiving beds', value: metrics.beds, detail: 'Hospital capacity available' },
-        { label: 'Unit status', value: firstAmbulance?.status || 'Available', detail: firstAmbulance?.vehicle_number || 'Vehicle readiness' },
+        { label: 'Unit status', value: firstAmbulance?.status || 'Not registered', detail: firstAmbulance?.vehicle_number || 'No vehicle linked' },
       ],
       focus: { eyebrow: 'Dispatch queue', title: 'Ambulance action board' },
       second: { eyebrow: 'Handoff signals', title: 'Route and hospital context' },
       tasks: [
-        { title: 'Accept highest-priority dispatch', detail: topRescue?.notes || 'No high-priority dispatch waiting.', status: topRescue?.priority_label || 'Ready' },
-        { title: 'Confirm receiving hospital', detail: `${firstHospital?.name || 'Hospital'} has ${firstHospital?.available_beds || metrics.beds} beds visible.`, status: 'Live' },
-        { title: 'Update vehicle status', detail: 'Keep availability accurate for command allocation.', status: 'Active' },
+        { title: 'Accept highest-priority dispatch', detail: topRescue?.notes || 'No high-priority dispatch waiting.', status: topRescue?.priority_label || 'Waiting' },
+        { title: 'Confirm receiving hospital', detail: firstHospital ? `${firstHospital.name} has ${firstHospital.available_beds} beds visible.` : 'No receiving hospital is registered.', status: firstHospital ? 'Review' : 'Missing' },
+        { title: 'Update vehicle status', detail: 'Keep availability accurate for command allocation.', status: firstAmbulance?.status || 'Missing' },
       ],
       signals: [
-        { label: 'ETA target', value: '12 min', detail: topRescue?.victim_name || 'Nearest call', icon: Navigation },
+        { label: 'ETA target', value: 'Not recorded', detail: topRescue?.victim_name || 'No assigned call', icon: Navigation },
         { label: 'Patient condition', value: topRescue?.condition || 'stable', detail: 'Reported rescue condition', icon: HeartPulse },
         { label: 'Hospital handoff', value: firstHospital?.available_beds || metrics.beds, detail: 'Open beds', icon: Building2 },
       ],
@@ -2552,8 +2665,8 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       title: 'Coordinate supplies, volunteers and unmet needs',
       summary: 'Built for local relief distribution, volunteer teams, shelter gaps and field assessment reports.',
       metrics: [
-        { label: 'Food packets', value: '2,500', detail: 'Ready for distribution' },
-        { label: 'Medicine kits', value: '800', detail: 'Warehouse stock' },
+        { label: 'Food and water stock', value: resourceQuantity(foodResources), detail: `${foodResources.length} verified inventory records` },
+        { label: 'Medical stock', value: resourceQuantity(medicineResources), detail: `${medicineResources.length} verified inventory records` },
         { label: 'Open shelters', value: facilities.shelters.length, detail: `${metrics.shelterCapacity} free slots` },
         { label: 'Unmet needs', value: metrics.pending, detail: 'Pending high-priority requests' },
       ],
@@ -2561,12 +2674,12 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       second: { eyebrow: 'Coordination signals', title: 'Where support is needed' },
       tasks: [
         { title: 'Dispatch food and water to open shelters', detail: 'Prioritize high-occupancy camps and flood zones.', status: 'High' },
-        { title: 'Assign volunteers to intake and logistics', detail: 'Match skills to shelter, WASH and relief tasks.', status: 'Active' },
-        { title: 'Submit field assessment', detail: 'Report unmet household needs from the affected ward.', status: 'Live' },
+        { title: 'Assign volunteers to intake and logistics', detail: 'Match skills to shelter, WASH and relief tasks.', status: volunteers.length ? 'Available' : 'Waiting' },
+        { title: 'Submit field assessment', detail: 'Report unmet household needs from the affected ward.', status: 'Guidance' },
       ],
       signals: [
-        { label: 'Relief stock', value: 'Good', detail: 'Food, ORS and water cans available', icon: Package },
-        { label: 'Volunteer teams', value: fieldTeams.length, detail: 'Teams visible in field operations', icon: Users },
+        { label: 'Relief stock', value: availableResources, detail: `${resources.length} inventory records`, icon: Package },
+        { label: 'Volunteer teams', value: volunteers.length, detail: 'Verified volunteer profiles visible', icon: Users },
         { label: 'Shelter gap', value: metrics.shelterCapacity, detail: 'Available relief slots', icon: Home },
       ],
       actions: [
@@ -2581,21 +2694,21 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       title: 'Know your task, stay safe and check in',
       summary: 'Focused on assigned work, safety briefing, check-in status and nearby relief locations.',
       metrics: [
-        { label: 'Assigned task', value: '1', detail: 'Greater Chennai Volunteer Team A relocation support' },
-        { label: 'Safety briefing', value: 'Due', detail: 'Floodwater and PPE reminder' },
+        { label: 'Assigned tasks', value: rescues.length, detail: topRescue?.notes || 'No active assignment' },
+        { label: 'Safety briefing', value: 'Not recorded', detail: 'Confirm briefing with the incident supervisor' },
         { label: 'Nearest shelter', value: firstShelter?.available_capacity || 0, detail: firstShelter?.name || 'Open shelter' },
-        { label: 'Check-in', value: 'Ready', detail: 'No overdue check-in' },
+        { label: 'Check-in', value: topRescue?.status || 'No assignment', detail: topRescue?.assigned_unit || 'No response unit assigned' },
       ],
       focus: { eyebrow: 'Assignment board', title: 'Volunteer action board' },
       second: { eyebrow: 'Safety signals', title: 'Before deployment' },
       tasks: [
-        { title: 'Confirm availability', detail: 'Check in before moving to the assigned area.', status: 'Ready' },
-        { title: 'Support shelter intake', detail: 'Help families register and identify vulnerable people.', status: 'Assigned' },
-        { title: 'Report unsafe conditions', detail: 'Escalate blocked roads, live wires or contaminated water.', status: 'Live' },
+        { title: 'Confirm availability', detail: 'Check in before moving to the assigned area.', status: topRescue ? 'Assigned' : 'Waiting' },
+        { title: 'Support shelter intake', detail: 'Help families register and identify vulnerable people when assigned.', status: 'Guidance' },
+        { title: 'Report unsafe conditions', detail: 'Escalate blocked roads, live wires or contaminated water.', status: 'Guidance' },
       ],
       signals: [
-        { label: 'PPE status', value: 'Packed', detail: 'Gloves, mask, torch, water', icon: ClipboardList },
-        { label: 'Task area', value: 'Velachery', detail: 'Greater Chennai Volunteer Team A route', icon: Navigation },
+        { label: 'PPE status', value: 'Not recorded', detail: 'Confirm PPE with the incident supervisor', icon: ClipboardList },
+        { label: 'Task area', value: activeDisaster ? 'Assigned area' : 'None', detail: activeDisaster?.address || 'No task location recorded', icon: Navigation },
         { label: 'Buddy system', value: 'Required', detail: 'Do not deploy alone', icon: Users },
       ],
       actions: [
@@ -2612,19 +2725,19 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       metrics: [
         { label: 'Active incidents', value: disasters.length, detail: 'Public-safety areas to monitor' },
         { label: 'Pending rescues', value: metrics.pending, detail: 'Require coordination support' },
-        { label: 'Road corridors', value: '3 open', detail: 'Access routes for ambulances and rescue' },
+        { label: 'Road corridors', value: 'Not recorded', detail: 'Validate closures through the authorized traffic system' },
         { label: 'Alerts sent', value: alerts.length, detail: 'Public warnings visible' },
       ],
       focus: { eyebrow: 'Public-safety board', title: 'Police action board' },
       second: { eyebrow: 'Access signals', title: 'Perimeters and movement' },
       tasks: [
         { title: 'Secure rescue corridor', detail: 'Keep route open for ambulance and fire rescue access.', status: 'High' },
-        { title: 'Manage evacuation perimeter', detail: 'Guide citizens away from unstable or flooded areas.', status: 'Active' },
-        { title: 'Verify public warning reach', detail: 'Confirm ward-level warnings are understood and actionable.', status: 'Live' },
+        { title: 'Manage evacuation perimeter', detail: 'Guide citizens away from unstable or flooded areas.', status: activeDisaster ? 'Review' : 'Waiting' },
+        { title: 'Verify public warning reach', detail: 'Confirm ward-level warnings are understood and actionable.', status: alerts.length ? 'Review' : 'Waiting' },
       ],
       signals: [
-        { label: 'Primary corridor', value: 'Open', detail: activeDisaster?.address || 'Incident access route', icon: Navigation },
-        { label: 'Crowd control', value: 'Active', detail: 'Shelter intake and road junctions', icon: Users },
+        { label: 'Primary corridor', value: activeDisaster ? 'Unverified' : 'None', detail: activeDisaster?.address || 'No incident access route', icon: Navigation },
+        { label: 'Crowd control', value: 'Not recorded', detail: 'No perimeter status has been entered', icon: Users },
         { label: 'Hazards', value: metrics.critical, detail: 'Critical rescue zones', icon: AlertTriangle },
       ],
       actions: [
@@ -2641,20 +2754,20 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       metrics: [
         { label: 'Critical rescues', value: metrics.critical, detail: 'AI-prioritized trapped/injured cases' },
         { label: 'Fire incidents', value: disasters.filter((item) => item.disaster_type === 'fire').length, detail: 'Active fire reports' },
-        { label: 'Rescue teams', value: fieldTeams.length, detail: 'Visible response teams' },
-        { label: 'Equipment ready', value: '86%', detail: 'Boats, PPE and rescue gear' },
+        { label: 'Rescue teams', value: responderUnits.length, detail: 'Registered professional responder units' },
+        { label: 'Equipment ready', value: 'Not recorded', detail: 'Equipment inspection is not yet recorded' },
       ],
       focus: { eyebrow: 'Fire rescue board', title: 'Rescue action board' },
       second: { eyebrow: 'Hazard signals', title: 'Scene safety and equipment' },
       tasks: [
-        { title: 'Prioritize trapped victims', detail: topRescue?.notes || 'No trapped victim in queue.', status: topRescue?.priority_label || 'Ready' },
-        { title: 'Stage rescue equipment', detail: 'Check PPE, boat, rope and extrication gear readiness.', status: 'Active' },
-        { title: 'Update scene status', detail: 'Share hazard, smoke, floodwater and structural risk changes.', status: 'Live' },
+        { title: 'Prioritize trapped victims', detail: topRescue?.notes || 'No trapped victim in queue.', status: topRescue?.priority_label || 'Waiting' },
+        { title: 'Stage rescue equipment', detail: 'Check PPE, boat, rope and extrication gear readiness.', status: 'Checklist' },
+        { title: 'Update scene status', detail: 'Share hazard, smoke, floodwater and structural risk changes.', status: activeDisaster ? 'Review' : 'Waiting' },
       ],
       signals: [
         { label: 'Scene hazard', value: topRescue?.priority_label || 'Medium', detail: activeDisaster?.title || 'Active incident', icon: AlertTriangle },
-        { label: 'Team ETA', value: '18 min', detail: 'Tamil Nadu Fire Rescue Team 4 mobilizing', icon: Navigation },
-        { label: 'Equipment', value: 'Ready', detail: 'Rescue kit and PPE staged', icon: Package },
+        { label: 'Team ETA', value: 'Not recorded', detail: topRescue?.assigned_unit || 'No response team assigned', icon: Navigation },
+        { label: 'Equipment', value: 'Not recorded', detail: 'Record readiness through the incident supervisor', icon: Package },
       ],
       actions: [
         { label: 'Open queue', view: 'rescue', icon: HeartPulse },
@@ -2679,6 +2792,8 @@ function CommandView({
   rescues,
   facilities,
   resources,
+  readinessPillars,
+  fieldTeams,
   priorityChart,
   disasterChart,
   trendChart,
@@ -2753,7 +2868,7 @@ function CommandView({
                 <Bar data={disasterChart} options={chartOptions} />
               </div>
             </div>
-            <EarlyWarningPanel />
+            <EarlyWarningPanel pillars={readinessPillars} />
           </section>
         </>
       )}
@@ -2763,7 +2878,7 @@ function CommandView({
           <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
           <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
           <section className="split-grid split-grid-3">
-            <FieldTeamsPanel />
+            <FieldTeamsPanel teams={fieldTeams} />
             <StandardsPanel />
             <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
           </section>
@@ -2775,7 +2890,7 @@ function CommandView({
           <section className="split-grid split-grid-3">
             <FacilityCapacityPanel facilities={facilities} />
             <TriagePanel rescues={rescues} disasters={disasters} />
-            <EarlyWarningPanel />
+            <EarlyWarningPanel pillars={readinessPillars} />
           </section>
           <section className="analytics-wall">
             <PanelTitle eyebrow="Health trend" title="Emergency response trend" />
@@ -2790,7 +2905,7 @@ function CommandView({
         <>
           <section className="operations-grid">
             <ResourceReadinessPanel resources={resources} />
-            <FieldTeamsPanel />
+            <FieldTeamsPanel teams={fieldTeams} />
             <StandardsPanel />
             <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
           </section>
@@ -3011,7 +3126,7 @@ function getResponseBoardColumns(disasters, rescues) {
     kicker: item.disaster_type,
     description: `${item.address}. ${item.people_affected} people affected.`,
     time: item.created_at,
-    updates: `${Math.max(1, Math.round(item.score / 18))} updates`,
+    updates: `${item.status} status`,
     people: item.people_affected,
     status: item.label,
     score: `${item.score}/100`,
@@ -3026,7 +3141,7 @@ function getResponseBoardColumns(disasters, rescues) {
       kicker: `${item.condition} condition`,
       description: item.notes,
       time: item.created_at,
-      updates: `${item.trapped ? 5 : 2} notes`,
+      updates: item.trapped ? 'Trapped reported' : 'Not trapped',
       people: item.people_count,
       status: item.priority_label,
       score: `${item.priority_score}/100`,
@@ -3042,7 +3157,7 @@ function getResponseBoardColumns(disasters, rescues) {
       kicker: item.victim_name,
       description: item.notes,
       time: item.created_at,
-      updates: item.status === 'en route' ? 'ETA live' : item.status,
+      updates: item.status,
       people: item.people_count,
       status: item.status,
       score: item.priority_label,
@@ -3125,12 +3240,12 @@ function DecisionStack({ allocation, rescues, disasters }) {
   );
 }
 
-function EarlyWarningPanel() {
+function EarlyWarningPanel({ pillars }) {
   return (
     <section className="panel">
       <PanelTitle eyebrow="Early warning" title="Readiness pillars" />
       <div className="readiness-list">
-        {earlyWarningPillars.map(({ name, score, detail, icon: Icon }) => (
+        {pillars.map(({ name, score, detail, icon: Icon }) => (
           <div className="readiness-item" key={name}>
             <div className="readiness-heading">
               <span>
@@ -3149,58 +3264,46 @@ function EarlyWarningPanel() {
 }
 
 function ResourceReadinessPanel({ resources = [] }) {
-  const inventory = resources.length
-    ? resources.map((resource) => {
-        const reference = resourceInventory.find((item) => item.name.toLowerCase().includes(resource.name.toLowerCase()) || resource.name.toLowerCase().includes(item.name.toLowerCase()));
-        const available = Number(resource.available_quantity || 0);
-        return {
-          name: resource.name,
-          available,
-          total: Math.max(available, reference?.total || available || 1),
-          unit: resource.unit,
-        };
-      })
-    : resourceInventory;
+  const inventory = resources.map((resource) => ({
+    name: resource.name,
+    available: Number(resource.available_quantity || 0),
+    unit: resource.unit,
+    location: resource.storage_location,
+  }));
   return (
     <section className="panel">
       <PanelTitle eyebrow="Logistics" title="Resource inventory health" />
       <div className="inventory-list">
-        {inventory.map((item) => {
-          const percent = Math.round((item.available / item.total) * 100);
-          return (
+        {inventory.map((item) => (
             <div className="inventory-row" key={item.name}>
               <div>
                 <strong>{item.name}</strong>
-                <span>{item.available.toLocaleString()} {item.unit} available</span>
-              </div>
-              <div className="inventory-meter">
-                <span>{percent}%</span>
-                <ProgressBar value={percent} />
+                <span>{item.available.toLocaleString()} {item.unit} available{item.location ? ` at ${item.location}` : ''}</span>
               </div>
             </div>
-          );
-        })}
+        ))}
+        {!inventory.length && <EmptyState title="No resource inventory" detail="Add verified stock in Operational Setup before planning distributions." />}
       </div>
     </section>
   );
 }
 
-function FieldTeamsPanel() {
+function FieldTeamsPanel({ teams = [] }) {
   return (
     <section className="panel">
-      <PanelTitle eyebrow="Field operations" title="Team progress and ETA" />
+      <PanelTitle eyebrow="Field operations" title="Registered responder readiness" />
       <div className="team-list">
-        {fieldTeams.map((team) => (
+        {teams.map((team) => (
           <div className="team-row" key={team.name}>
             <div className="team-status-dot" />
             <div>
               <strong>{team.name}</strong>
-              <span>{team.location}</span>
+              <span>{team.unit_type || 'Responder unit'} · {team.latitude != null && team.longitude != null ? 'Location registered' : 'Location not registered'}</span>
             </div>
-            <StatusPill value={team.status} />
-            <strong className="team-eta">{team.eta}</strong>
+            <StatusPill value={team.availability_status || 'unknown'} />
           </div>
         ))}
+        {!teams.length && <EmptyState title="No responder units" detail="Register verified field units in Operational Setup to enable proximity dispatch." />}
       </div>
     </section>
   );
