@@ -241,14 +241,20 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ type: 'all', severity: 'all', status: 'all' });
   const [selectedRescueId, setSelectedRescueId] = useState(null);
-  const [operatorNotice, setOperatorNotice] = useState(DEMO_ENABLED ? 'India-wide emergency demo data loaded' : 'Sign in to access live emergency operations');
+  const [passwordResetToken, setPasswordResetToken] = useState(
+    () => new URLSearchParams(window.location.search).get('reset_token') || '',
+  );
+  const [operatorNotice, setOperatorNotice] = useState(
+    DEMO_ENABLED
+      ? 'India-wide emergency demo data loaded'
+      : passwordResetToken
+        ? ''
+        : 'Sign in to access live emergency operations',
+  );
   const [connectionState, setConnectionState] = useState('connecting');
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionMode, setSessionMode] = useState(DEMO_ENABLED ? 'demo' : 'checking');
   const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
-  const [passwordResetToken, setPasswordResetToken] = useState(
-    () => new URLSearchParams(window.location.search).get('reset_token') || '',
-  );
   const [authMode, setAuthMode] = useState(passwordResetToken ? 'reset' : 'login');
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
   const [passwordDraft, setPasswordDraft] = useState(emptyPasswordDraft);
@@ -1143,6 +1149,20 @@ export default function App() {
     setOperatorNotice('Showing all India operations');
   }
 
+  function changeAuthMode(nextMode) {
+    setAuthDraft({ ...emptyAuthDraft });
+    setRecoveryDraft({ ...emptyRecoveryDraft });
+    setMfaChallenge({ token: '', code: '' });
+    if (nextMode !== 'reset' && passwordResetToken) {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('reset_token');
+      window.history.replaceState({}, document.title, cleanUrl);
+      setPasswordResetToken('');
+    }
+    setAuthMode(nextMode);
+    setOperatorNotice(nextMode === 'login' ? 'Sign in to access live emergency operations' : '');
+  }
+
   async function submitAuthentication(event) {
     event.preventDefault();
     if (authMode === 'register' && authDraft.password !== authDraft.password_confirmation) {
@@ -1197,8 +1217,8 @@ export default function App() {
     try {
       const response = await requestPasswordReset({ email: recoveryDraft.email });
       setRecoveryDraft((current) => ({ ...current, email: '' }));
+      if (response.recovery_available) changeAuthMode('login');
       setOperatorNotice(response.message);
-      if (response.recovery_available) setAuthMode('login');
     } catch (error) {
       setOperatorNotice(`Password recovery request failed: ${error.message}`);
     }
@@ -1219,12 +1239,7 @@ export default function App() {
         token: passwordResetToken,
         new_password: recoveryDraft.new_password,
       });
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('reset_token');
-      window.history.replaceState({}, document.title, cleanUrl);
-      setPasswordResetToken('');
-      setRecoveryDraft(emptyRecoveryDraft);
-      setAuthMode('login');
+      changeAuthMode('login');
       setOperatorNotice(response.message);
     } catch (error) {
       setRecoveryDraft((current) => ({
@@ -1510,7 +1525,7 @@ export default function App() {
         ) : (
           <AccountPanel
             mode={authMode}
-            setMode={setAuthMode}
+            setMode={changeAuthMode}
             draft={authDraft}
             setDraft={setAuthDraft}
             onSubmit={submitAuthentication}
@@ -1657,7 +1672,7 @@ export default function App() {
         {showAccountPanel && (
           <AccountPanel
             mode={authMode}
-            setMode={setAuthMode}
+            setMode={changeAuthMode}
             draft={authDraft}
             setDraft={setAuthDraft}
             onSubmit={submitAuthentication}
@@ -1939,6 +1954,13 @@ function AccountPanel({
       : mode === 'reset'
         ? 'Choose a new account password'
         : 'Sign in to your operational account';
+  const accessDescription = mode === 'register'
+    ? 'Citizens and volunteers can create accounts here. Operational roles are provisioned by an administrator.'
+    : mode === 'forgot'
+      ? 'Recovery never reveals whether an account exists.'
+      : mode === 'reset'
+        ? 'Choose a private replacement password for this account.'
+        : 'Use your authorized account. Operational roles are provisioned by an administrator.';
   return (
     <section className="panel account-panel" aria-label="Account access">
       <div>
@@ -1949,23 +1971,23 @@ function AccountPanel({
             ? `Signed in as ${currentUser?.name} (${currentUser?.role})`
             : demoEnabled
               ? 'Role switching remains available as a clearly marked local demo.'
-              : 'Use your authorized account. Operational roles are provisioned by an administrator.'}
+              : accessDescription}
         </span>
       </div>
       {!hasAccountSession && notice && <p className="account-notice" role="status">{notice}</p>}
       {!hasAccountSession && !awaitingMfa && ['login', 'register'].includes(mode) && (
-        <form className="account-form" onSubmit={onSubmit}>
+        <form className="account-form" key={`account-${mode}`} onSubmit={onSubmit}>
           {mode === 'register' && (
             <>
-              <Input label="Full name" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} required autoComplete="name" />
-              <Input label="Phone" value={draft.phone} onChange={(value) => setDraft({ ...draft, phone: value })} required autoComplete="tel" />
+              <Input label="Full name" name="name" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} required autoComplete="name" />
+              <Input label="Phone" name="phone" value={draft.phone} onChange={(value) => setDraft({ ...draft, phone: value })} required autoComplete="tel" />
               <Select label="Account role" value={draft.role} options={['Citizen', 'Volunteer']} onChange={(value) => setDraft({ ...draft, role: value })} />
             </>
           )}
-          <Input label="Email" type="email" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} required autoComplete="email" />
-          <Input label="Password (15+ characters)" type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required minLength={15} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          <Input label="Email" name="email" type="email" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} required autoComplete={mode === 'login' ? 'username' : 'email'} />
+          <Input label="Password (15+ characters)" name={mode === 'login' ? 'password' : 'new_password'} type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required minLength={15} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
           {mode === 'register' && (
-            <Input label="Confirm password" type="password" value={draft.password_confirmation} onChange={(value) => setDraft({ ...draft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
+            <Input label="Confirm password" name="password_confirmation" type="password" value={draft.password_confirmation} onChange={(value) => setDraft({ ...draft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           )}
           <button className="primary-action" type="submit">
             <UserRound size={18} /> {mode === 'login' ? 'Sign in' : 'Create account'}
@@ -1984,6 +2006,7 @@ function AccountPanel({
           </p>
           <Input
             label="Account email"
+            name="email"
             type="email"
             value={recoveryDraft.email}
             onChange={(value) => setRecoveryDraft({ ...recoveryDraft, email: value })}
@@ -2001,6 +2024,7 @@ function AccountPanel({
               <p className="muted-copy">This reset link is single-use. Completing it signs out every active device; configured MFA remains required.</p>
               <Input
                 label="New password (15+ characters)"
+                name="new_password"
                 type="password"
                 value={recoveryDraft.new_password}
                 onChange={(value) => setRecoveryDraft({ ...recoveryDraft, new_password: value })}
@@ -2010,6 +2034,7 @@ function AccountPanel({
               />
               <Input
                 label="Confirm new password"
+                name="new_password_confirmation"
                 type="password"
                 value={recoveryDraft.new_password_confirmation}
                 onChange={(value) => setRecoveryDraft({ ...recoveryDraft, new_password_confirmation: value })}
@@ -4178,11 +4203,11 @@ function FacilityPanel({ title, icon: Icon, children }) {
   );
 }
 
-function Input({ label, value, onChange, type = 'text', required = false, step, minLength, autoComplete, inputMode }) {
+function Input({ label, name, value, onChange, type = 'text', required = false, step, minLength, autoComplete, inputMode }) {
   return (
     <label className="form-field">
       <span>{label}</span>
-      <input className="form-control" type={type} step={step} minLength={minLength} autoComplete={autoComplete} inputMode={inputMode} value={value} required={required} onChange={(event) => onChange(event.target.value)} />
+      <input className="form-control" name={name} type={type} step={step} minLength={minLength} autoComplete={autoComplete} inputMode={inputMode} value={value} required={required} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

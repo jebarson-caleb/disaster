@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## 1.2.1 - 2026-07-29
+
+### Fixed
+
+- Authentication mode changes now remount and clear credential fields so browser-autofilled sign-in secrets cannot carry into public registration.
+- Leaving a password-reset link now removes its token from the address bar and clears the recovery draft.
+- Account registration and recovery screens now present mode-specific guidance and explicit autofill field names.
+
 ## 1.2.0 - 2026-07-29
 
 ### Added
