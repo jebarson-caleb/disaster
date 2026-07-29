@@ -142,6 +142,7 @@ const roleNavigation = {
   Shelter: [
     { id: 'command', label: 'Shelter Ops', icon: Home },
     { id: 'facilities', label: 'Capacity', icon: Building2 },
+    { id: 'rescue', label: 'Expected Arrivals', icon: Users },
   ],
   Ambulance: [
     { id: 'command', label: 'Dispatch', icon: Ambulance },
@@ -158,6 +159,7 @@ const roleNavigation = {
   Volunteer: [
     { id: 'command', label: 'My Assignment', icon: Users },
     { id: 'rescue', label: 'Tasks', icon: ClipboardList },
+    { id: 'report', label: 'Report Hazard', icon: AlertTriangle },
   ],
   Police: [
     { id: 'command', label: 'Public Safety', icon: ShieldAlert },

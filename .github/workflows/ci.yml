@@ -56,3 +56,69 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  role-browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r backend/requirements-dev.txt
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Exercise every role workspace
+        shell: bash
+        env:
+          APP_ENV: testing
+          AUTO_MIGRATE: 'true'
+          CORS_ORIGINS: http://127.0.0.1:5173
+          DATABASE_URL: sqlite:////tmp/resq-role-acceptance.sqlite
+          DEMO_MODE: 'true'
+          JWT_SECRET_KEY: role-acceptance-jwt-secret-key-32-characters
+          SECRET_KEY: role-acceptance-app-secret-key-32-characters
+          VITE_API_BASE_URL: http://127.0.0.1:5000/api/v1
+          VITE_DEMO_MODE: 'true'
+        run: |
+          set -euo pipefail
+          python backend/run.py > "$RUNNER_TEMP/resq-backend.log" 2>&1 &
+          backend_pid=$!
+          npm --prefix frontend run dev -- --host 127.0.0.1 > "$RUNNER_TEMP/resq-frontend.log" 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$frontend_pid" "$backend_pid" 2>/dev/null || true' EXIT
+
+          backend_ready=false
+          frontend_ready=false
+          for _ in {1..45}; do
+            if curl --fail --silent http://127.0.0.1:5000/api/v1/health > /dev/null; then
+              backend_ready=true
+            fi
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then
+              frontend_ready=true
+            fi
+            if [[ "$backend_ready" == true && "$frontend_ready" == true ]]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ "$backend_ready" != true || "$frontend_ready" != true ]]; then
+            cat "$RUNNER_TEMP/resq-backend.log"
+            cat "$RUNNER_TEMP/resq-frontend.log"
+            exit 1
+          fi
+
+          cd frontend
+          DEMO_E2E=true BASE_URL=http://127.0.0.1:5173 npm run test:e2e -- e2e/demo-roles.spec.js --project=chromium

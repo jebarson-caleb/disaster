@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## 1.2.2 - 2026-07-29
+
+### Fixed
+
+- Made Shelter expected-arrival tracking and Volunteer hazard reporting directly reachable from both role navigation and dashboard actions.
+
+### Added
+
+- Isolated full-stack Chromium acceptance coverage for every advertised workspace across all nine supported roles.
+
 ## 1.2.1 - 2026-07-29
 
 ### Fixed
