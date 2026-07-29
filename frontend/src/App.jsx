@@ -423,11 +423,13 @@ export default function App() {
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
   const filterSummary = searchQuery.trim() || activeFilterCount ? `${filteredDisasters.length} reports, ${sortedRescues.length} rescues shown` : 'All India operations';
   const selectedDisaster = filteredDisasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters.find((item) => Number(item.id) === Number(rescueDraft.disaster_id)) || disasters[0];
-  const allocation = allocateResources({
-    severity: sortedRescues[0]?.priority_label || 'Medium',
-    people_count: selectedDisaster?.people_affected || 1,
-    disaster_type: selectedDisaster?.disaster_type || 'flood',
-  });
+  const allocation = selectedDisaster
+    ? allocateResources({
+        severity: sortedRescues[0]?.priority_label || selectedDisaster.label || 'Medium',
+        people_count: selectedDisaster.people_affected || 1,
+        disaster_type: selectedDisaster.disaster_type,
+      })
+    : { ambulances: 0, rescue_teams: 0, volunteers: 0, food_packets: 0, medicine_kits: 0, shelter_slots: 0 };
   const activeTopbar = roleTopbar[activeRole] || roleTopbar.Admin;
   const activeNavigation = useMemo(
     () => [
@@ -2950,7 +2952,7 @@ function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
             </CircleMarker>
           ))}
         </MapContainer>
-        {!disasters.length && !rescues.length && <EmptyState title="No map results" detail="Clear search or filters to restore national operations." />}
+        {!disasters.length && !rescues.length && <EmptyState title="No map results" detail="No live incident or rescue location matches the current view." />}
       </motion.div>
 
       <DecisionStack allocation={allocation} rescues={rescues} disasters={disasters} />
