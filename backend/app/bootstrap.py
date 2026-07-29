@@ -15,7 +15,8 @@ BASELINE_REVISION = "20260721_01"
 SECURITY_REVISION = "20260721_02"
 MFA_REVISION = "20260721_03"
 ONBOARDING_REVISION = "20260727_04"
-HEAD_REVISION = "20260729_05"
+RECOVERY_REVISION = "20260729_05"
+HEAD_REVISION = "20260729_06"
 SECURITY_TABLES = {"account_security", "audit_events", "auth_sessions"}
 MFA_TABLES = {"mfa_credentials", "mfa_challenges"}
 RECOVERY_TABLES = {"password_reset_tokens"}
@@ -116,7 +117,24 @@ def apply_schema_migrations():
                         and {"hospital_id", "shelter_id", "ambulance_id"} <= role_profile_columns
                     )
                     if onboarding_columns_present:
-                        legacy_revision = HEAD_REVISION if existing_recovery else ONBOARDING_REVISION
+                        if existing_recovery:
+                            alert_columns = {
+                                column["name"]
+                                for column in inspect(db.engine).get_columns("emergency_alerts")
+                            }
+                            delivery_columns = {
+                                "delivery_status",
+                                "delivery_attempts",
+                                "delivery_status_code",
+                                "delivery_attempted_at",
+                            }
+                            legacy_revision = (
+                                HEAD_REVISION
+                                if delivery_columns <= alert_columns
+                                else RECOVERY_REVISION
+                            )
+                        else:
+                            legacy_revision = ONBOARDING_REVISION
                     else:
                         legacy_revision = MFA_REVISION
                 elif existing_security == SECURITY_TABLES:

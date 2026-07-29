@@ -163,6 +163,17 @@ jobs:
           assert isinstance(public_feed["alerts"], list), public_feed
           assert isinstance(public_feed["disasters"], list), public_feed
           assert isinstance(public_feed["news_updates"], list), public_feed
+          private_alert_fields = {
+              "sender_id",
+              "delivery_status",
+              "delivery_attempts",
+              "delivery_status_code",
+              "delivery_attempted_at",
+          }
+          assert all(
+              private_alert_fields.isdisjoint(alert)
+              for alert in public_feed["alerts"]
+          ), public_feed
           assert recovery["message"], recovery
           assert isinstance(recovery["recovery_available"], bool), recovery
 

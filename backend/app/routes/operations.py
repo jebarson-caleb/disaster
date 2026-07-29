@@ -5,8 +5,8 @@ from uuid import uuid4
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
-from ..auth import login_required, session_response
-from ..extensions import db
+from ..auth import audit_event, authenticated_rate_key, login_required, session_response
+from ..extensions import db, limiter
 from ..models import (
     AlertAcknowledgement,
     Ambulance,
@@ -30,8 +30,52 @@ from ..models import (
     VolunteerAssignment,
     WelfareCheck,
 )
+from ..services.alert_delivery_service import AlertDeliveryError, deliver_alert
 
 operations_bp = Blueprint("operations", __name__)
+
+
+def _deliver_and_audit_alert(alert):
+    try:
+        delivery = deliver_alert(alert)
+    except AlertDeliveryError as error:
+        delivery = {
+            "status": "failed",
+            "provider": "webhook",
+            **({"status_code": error.status_code} if error.status_code else {}),
+        }
+        current_app.logger.warning(
+            "Outbound alert delivery failed for %s: %s",
+            alert.identifier,
+            error,
+        )
+
+    alert.delivery_status = delivery["status"]
+    alert.delivery_status_code = delivery.get("status_code")
+    if delivery["status"] != "not_configured":
+        alert.delivery_attempts += 1
+        alert.delivery_attempted_at = datetime.now(UTC)
+
+    audit_outcome = {
+        "delivered": "success",
+        "failed": "failure",
+        "not_configured": "skipped",
+    }[delivery["status"]]
+    try:
+        audit_event(
+            "alert_delivery",
+            audit_outcome,
+            user_id=request.user.id,
+            details=(
+                f"alert={alert.identifier}; provider={delivery['provider']}; "
+                f"status={delivery['status']}; status_code={delivery.get('status_code', 'none')}"
+            ),
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Alert delivery status could not be recorded")
+    return delivery
 
 
 @operations_bp.get("/operations/bootstrap")
@@ -57,6 +101,7 @@ def bootstrap():
         .group_by(AlertAcknowledgement.alert_id)
         .all()
     )
+    command_role = request.user.role in {"Admin", "Police", "Fire Service", "NGO"}
     profile = RoleProfile.query.filter_by(user_id=request.user.id).first()
     rescue_query = RescueRequest.query.order_by(
         RescueRequest.priority_score.desc(),
@@ -130,7 +175,21 @@ def bootstrap():
             else [],
             "alerts": [
                 {
-                    **item.to_dict(),
+                    **item.public_dict(),
+                    **(
+                        {
+                            "delivery_status": item.delivery_status,
+                            "delivery_attempts": item.delivery_attempts,
+                            "delivery_status_code": item.delivery_status_code,
+                            "delivery_attempted_at": (
+                                item.delivery_attempted_at.isoformat()
+                                if item.delivery_attempted_at
+                                else None
+                            ),
+                        }
+                        if command_role
+                        else {}
+                    ),
                     "acknowledgement_count": acknowledgement_counts.get(item.id, 0),
                     "acknowledged": item.id in acknowledged_ids,
                 }
@@ -157,30 +216,83 @@ def bootstrap():
 
 @operations_bp.post("/alerts")
 @login_required(roles=["Admin", "Police", "Fire Service", "NGO"])
+@limiter.limit("30 per hour", key_func=authenticated_rate_key)
 def create_alert():
     data = request.get_json() or {}
     missing = [field for field in ["audience", "channels", "message", "instruction"] if not data.get(field)]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    expires_in_hours = int(data.get("expires_in_hours", 6))
+    text_limits = {
+        "event": 100,
+        "audience": 180,
+        "channels": 180,
+        "message": 2000,
+        "instruction": 2000,
+    }
+    normalized = {}
+    for field, limit in text_limits.items():
+        value = data.get(field, "All-hazard emergency warning" if field == "event" else "")
+        if not isinstance(value, str) or not value.strip():
+            return jsonify({"error": f"{field} must be non-empty text"}), 400
+        if len(value.strip()) > limit:
+            return jsonify({"error": f"{field} must contain at most {limit} characters"}), 400
+        normalized[field] = value.strip()
+
+    allowed_cap_values = {
+        "urgency": {"immediate", "expected", "future", "past", "unknown"},
+        "severity": {"extreme", "severe", "moderate", "minor", "unknown"},
+        "certainty": {"observed", "likely", "possible", "unlikely", "unknown"},
+    }
+    cap_values = {}
+    for field, allowed in allowed_cap_values.items():
+        value = str(data.get(field, {"urgency": "immediate", "severity": "severe", "certainty": "likely"}[field])).lower()
+        if value not in allowed:
+            return jsonify({"error": f"{field} must be one of: {', '.join(sorted(allowed))}"}), 400
+        cap_values[field] = value
+
+    try:
+        expires_in_hours = int(data.get("expires_in_hours", 6))
+    except (TypeError, ValueError):
+        return jsonify({"error": "expires_in_hours must be an integer"}), 400
     if not 1 <= expires_in_hours <= 72:
         return jsonify({"error": "expires_in_hours must be between 1 and 72"}), 400
     alert = EmergencyAlert(
         identifier=f"RESQ-{datetime.now(UTC):%Y%m%d%H%M%S}-{uuid4().hex[:6].upper()}",
         sender_id=request.user.id,
-        event=data.get("event", "All-hazard emergency warning"),
-        audience=data["audience"],
-        channels=data["channels"],
-        urgency=data.get("urgency", "immediate"),
-        severity=data.get("severity", "severe"),
-        certainty=data.get("certainty", "likely"),
-        message=data["message"],
-        instruction=data["instruction"],
+        event=normalized["event"],
+        audience=normalized["audience"],
+        channels=normalized["channels"],
+        urgency=cap_values["urgency"],
+        severity=cap_values["severity"],
+        certainty=cap_values["certainty"],
+        message=normalized["message"],
+        instruction=normalized["instruction"],
         expires_at=datetime.now(UTC) + timedelta(hours=expires_in_hours),
     )
     db.session.add(alert)
     db.session.commit()
-    return jsonify({"alert": {**alert.to_dict(), "acknowledgement_count": 0}}), 201
+    delivery = _deliver_and_audit_alert(alert)
+
+    return jsonify(
+        {
+            "alert": {**alert.to_dict(), "acknowledgement_count": 0},
+            "delivery": delivery,
+        }
+    ), 201
+
+
+@operations_bp.post("/alerts/<int:alert_id>/deliver")
+@login_required(roles=["Admin", "Police", "Fire Service", "NGO"])
+@limiter.limit("20 per hour", key_func=authenticated_rate_key)
+def retry_alert_delivery(alert_id):
+    alert = db.get_or_404(EmergencyAlert, alert_id)
+    expires_at = alert.expires_at
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if alert.status != "active" or (expires_at and expires_at <= datetime.now(UTC)):
+        return jsonify({"error": "Only active, unexpired alerts can be delivered"}), 409
+    delivery = _deliver_and_audit_alert(alert)
+    return jsonify({"alert": alert.to_dict(), "delivery": delivery})
 
 
 @operations_bp.post("/alerts/<int:alert_id>/acknowledge")

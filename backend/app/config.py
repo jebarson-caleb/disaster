@@ -60,6 +60,9 @@ class Config:
         if item.strip()
     }
     EMERGENCY_HOTLINE = os.getenv("EMERGENCY_HOTLINE", "112")
+    ALERT_DELIVERY_WEBHOOK_URL = os.getenv("ALERT_DELIVERY_WEBHOOK_URL", "").strip()
+    ALERT_DELIVERY_WEBHOOK_SECRET = os.getenv("ALERT_DELIVERY_WEBHOOK_SECRET", "")
+    ALERT_DELIVERY_TIMEOUT_SECONDS = int(os.getenv("ALERT_DELIVERY_TIMEOUT_SECONDS", "5"))
     DONATION_PAYMENT_URL = os.getenv("DONATION_PAYMENT_URL", "").rstrip("/")
     PUBLIC_BASE_URL = public_base_url()
     PASSWORD_RESET_MINUTES = int(os.getenv("PASSWORD_RESET_MINUTES", "30"))
@@ -132,6 +135,24 @@ def production_configuration_issues(config):
     payment_url = str(config.get("DONATION_PAYMENT_URL") or "")
     if payment_url and not _is_secure_public_url(payment_url):
         issues.append("DONATION_PAYMENT_URL must be an absolute HTTPS URL without embedded credentials")
+    alert_webhook_url = str(config.get("ALERT_DELIVERY_WEBHOOK_URL") or "")
+    alert_webhook_secret = str(config.get("ALERT_DELIVERY_WEBHOOK_SECRET") or "")
+    if bool(alert_webhook_url) != bool(alert_webhook_secret):
+        issues.append("ALERT_DELIVERY_WEBHOOK_URL and ALERT_DELIVERY_WEBHOOK_SECRET must be supplied together")
+    if alert_webhook_url:
+        parsed_alert_webhook_url = urlsplit(alert_webhook_url)
+        if (
+            not _is_secure_public_url(alert_webhook_url)
+            or parsed_alert_webhook_url.query
+            or parsed_alert_webhook_url.fragment
+        ):
+            issues.append(
+                "ALERT_DELIVERY_WEBHOOK_URL must be an absolute HTTPS URL without credentials, query, or fragment"
+            )
+        if len(alert_webhook_secret) < 32:
+            issues.append("ALERT_DELIVERY_WEBHOOK_SECRET must contain at least 32 characters")
+    if not 1 <= int(config.get("ALERT_DELIVERY_TIMEOUT_SECONDS") or 0) <= 15:
+        issues.append("ALERT_DELIVERY_TIMEOUT_SECONDS must be between 1 and 15")
     ollama_url = str(config.get("OLLAMA_BASE_URL") or "")
     if ollama_url:
         parsed_ollama_url = urlsplit(ollama_url)

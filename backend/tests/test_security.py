@@ -146,6 +146,9 @@ def test_optional_integration_configuration_is_fail_closed(app):
     invalid = {
         **base,
         "DONATION_PAYMENT_URL": "http://payments.example/checkout",
+        "ALERT_DELIVERY_WEBHOOK_URL": "https://alerts.example/provider?token=unsafe",
+        "ALERT_DELIVERY_WEBHOOK_SECRET": "short",
+        "ALERT_DELIVERY_TIMEOUT_SECONDS": 0,
         "OLLAMA_BASE_URL": "file:///private/model",
         "RATELIMIT_STORAGE_URI": "redis://redis.example/0",
         "SMTP_HOST": "smtp.example",
@@ -161,6 +164,9 @@ def test_optional_integration_configuration_is_fail_closed(app):
     }
     issues = production_configuration_issues(invalid)
     assert any("DONATION_PAYMENT_URL" in issue for issue in issues)
+    assert any("ALERT_DELIVERY_WEBHOOK_URL" in issue for issue in issues)
+    assert any("ALERT_DELIVERY_WEBHOOK_SECRET" in issue for issue in issues)
+    assert any("ALERT_DELIVERY_TIMEOUT_SECONDS" in issue for issue in issues)
     assert any("OLLAMA_BASE_URL" in issue for issue in issues)
     assert any("RATELIMIT_STORAGE_URI" in issue for issue in issues)
     assert any("SMTP_HOST and SMTP_FROM_EMAIL" in issue for issue in issues)
@@ -174,6 +180,9 @@ def test_optional_integration_configuration_is_fail_closed(app):
     configured = {
         **base,
         "DONATION_PAYMENT_URL": "https://payments.example/checkout",
+        "ALERT_DELIVERY_WEBHOOK_URL": "https://alerts.example/provider",
+        "ALERT_DELIVERY_WEBHOOK_SECRET": "approved-provider-webhook-secret-32-bytes",
+        "ALERT_DELIVERY_TIMEOUT_SECONDS": 5,
         "OLLAMA_BASE_URL": "https://private-ai.example",
         "RATELIMIT_STORAGE_URI": "rediss://redis.example/0",
         "SMTP_HOST": "smtp.example",
@@ -191,6 +200,12 @@ def test_optional_integration_configuration_is_fail_closed(app):
 
     invalid_sender = {**configured, "SMTP_FROM_EMAIL": "ResQ Security <security@resq.example>"}
     assert any("SMTP_FROM_EMAIL" in issue for issue in production_configuration_issues(invalid_sender))
+
+    incomplete_webhook = {**configured, "ALERT_DELIVERY_WEBHOOK_SECRET": ""}
+    assert any(
+        "must be supplied together" in issue
+        for issue in production_configuration_issues(incomplete_webhook)
+    )
 
 
 def test_password_change_revokes_previous_session(client):

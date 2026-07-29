@@ -40,6 +40,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 - Operational Setup workspace for live resource inventory, responder units, and verified donation campaigns
 - Incident reporting, deterministic damage scoring, rescue priority, automatic nearest-team/volunteer/ambulance dispatch, and hospital preparation
 - CAP-inspired public alerts, acknowledgements, India-wide alert aggregation, verified field updates, and safe-route advice
+- Optional signed, idempotent outbound alert webhook for an approved SMS, siren, radio, or public-warning gateway, with tracked attempts and safe manual retry
 - Hospital/shelter capacity, resource inventory, transactional distribution, volunteer assignment, welfare checks, and isolated-survivor supply cases
 - Consent-based device location, auditable donation campaigns, offline citizen submission queue, reconnect replay, Leaflet maps, and Chart.js analytics
 - Optional Ollama explanations; operational decisions continue with deterministic rules if Ollama is unavailable

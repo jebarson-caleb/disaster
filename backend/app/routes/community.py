@@ -80,7 +80,7 @@ def national_alerts():
     return jsonify(
         {
             "country": "India",
-            "alerts": [item.to_dict() for item in alerts],
+            "alerts": [item.public_dict() for item in alerts],
             "disasters": [item.to_dict() for item in disasters],
             "news_updates": [item.to_dict() for item in news],
             "generated_at": now.isoformat(),

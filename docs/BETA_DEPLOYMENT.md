@@ -21,7 +21,7 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | First authorized administrator email |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Unique 15–128 character initial administrator password |
 
-Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PUBLIC_BASE_URL`, `PASSWORD_RESET_MINUTES`, and the `SMTP_*` settings documented in `backend/.env.example`.
+Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `ALERT_DELIVERY_WEBHOOK_URL`, `ALERT_DELIVERY_WEBHOOK_SECRET`, `ALERT_DELIVERY_TIMEOUT_SECONDS`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PUBLIC_BASE_URL`, `PASSWORD_RESET_MINUTES`, and the `SMTP_*` settings documented in `backend/.env.example`.
 
 ## Database migrations
 
@@ -95,16 +95,22 @@ After cleanup, keep the bootstrap administrator as the only initial identity. Ci
 | Persistent database | Attached managed PostgreSQL/Neon resource and pooled TLS `DATABASE_URL` | None; readiness rejects SQLite in production |
 | Maps | Browser access to OpenStreetMap tiles; external navigation is advisory | Typed coordinates and address remain available |
 | Shared throttling | TLS Redis URL in `RATELIMIT_STORAGE_URI` for horizontally scaled traffic | Per-instance throttling plus database-backed account lockout |
-| Public alert delivery | Approved SMS/siren/radio provider, recipient governance, credentials, and a delivery adapter | CAP-inspired alert and acknowledgement records inside the authenticated application only |
+| Public alert delivery | Approved SMS/siren/radio provider or gateway, recipient governance, and a signed HTTPS endpoint in `ALERT_DELIVERY_WEBHOOK_URL` with a 32+ character HMAC secret | CAP-inspired alert and acknowledgement records inside the authenticated application only |
 | Online donations | Approved hosted checkout in `DONATION_PAYMENT_URL` plus the provider's independent settlement/reconciliation process | Auditable pledge records; no money is represented as collected |
 | AI explanations | Reachable, privacy-approved Ollama service in `OLLAMA_BASE_URL` | Deterministic, tested scoring without transmitting personal data |
 | Email recovery | Standard SMTP host/port, verified `SMTP_FROM_EMAIL`, `PUBLIC_BASE_URL`, credentials when required, delivery monitoring, and support ownership | Administrator-assisted password reset with re-authentication and session revocation |
 
 Do not label an optional provider as integrated merely because an environment-variable slot exists. Activation requires provider credentials, contractual/organizational approval, a non-production delivery test, failure/retry monitoring, and a production reconciliation test. Provider secrets must remain in Vercel environment storage and never appear in source control or browser payloads.
 
+### Public-warning webhook contract
+
+ResQ sends `POST` requests with `Content-Type: application/json`, `Idempotency-Key: <alert identifier>`, and `X-ResQ-Signature: sha256=<hex HMAC>`. The signature is the HMAC-SHA256 of the exact request body using `ALERT_DELIVERY_WEBHOOK_SECRET`; the provider must verify it with a constant-time comparison before dispatch. The JSON body contains `schema_version`, `idempotency_key`, and an `alert` object with the identifier, event, audience, requested channels, CAP urgency/severity/certainty values, public message, action instruction, creation time, and expiry. It intentionally excludes user IDs, operator contact details, credentials, and private case data.
+
+The gateway must return any `2xx` status only after accepting responsibility for the idempotency key. ResQ reads at most 1 KiB of the response, never stores its body, records the bounded status code and attempt time, and treats timeouts or non-`2xx` responses as failed delivery. Manual retries reuse the original identifier so the gateway can suppress duplicate SMS, siren, radio, or other downstream dispatch.
+
 ## Operational boundaries
 
-- Call/SMS/siren/radio values are coordination records; actual delivery needs an approved communications provider and credentials.
+- Call/SMS/siren/radio values are coordination records until the signed outbound webhook is connected to an approved communications provider. Each configured delivery uses an idempotency key and HMAC signature; attempts and provider status codes are recorded without response bodies or credentials. Failures leave the in-app alert active and expose a role-authorized manual retry that reuses the same idempotency key.
 - `DONATION_PAYMENT_URL` is only a handoff to an approved checkout. Without it, donations are recorded as pledges and no money is collected.
 - Safe routes are advisory and must not override official closures or responder instructions.
 - Device location is captured only after an explicit browser action and consent.

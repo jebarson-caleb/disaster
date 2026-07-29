@@ -16,6 +16,9 @@ class TestConfig(Config):
     CORS_ORIGINS = ["http://localhost:5173"]
     OLLAMA_BASE_URL = ""
     OLLAMA_MODEL = "llama3.1"
+    ALERT_DELIVERY_WEBHOOK_URL = ""
+    ALERT_DELIVERY_WEBHOOK_SECRET = ""
+    ALERT_DELIVERY_TIMEOUT_SECONDS = 5
     DEMO_MODE = True
     AUTO_MIGRATE = True
     MFA_ENCRYPTION_KEY = "vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A="

@@ -11,6 +11,7 @@ const roleWorkspaces = [
       ['Command', 'India-wide live risk and relief readiness'],
       ['Report Disaster', 'Report a disaster'],
       ['Rescue Queue', 'Rescue requests'],
+      ['Public Warnings', 'Alert dissemination'],
       ['Facilities', 'Hospitals'],
       ['Relief Coordination', 'Move supplies and people to verified needs'],
       ['User Access', 'Provision an operational account'],
@@ -67,6 +68,7 @@ const roleWorkspaces = [
       ['Needs Queue', 'Rescue requests'],
       ['Shelters', 'Shelters'],
       ['Field Report', 'Report a disaster'],
+      ['Public Warnings', 'Alert dissemination'],
       ['Relief Coordination', 'Move supplies and people to verified needs'],
       ['Response Hub', responseHubHeading],
     ],
@@ -89,6 +91,7 @@ const roleWorkspaces = [
       ['Public Safety', 'Secure access, perimeters and rescue corridors'],
       ['Queue', 'Rescue requests'],
       ['Incident Report', 'Report a disaster'],
+      ['Public Warnings', 'Alert dissemination'],
       ['Response Hub', responseHubHeading],
     ],
   },
@@ -99,6 +102,7 @@ const roleWorkspaces = [
       ['Fire Rescue', 'Track rescue hazards, teams and equipment'],
       ['Rescue Queue', 'Rescue requests'],
       ['Field Report', 'Report a disaster'],
+      ['Public Warnings', 'Alert dissemination'],
       ['Response Hub', responseHubHeading],
     ],
   },
@@ -137,5 +141,30 @@ test.describe('controlled full-stack role acceptance', () => {
         await expect(page.getByRole('heading', { name: actionHeading, level: 2 })).toBeVisible();
       }
     }
+  });
+
+  test('an authorized operator can publish a warning and see delivery state', async ({ page }) => {
+    const audience = `Browser acceptance zone ${Date.now()}`;
+    await page.goto('/');
+    await page.getByLabel('Active role').selectOption('Admin');
+    await page
+      .getByRole('navigation', { name: 'Main views' })
+      .getByRole('button', { name: 'Public Warnings', exact: true })
+      .click();
+
+    await page.getByLabel('Audience').fill(audience);
+    await page.getByLabel('Channel').fill('Operations dashboard');
+    await page.getByLabel('Message').fill('This is an isolated acceptance warning.');
+    await page.getByLabel('Action instruction').fill('No real-world action is required.');
+    await page.getByRole('button', { name: 'Send alert', exact: true }).click();
+
+    await expect(
+      page.getByText(
+        `Alert published in ResQ for ${audience}; no external delivery provider is configured.`,
+      ),
+    ).toBeVisible();
+    const createdAlert = page.getByText(audience, { exact: true }).locator('..');
+    await expect(createdAlert).toBeVisible();
+    await expect(createdAlert.getByText('Delivery not configured', { exact: true })).toBeVisible();
   });
 });

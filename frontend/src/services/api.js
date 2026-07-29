@@ -114,6 +114,7 @@ export const api = {
   updateShelter: (id, payload) => request(`/shelters/${id}/capacity`, { method: 'PATCH', body: JSON.stringify(payload) }),
   updateAmbulance: (id, payload) => request(`/ambulances/${id}/status`, { method: 'PATCH', body: JSON.stringify(payload) }),
   createAlert: (payload) => request('/alerts', { method: 'POST', body: JSON.stringify(payload) }),
+  retryAlertDelivery: (id) => request(`/alerts/${id}/deliver`, { method: 'POST', body: '{}' }),
   acknowledgeAlert: (id, payload = {}) => request(`/alerts/${id}/acknowledge`, { method: 'POST', body: JSON.stringify(payload) }),
   coordination: () => request('/coordination'),
   createDistribution: (payload) => request('/distributions', { method: 'POST', body: JSON.stringify(payload) }),

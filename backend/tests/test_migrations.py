@@ -9,6 +9,7 @@ from app.bootstrap import (
     MFA_REVISION,
     MIGRATIONS_DIRECTORY,
     ONBOARDING_REVISION,
+    RECOVERY_REVISION,
     SECURITY_REVISION,
     initialize_database,
 )
@@ -46,6 +47,14 @@ def test_fresh_database_migrates_to_head_and_is_idempotent(tmp_path):
             "password_reset_tokens",
             "alembic_version",
         } <= tables
+        assert {
+            "delivery_status",
+            "delivery_attempts",
+            "delivery_status_code",
+            "delivery_attempted_at",
+        } <= {
+            column["name"] for column in inspect(db.engine).get_columns("emergency_alerts")
+        }
         assert "must_change_password" in {
             column["name"] for column in inspect(db.engine).get_columns("account_security")
         }
@@ -167,6 +176,28 @@ def test_unversioned_onboarding_release_upgrades_to_password_recovery(tmp_path):
         initialize_database()
 
         assert "password_reset_tokens" in set(inspect(db.engine).get_table_names())
+        assert current_revision() == HEAD_REVISION
+        db.session.remove()
+        db.engine.dispose()
+
+
+def test_unversioned_recovery_release_upgrades_to_alert_delivery_tracking(tmp_path):
+    application = build_migration_app(tmp_path / "recovery-release.db")
+    with application.app_context():
+        upgrade(directory=str(MIGRATIONS_DIRECTORY), revision=RECOVERY_REVISION)
+        db.session.execute(text("DROP TABLE alembic_version"))
+        db.session.commit()
+
+        initialize_database()
+
+        assert {
+            "delivery_status",
+            "delivery_attempts",
+            "delivery_status_code",
+            "delivery_attempted_at",
+        } <= {
+            column["name"] for column in inspect(db.engine).get_columns("emergency_alerts")
+        }
         assert current_revision() == HEAD_REVISION
         db.session.remove()
         db.engine.dispose()

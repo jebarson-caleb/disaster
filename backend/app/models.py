@@ -263,8 +263,34 @@ class EmergencyAlert(db.Model, SerializerMixin):
     message = db.Column(db.Text, nullable=False)
     instruction = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(30), default="active", nullable=False, index=True)
+    delivery_status = db.Column(db.String(30), default="not_configured", nullable=False, index=True)
+    delivery_attempts = db.Column(db.Integer, default=0, nullable=False)
+    delivery_status_code = db.Column(db.Integer)
+    delivery_attempted_at = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     expires_at = db.Column(db.DateTime(timezone=True))
+
+    def public_dict(self):
+        """Serialize warning content without sender or provider-delivery metadata."""
+        values = self.to_dict()
+        return {
+            key: values[key]
+            for key in (
+                "id",
+                "identifier",
+                "event",
+                "audience",
+                "channels",
+                "urgency",
+                "severity",
+                "certainty",
+                "message",
+                "instruction",
+                "status",
+                "created_at",
+                "expires_at",
+            )
+        }
 
 
 class AlertAcknowledgement(db.Model, SerializerMixin):

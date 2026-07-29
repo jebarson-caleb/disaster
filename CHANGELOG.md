@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## 1.3.0 - 2026-07-29
+
+### Added
+
+- Signed, idempotent HTTPS delivery of public-warning payloads to an approved external communications gateway.
+- Fail-closed webhook configuration checks, bounded provider timeouts, sanitized audit outcomes, persistent attempt status, and safe manual retry.
+- Public-warning workspaces for every authorized command role, plus full-stack browser coverage for in-app publishing and delivery state.
+
 ## 1.2.2 - 2026-07-29
 
 ### Fixed

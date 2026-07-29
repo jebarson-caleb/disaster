@@ -124,6 +124,7 @@ const roleNavigation = {
     { id: 'command', label: 'Command', icon: RadioTower },
     { id: 'report', label: 'Report Disaster', icon: MapPin },
     { id: 'rescue', label: 'Rescue Queue', icon: HeartPulse },
+    { id: 'warnings', label: 'Public Warnings', icon: Megaphone },
     { id: 'facilities', label: 'Facilities', icon: Building2 },
     { id: 'coordination', label: 'Relief Coordination', icon: Package },
     { id: 'access', label: 'User Access', icon: UserRound },
@@ -154,6 +155,7 @@ const roleNavigation = {
     { id: 'rescue', label: 'Needs Queue', icon: ClipboardList },
     { id: 'facilities', label: 'Shelters', icon: Home },
     { id: 'report', label: 'Field Report', icon: MapPin },
+    { id: 'warnings', label: 'Public Warnings', icon: Megaphone },
     { id: 'coordination', label: 'Relief Coordination', icon: Users },
   ],
   Volunteer: [
@@ -165,11 +167,13 @@ const roleNavigation = {
     { id: 'command', label: 'Public Safety', icon: ShieldAlert },
     { id: 'rescue', label: 'Queue', icon: HeartPulse },
     { id: 'report', label: 'Incident Report', icon: MapPin },
+    { id: 'warnings', label: 'Public Warnings', icon: Megaphone },
   ],
   'Fire Service': [
     { id: 'command', label: 'Fire Rescue', icon: Siren },
     { id: 'rescue', label: 'Rescue Queue', icon: HeartPulse },
     { id: 'report', label: 'Field Report', icon: MapPin },
+    { id: 'warnings', label: 'Public Warnings', icon: Megaphone },
   ],
 };
 
@@ -764,9 +768,32 @@ export default function App() {
       setAlerts((items) => [next, ...items]);
       setAlertDraft({ ...alertDraft, message: '', instruction: '' });
       setConnectionState('online');
-      setOperatorNotice(`Authoritative alert sent to ${next.audience} by ${next.channel}`);
+      if (response.delivery?.status === 'delivered') {
+        setOperatorNotice(`Authoritative alert delivered to ${next.audience} by ${next.channel}`);
+      } else if (response.delivery?.status === 'failed') {
+        setOperatorNotice(`Alert published in ResQ, but the external delivery provider failed. Check delivery monitoring before retrying.`);
+      } else {
+        setOperatorNotice(`Alert published in ResQ for ${next.audience}; no external delivery provider is configured.`);
+      }
     } catch (error) {
       setOperatorNotice(`Alert was not sent: ${error.message}`);
+    }
+  }
+
+  async function retryAlertDelivery(alert) {
+    try {
+      const response = await api.retryAlertDelivery(alert.id);
+      const updated = normalizeAlert(response.alert);
+      setAlerts((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      if (response.delivery.status === 'delivered') {
+        setOperatorNotice(`External delivery succeeded for ${updated.audience}.`);
+      } else if (response.delivery.status === 'not_configured') {
+        setOperatorNotice('No external alert delivery provider is configured. The in-app warning remains active.');
+      } else {
+        setOperatorNotice('External alert delivery failed again. Check provider monitoring before another retry.');
+      }
+    } catch (error) {
+      setOperatorNotice(`External alert delivery was not retried: ${error.message}`);
     }
   }
 
@@ -1770,6 +1797,7 @@ export default function App() {
                   alertDraft={alertDraft}
                   setAlertDraft={setAlertDraft}
                   sendAlert={sendAlert}
+                  retryAlertDelivery={retryAlertDelivery}
                   reduceMotion={reduceMotion}
                   filterSummary={filterSummary}
                 />
@@ -1841,6 +1869,17 @@ export default function App() {
                 setVolunteerDraft={setVolunteerDraft}
                 onDistributionSubmit={submitDistribution}
                 onVolunteerSubmit={submitVolunteerAssignment}
+              />
+            </MotionPage>
+          )}
+          {visibleActiveView === 'warnings' && (
+            <MotionPage key="warnings" reduceMotion={reduceMotion}>
+              <AlertComposer
+                alerts={alerts}
+                draft={alertDraft}
+                setDraft={setAlertDraft}
+                onSubmit={sendAlert}
+                onRetry={retryAlertDelivery}
               />
             </MotionPage>
           )}
@@ -2968,6 +3007,7 @@ function CommandView({
   alertDraft,
   setAlertDraft,
   sendAlert,
+  retryAlertDelivery,
   reduceMotion,
   filterSummary,
 }) {
@@ -3044,7 +3084,7 @@ function CommandView({
           <section className="split-grid split-grid-3">
             <FieldTeamsPanel teams={fieldTeams} />
             <StandardsPanel />
-            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
+            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} onRetry={retryAlertDelivery} />
           </section>
         </>
       )}
@@ -3071,7 +3111,7 @@ function CommandView({
             <ResourceReadinessPanel resources={resources} />
             <FieldTeamsPanel teams={fieldTeams} />
             <StandardsPanel />
-            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} />
+            <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} onRetry={retryAlertDelivery} />
           </section>
           <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
         </>
@@ -3495,7 +3535,7 @@ function StandardsPanel() {
   );
 }
 
-function AlertComposer({ alerts, draft, setDraft, onSubmit }) {
+function AlertComposer({ alerts, draft, setDraft, onSubmit, onRetry }) {
   return (
     <section className="panel alert-panel">
       <PanelTitle eyebrow="Public warning" title="Alert dissemination" />
@@ -3517,8 +3557,14 @@ function AlertComposer({ alerts, draft, setDraft, onSubmit }) {
             <div>
               <strong>{alert.audience}</strong>
               <span>{alert.channel} - {alert.time}{alert.acknowledgement_count != null ? ` · ${alert.acknowledgement_count} confirmed` : ''}</span>
+              {alert.delivery_status && <StatusPill value={`Delivery ${alert.delivery_status.replace('_', ' ')}`} />}
               <p>{alert.message}</p>
               {alert.instruction && <p><strong>Action:</strong> {alert.instruction}</p>}
+              {alert.delivery_status === 'failed' && onRetry && (
+                <button className="compact-button secondary-button" type="button" onClick={() => onRetry(alert)}>
+                  <RefreshCw size={15} /> Retry external delivery
+                </button>
+              )}
             </div>
           </div>
         ))}

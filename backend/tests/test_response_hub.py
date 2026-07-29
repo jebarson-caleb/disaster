@@ -28,6 +28,14 @@ def test_countrywide_alerts_and_live_news_are_public(client, app):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["country"] == "India"
+    assert payload["alerts"]
+    assert {
+        "sender_id",
+        "delivery_status",
+        "delivery_attempts",
+        "delivery_status_code",
+        "delivery_attempted_at",
+    }.isdisjoint(payload["alerts"][0])
     assert len(payload["disasters"]) >= 4
     assert len({item["state"] for item in payload["news_updates"]}) >= 3
     assert any(item["is_live"] and item["stream_url"] for item in payload["news_updates"])
