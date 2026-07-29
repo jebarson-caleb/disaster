@@ -48,6 +48,14 @@ export function register(payload) {
   return request('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function requestPasswordReset(payload) {
+  return request('/auth/password-reset/request', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function completePasswordReset(payload) {
+  return request('/auth/password-reset/complete', { method: 'POST', body: JSON.stringify(payload) });
+}
+
 export function restoreSession() {
   return request('/auth/me');
 }

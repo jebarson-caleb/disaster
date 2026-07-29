@@ -216,6 +216,55 @@ def test_ai_endpoints(client, auth_headers):
     assert allocation.get_json()["recommendations"]["rescue_teams"] >= 2
 
 
+def test_ollama_prompt_excludes_personal_and_location_data(client, app, auth_headers, monkeypatch):
+    app.config.update(OLLAMA_BASE_URL="https://private-ai.example", OLLAMA_MODEL="privacy-test")
+    recorded = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"response": "Sanitized operational explanation."}
+
+    def fake_post(url, json, timeout):
+        recorded.update(url=url, payload=json, timeout=timeout)
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.ai_service.requests.post", fake_post)
+    response = client.post(
+        "/api/v1/ai/prioritize-rescue",
+        headers=auth_headers,
+        json={
+            "condition": "critical",
+            "trapped": True,
+            "people_count": 2,
+            "vulnerable_people": 1,
+            "victim_name": "Private Person",
+            "contact_phone": "9000000123",
+            "latitude": 12.981,
+            "longitude": 80.22,
+            "notes": "Private medical narrative",
+            "image_url": "https://private.example/victim.jpg",
+        },
+    )
+
+    assert response.status_code == 200
+    prompt = recorded["payload"]["prompt"]
+    assert recorded["url"] == "https://private-ai.example/api/generate"
+    assert recorded["timeout"] == 3
+    assert '"condition": "critical"' in prompt
+    for sensitive_value in (
+        "Private Person",
+        "9000000123",
+        "12.981",
+        "80.22",
+        "Private medical narrative",
+        "victim.jpg",
+    ):
+        assert sensitive_value not in prompt
+
+
 def test_admin_can_provision_operational_user(client, auth_headers):
     response = client.post(
         "/api/v1/admin/users",

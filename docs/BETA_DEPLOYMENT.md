@@ -21,7 +21,7 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | First authorized administrator email |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Unique 15–128 character initial administrator password |
 
-Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, and `OLLAMA_MODEL`.
+Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PUBLIC_BASE_URL`, `PASSWORD_RESET_MINUTES`, and the `SMTP_*` settings documented in `backend/.env.example`.
 
 ## Database migrations
 
@@ -54,7 +54,7 @@ After deployment:
 2. Open `https://<deployment>/api/v1/ready`; expect HTTP 200, `status: ready`, and both checks `true`. A 503 means the release must not receive beta traffic; inspect Vercel function logs using the returned request ID.
 3. Open the site in a private browser. Confirm operational data is hidden behind the login screen.
 4. Sign in as the bootstrap administrator and replace the bootstrap password. The temporary-password gate must prevent access to operational data until this succeeds.
-5. Enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes.
+5. Enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes. If SMTP recovery is enabled, request a password-reset link, verify its expiry/single-use behavior, and confirm completion revokes every prior session while leaving MFA required.
 6. Open **User Access** and provision one account for each operational role in use. Hospital, shelter, and ambulance accounts must be assigned to an existing facility or create their facility atomically. Confirm every issued password must be replaced on first sign-in.
 7. For hospital, shelter, and ambulance accounts, confirm the workspace shows only the assigned operational record and rejects attempts to update another facility. For citizens, confirm rescue lists contain only cases created by that citizen.
 8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions. Manual rescue and supply assignment must accept only a registered available asset, reserve it while active, and release it after completion or cancellation.
@@ -83,7 +83,7 @@ vercel env run -e production -- python -m scripts.purge_training_data \
 vercel env run -e production -- python -m scripts.purge_training_data
 ```
 
-The final preview must report `state: already_clean`. Keep demo seed code and test fixtures in source control; they are required for deterministic CI and local demonstrations, but `DEMO_MODE=false` and an unset `VITE_DEMO_MODE` prevent them from entering a public runtime.
+The final preview must report `state: already_clean`. Keep demo accounts, demo seed code, and test fixtures in source control only; they are required for deterministic CI and controlled local demonstrations. `DEMO_MODE=false`, an unset `VITE_DEMO_MODE`, a disabled production demo-session endpoint, and the production bundle smoke check prevent those credentials and records from entering the public runtime.
 
 After cleanup, keep the bootstrap administrator as the only initial identity. Citizens and volunteers may register through the public account flow; volunteers remain pending until an administrator verifies them. Provision every privileged or facility role through **User Access**, using unique real email/phone details, first-login password replacement, and mandatory MFA.
 
@@ -98,7 +98,7 @@ After cleanup, keep the bootstrap administrator as the only initial identity. Ci
 | Public alert delivery | Approved SMS/siren/radio provider, recipient governance, credentials, and a delivery adapter | CAP-inspired alert and acknowledgement records inside the authenticated application only |
 | Online donations | Approved hosted checkout in `DONATION_PAYMENT_URL` plus the provider's independent settlement/reconciliation process | Auditable pledge records; no money is represented as collected |
 | AI explanations | Reachable, privacy-approved Ollama service in `OLLAMA_BASE_URL` | Deterministic, tested scoring without transmitting personal data |
-| Email recovery/verification | Approved transactional-email provider, verified sending domain, templates, and support ownership | Administrator-assisted password reset with re-authentication and session revocation |
+| Email recovery | Standard SMTP host/port, verified `SMTP_FROM_EMAIL`, `PUBLIC_BASE_URL`, credentials when required, delivery monitoring, and support ownership | Administrator-assisted password reset with re-authentication and session revocation |
 
 Do not label an optional provider as integrated merely because an environment-variable slot exists. Activation requires provider credentials, contractual/organizational approval, a non-production delivery test, failure/retry monitoring, and a production reconciliation test. Provider secrets must remain in Vercel environment storage and never appear in source control or browser payloads.
 

@@ -207,7 +207,14 @@ def current_auth_session():
 def enforce_csrf():
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return None
-    if request.endpoint in {"auth.login", "auth.register", "auth.complete_mfa_login", "operations.demo_session"}:
+    if request.endpoint in {
+        "auth.login",
+        "auth.register",
+        "auth.complete_mfa_login",
+        "auth.request_password_reset",
+        "auth.complete_password_reset",
+        "operations.demo_session",
+    }:
         return None
     if request.headers.get("Authorization", "").startswith("Bearer "):
         return None

@@ -1,3 +1,4 @@
+import json
 import math
 from datetime import UTC, datetime
 
@@ -17,6 +18,32 @@ DISASTER_WEIGHTS = {
     "cyclone": 26,
     "landslide": 24,
     "fire": 28,
+}
+
+AI_PROMPT_FIELDS = {
+    "damage estimation": {
+        "disaster_type",
+        "severity_hint",
+        "people_affected",
+        "location_risk",
+    },
+    "relief prioritization": {
+        "condition",
+        "trapped",
+        "vulnerable_people",
+        "people_count",
+        "victim_age",
+        "disaster_type",
+        "created_at",
+    },
+    "resource allocation": {
+        "severity",
+        "priority_label",
+        "people_count",
+        "people_affected",
+        "disaster_type",
+        "available_resources",
+    },
 }
 
 
@@ -129,9 +156,15 @@ def ollama_explanation(task, payload, fallback):
     model = current_app.config.get("OLLAMA_MODEL")
     if not base_url or not model:
         return fallback
+    safe_payload = {
+        field: payload[field]
+        for field in AI_PROMPT_FIELDS.get(task, set())
+        if field in payload
+    }
     prompt = (
         f"Give a concise disaster management explanation for {task}. "
-        f"Use this input: {payload}. Keep it under 45 words."
+        f"Use this non-identifying input: {json.dumps(safe_payload, sort_keys=True, default=str)}. "
+        "Keep it under 45 words."
     )
     try:
         response = requests.post(

@@ -1,5 +1,6 @@
 import base64
 import os
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -23,6 +24,16 @@ def cors_origins():
     environment = os.getenv("APP_ENV", "production" if os.getenv("VERCEL") else "development").lower()
     default_origins = "" if environment == "production" else "http://localhost:5173"
     return [item.strip() for item in os.getenv("CORS_ORIGINS", default_origins).split(",") if item.strip()]
+
+
+def public_base_url():
+    configured_url = os.getenv("PUBLIC_BASE_URL", "").strip()
+    if configured_url:
+        return configured_url.rstrip("/")
+    vercel_url = os.getenv("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
+    if vercel_url:
+        return f"https://{vercel_url}".rstrip("/")
+    return "http://localhost:5173" if not os.getenv("VERCEL") else ""
 
 
 class Config:
@@ -50,6 +61,16 @@ class Config:
     }
     EMERGENCY_HOTLINE = os.getenv("EMERGENCY_HOTLINE", "112")
     DONATION_PAYMENT_URL = os.getenv("DONATION_PAYMENT_URL", "").rstrip("/")
+    PUBLIC_BASE_URL = public_base_url()
+    PASSWORD_RESET_MINUTES = int(os.getenv("PASSWORD_RESET_MINUTES", "30"))
+    SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip()
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+    SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() in {"1", "true", "yes"}
+    SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS", "8"))
     SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "resq_session")
     CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "resq_csrf")
     SESSION_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true" if APP_ENV == "production" else "false").lower() in {"1", "true", "yes"}
@@ -108,4 +129,59 @@ def production_configuration_issues(config):
         issues.append("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required for first production access")
     elif len(config.get("BOOTSTRAP_ADMIN_PASSWORD", "")) < 15:
         issues.append("BOOTSTRAP_ADMIN_PASSWORD must contain at least 15 characters")
+    payment_url = str(config.get("DONATION_PAYMENT_URL") or "")
+    if payment_url and not _is_secure_public_url(payment_url):
+        issues.append("DONATION_PAYMENT_URL must be an absolute HTTPS URL without embedded credentials")
+    ollama_url = str(config.get("OLLAMA_BASE_URL") or "")
+    if ollama_url:
+        parsed_ollama_url = urlsplit(ollama_url)
+        if parsed_ollama_url.scheme not in {"http", "https"} or not parsed_ollama_url.hostname:
+            issues.append("OLLAMA_BASE_URL must be an absolute HTTP(S) URL")
+    rate_limit_storage = str(config.get("RATELIMIT_STORAGE_URI") or "")
+    if rate_limit_storage not in {"", "memory://"} and not rate_limit_storage.startswith("rediss://"):
+        issues.append("RATELIMIT_STORAGE_URI must use rediss:// in production")
+    smtp_requested = any(
+        str(config.get(name) or "")
+        for name in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL")
+    )
+    if smtp_requested:
+        if not config.get("SMTP_HOST") or not config.get("SMTP_FROM_EMAIL"):
+            issues.append("SMTP_HOST and SMTP_FROM_EMAIL are required when email recovery is configured")
+        elif not _is_valid_email_address(config.get("SMTP_FROM_EMAIL")):
+            issues.append("SMTP_FROM_EMAIL must be a valid bare email address")
+        if bool(config.get("SMTP_USERNAME")) != bool(config.get("SMTP_PASSWORD")):
+            issues.append("SMTP_USERNAME and SMTP_PASSWORD must be supplied together")
+        if config.get("SMTP_USE_TLS") and config.get("SMTP_USE_SSL"):
+            issues.append("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
+        if not 1 <= int(config.get("SMTP_PORT") or 0) <= 65535:
+            issues.append("SMTP_PORT must be between 1 and 65535")
+        if not 1 <= int(config.get("SMTP_TIMEOUT_SECONDS") or 0) <= 60:
+            issues.append("SMTP_TIMEOUT_SECONDS must be between 1 and 60")
+        public_url = str(config.get("PUBLIC_BASE_URL") or "")
+        parsed_public_url = urlsplit(public_url)
+        if not _is_secure_public_url(public_url) or parsed_public_url.query or parsed_public_url.fragment:
+            issues.append(
+                "PUBLIC_BASE_URL must be an absolute HTTPS URL without credentials, query, or fragment "
+                "when email recovery is configured"
+            )
+    if not 5 <= int(config.get("PASSWORD_RESET_MINUTES") or 0) <= 120:
+        issues.append("PASSWORD_RESET_MINUTES must be between 5 and 120")
     return issues
+
+
+def _is_secure_public_url(value):
+    parsed = urlsplit(value)
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
+
+
+def _is_valid_email_address(value):
+    email = str(value or "")
+    if len(email) > 160 or any(character.isspace() for character in email):
+        return False
+    local, separator, domain = email.rpartition("@")
+    return bool(separator and local and "." in domain and not domain.startswith(".") and not domain.endswith("."))

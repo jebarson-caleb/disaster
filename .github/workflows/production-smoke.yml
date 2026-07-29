@@ -134,6 +134,16 @@ jobs:
           )"
           test "$privileged_registration_status" = "403"
 
+          recovery_status="$(
+            curl --silent --show-error \
+              --header 'Content-Type: application/json' \
+              --data '{"email":"nobody@example.invalid"}' \
+              --output recovery.json \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/v1/auth/password-reset/request"
+          )"
+          test "$recovery_status" = "202"
+
       - name: Validate responses and security headers
         shell: python {0}
         run: |
@@ -143,6 +153,7 @@ jobs:
           health = json.loads(Path("health.json").read_text())
           readiness = json.loads(Path("ready.json").read_text())
           public_feed = json.loads(Path("public.json").read_text())
+          recovery = json.loads(Path("recovery.json").read_text())
 
           assert health["status"] == "ok", health
           assert readiness["status"] == "ready", readiness
@@ -152,6 +163,8 @@ jobs:
           assert isinstance(public_feed["alerts"], list), public_feed
           assert isinstance(public_feed["disasters"], list), public_feed
           assert isinstance(public_feed["news_updates"], list), public_feed
+          assert recovery["message"], recovery
+          assert isinstance(recovery["recovery_available"], bool), recovery
 
           headers = Path("ready.headers").read_text().lower()
           required_headers = {
@@ -168,4 +181,4 @@ jobs:
               assert matching, f"missing {name}"
               assert any(value in line for line in matching), f"unexpected {name}"
 
-          print("Production root, liveness, readiness, auth boundary, and headers are healthy.")
+          print("Production root, readiness, auth/recovery boundaries, demo isolation, and headers are healthy.")

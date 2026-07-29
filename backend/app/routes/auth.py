@@ -1,13 +1,17 @@
 import json
+import secrets
+import smtplib
 from datetime import timedelta
 from math import isfinite
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from ..auth import (
+    as_utc,
     audit_event,
     authenticated_rate_key,
     clear_session_cookies,
+    digest,
     hash_password,
     login_required,
     security_state,
@@ -28,7 +32,17 @@ from ..mfa import (
     verify_factor,
     verify_totp,
 )
-from ..models import AccountSecurity, AuthSession, MfaChallenge, MfaCredential, RoleProfile, User, Volunteer
+from ..models import (
+    AccountSecurity,
+    AuthSession,
+    MfaChallenge,
+    MfaCredential,
+    PasswordResetToken,
+    RoleProfile,
+    User,
+    Volunteer,
+)
+from ..services.email_service import password_recovery_available, send_password_reset_email
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -60,7 +74,7 @@ def register():
     if data["role"] not in SELF_REGISTRATION_ROLES:
         return jsonify({"error": "This operational role requires administrator provisioning"}), 403
     email = str(data["email"]).strip().lower()
-    if "@" not in email or "." not in email.rsplit("@", 1)[-1] or len(email) > 160:
+    if not _valid_email(email):
         return jsonify({"error": "A valid email address is required"}), 400
     password_error = validate_password(data["password"])
     if password_error:
@@ -129,6 +143,110 @@ def register():
     audit_event("account.register", "success", user.id)
     db.session.commit()
     return response
+
+
+@auth_bp.post("/password-reset/request")
+@limiter.limit("3 per hour")
+def request_password_reset():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    if not _valid_email(email):
+        return jsonify({"error": "A valid email address is required"}), 400
+
+    available = password_recovery_available()
+    user = User.query.filter_by(email=email, is_active=True).first()
+    if available and user is not None:
+        now = utcnow()
+        PasswordResetToken.query.filter_by(user_id=user.id, consumed_at=None).update(
+            {PasswordResetToken.consumed_at: now},
+            synchronize_session=False,
+        )
+        raw_token = secrets.token_urlsafe(48)
+        reset_token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=digest(raw_token),
+            created_at=now,
+            expires_at=now + timedelta(minutes=current_app.config["PASSWORD_RESET_MINUTES"]),
+        )
+        db.session.add(reset_token)
+        audit_event("account.password_reset_request", "queued", user.id)
+        db.session.commit()
+        try:
+            send_password_reset_email(user, raw_token)
+        except (OSError, RuntimeError, ValueError, smtplib.SMTPException):
+            current_app.logger.exception(
+                "Password reset email delivery failed for user_id=%s",
+                user.id,
+            )
+            reset_token.consumed_at = utcnow()
+            audit_event("account.password_reset_request", "delivery_failed", user.id)
+            db.session.commit()
+        else:
+            audit_event("account.password_reset_request", "delivered", user.id)
+            db.session.commit()
+
+    message = (
+        "If an active account matches that email, a single-use reset link will be sent."
+        if available
+        else "Email recovery is not currently available. Ask a ResQ administrator to verify your identity and reset the account."
+    )
+    return jsonify({"message": message, "recovery_available": available}), 202
+
+
+@auth_bp.post("/password-reset/complete")
+@limiter.limit("10 per hour")
+def complete_password_reset():
+    data = request.get_json(silent=True) or {}
+    raw_token = str(data.get("token") or "")
+    new_password = str(data.get("new_password") or "")
+    if not raw_token or not new_password:
+        return jsonify({"error": "token and new_password are required"}), 400
+    password_error = validate_password(new_password)
+    if password_error:
+        return jsonify({"error": password_error}), 400
+    if len(raw_token) > 256:
+        return jsonify({"error": "Invalid or expired password reset link"}), 400
+
+    reset_token = PasswordResetToken.query.filter_by(token_hash=digest(raw_token)).first()
+    now = utcnow()
+    if reset_token is None or reset_token.consumed_at is not None or as_utc(reset_token.expires_at) <= now:
+        return jsonify({"error": "Invalid or expired password reset link"}), 400
+    user = db.session.get(User, reset_token.user_id)
+    if user is None or not user.is_active:
+        reset_token.consumed_at = now
+        db.session.commit()
+        return jsonify({"error": "Invalid or expired password reset link"}), 400
+
+    claimed = PasswordResetToken.query.filter(
+        PasswordResetToken.id == reset_token.id,
+        PasswordResetToken.consumed_at.is_(None),
+        PasswordResetToken.expires_at > now,
+    ).update(
+        {PasswordResetToken.consumed_at: now},
+        synchronize_session=False,
+    )
+    if claimed != 1:
+        db.session.rollback()
+        return jsonify({"error": "Invalid or expired password reset link"}), 400
+
+    user.password_hash = hash_password(new_password)
+    state = security_state(user)
+    state.password_changed_at = now
+    state.must_change_password = False
+    state.failed_login_attempts = 0
+    state.locked_until = None
+    AuthSession.query.filter_by(user_id=user.id, revoked_at=None).update(
+        {AuthSession.revoked_at: now},
+        synchronize_session=False,
+    )
+    MfaChallenge.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    PasswordResetToken.query.filter_by(user_id=user.id, consumed_at=None).update(
+        {PasswordResetToken.consumed_at: now},
+        synchronize_session=False,
+    )
+    audit_event("account.password_reset_complete", "success", user.id)
+    db.session.commit()
+    return jsonify({"message": "Password reset. Sign in with the new password; MFA remains required when enabled."})
 
 
 @auth_bp.post("/login")
@@ -463,3 +581,11 @@ def _optional_coordinate(value, name, minimum, maximum):
     if not isfinite(coordinate) or not minimum <= coordinate <= maximum:
         raise ValueError(f"{name} is outside valid bounds")
     return coordinate
+
+
+def _valid_email(value):
+    email = str(value or "")
+    if len(email) > 160 or any(character.isspace() for character in email):
+        return False
+    local, separator, domain = email.rpartition("@")
+    return bool(separator and local and "." in domain and not domain.startswith(".") and not domain.endswith("."))

@@ -5,7 +5,7 @@ Use these relationships to draw the ER diagram:
 - `users` 1--1 `role_profiles`
 - `role_profiles` N--1 optional `hospitals`, `shelters`, or `ambulances` for managed-facility access
 - `users` 1--1 `account_security`
-- `users` 1--N `auth_sessions`, `audit_events`, `mfa_challenges`, and 1--1 `mfa_credentials`
+- `users` 1--N `auth_sessions`, `password_reset_tokens`, `audit_events`, `mfa_challenges`, and 1--1 `mfa_credentials`
 - `users` 1--N `disasters` through `reported_by_id`
 - `users` 1--N `rescue_requests` through `requester_id`
 - `disasters` 1--N `rescue_requests`

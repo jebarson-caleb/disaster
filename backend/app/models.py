@@ -475,6 +475,19 @@ class AccountSecurity(db.Model, SerializerMixin):
     must_change_password = db.Column(db.Boolean, default=False, nullable=False)
 
 
+class PasswordResetToken(db.Model, SerializerMixin):
+    """Hashed, expiring, single-use token for email-assisted account recovery."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    consumed_at = db.Column(db.DateTime(timezone=True), index=True)
+
+
 class AuditEvent(db.Model, SerializerMixin):
     """Minimal security/operations audit trail without credentials or sensitive payloads."""
 

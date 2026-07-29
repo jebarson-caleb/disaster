@@ -23,6 +23,7 @@ from .models import (
     MfaChallenge,
     MfaCredential,
     Notification,
+    PasswordResetToken,
     RescueRequest,
     RescueStatusHistory,
     ResponseDispatch,
@@ -213,6 +214,11 @@ def build_training_cleanup_plan():
         else 0,
         "notifications": _count(Notification.query.filter(Notification.user_id.in_(user_ids))) if user_ids else 0,
         "auth_sessions": _count(AuthSession.query.filter(AuthSession.user_id.in_(user_ids))) if user_ids else 0,
+        "password_reset_tokens": _count(
+            PasswordResetToken.query.filter(PasswordResetToken.user_id.in_(user_ids))
+        )
+        if user_ids
+        else 0,
         "account_security": _count(AccountSecurity.query.filter(AccountSecurity.user_id.in_(user_ids)))
         if user_ids
         else 0,
@@ -255,6 +261,7 @@ def purge_training_data(confirmation):
     try:
         Notification.query.filter(Notification.user_id.in_(user_ids)).delete(synchronize_session=False)
         AuthSession.query.filter(AuthSession.user_id.in_(user_ids)).delete(synchronize_session=False)
+        PasswordResetToken.query.filter(PasswordResetToken.user_id.in_(user_ids)).delete(synchronize_session=False)
         AccountSecurity.query.filter(AccountSecurity.user_id.in_(user_ids)).delete(synchronize_session=False)
         MfaChallenge.query.filter(MfaChallenge.user_id.in_(user_ids)).delete(synchronize_session=False)
         MfaCredential.query.filter(MfaCredential.user_id.in_(user_ids)).delete(synchronize_session=False)

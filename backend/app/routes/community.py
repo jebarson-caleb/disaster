@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
-from ..auth import current_user, login_required
+from ..auth import audit_event, current_user, login_required
 from ..extensions import db
 from ..models import (
     Disaster,
@@ -311,18 +311,24 @@ def create_donation():
         return jsonify({"error": "This campaign is not accepting donations"}), 409
     try:
         amount = Decimal(str(data["amount"]))
-    except InvalidOperation:
+    except (InvalidOperation, ValueError):
         return jsonify({"error": "amount must be a number"}), 400
-    if amount < Decimal("10") or amount > Decimal("10000000"):
+    if not amount.is_finite() or amount < Decimal("10") or amount > Decimal("10000000"):
         return jsonify({"error": "amount must be between 10 and 10000000"}), 400
+    donor_name = str(data["donor_name"]).strip()
+    donor_email = str(data["donor_email"]).strip().lower()
+    if not donor_name or len(donor_name) > 120:
+        return jsonify({"error": "A donor name of 120 characters or fewer is required"}), 400
+    if not _valid_email(donor_email):
+        return jsonify({"error": "A valid donor email is required"}), 400
     user = current_user()
     payment_base = current_app.config.get("DONATION_PAYMENT_URL", "")
     reference = f"DON-{datetime.now(UTC):%Y%m%d}-{uuid4().hex[:10].upper()}"
     item = Donation(
         campaign_id=campaign.id,
         donor_id=user.id if user else None,
-        donor_name=str(data["donor_name"]).strip(),
-        donor_email=str(data["donor_email"]).strip().lower(),
+        donor_name=donor_name,
+        donor_email=donor_email,
         amount=amount,
         currency=campaign.currency,
         anonymous=bool(data.get("anonymous")),
@@ -334,8 +340,14 @@ def create_donation():
     db.session.commit()
     checkout_url = None
     if payment_base:
-        separator = "&" if "?" in payment_base else "?"
-        checkout_url = f"{payment_base}{separator}{urlencode({'reference': reference, 'amount': str(amount), 'currency': campaign.currency})}"
+        checkout_url = _checkout_url(
+            payment_base,
+            {
+                "reference": reference,
+                "amount": str(amount),
+                "currency": campaign.currency,
+            },
+        )
     return jsonify(
         {
             "donation": {**item.to_dict(), "amount": float(item.amount)},
@@ -354,6 +366,12 @@ def update_donation_status(donation_id):
     if status not in {"pledged", "pending_payment", "confirmed", "failed", "refunded"}:
         return jsonify({"error": "Invalid donation status"}), 400
     item.status = status
+    audit_event(
+        "donation.status_update",
+        "success",
+        request.user.id,
+        f"donation_id={item.id};status={status}",
+    )
     db.session.commit()
     return jsonify({"donation": {**item.to_dict(), "amount": float(item.amount)}})
 
@@ -392,3 +410,18 @@ def auto_dispatch(request_id):
     allocation = auto_dispatch_rescue(rescue, disaster)
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict(), "allocation": allocation, "already_dispatched": False})
+
+
+def _checkout_url(base_url, parameters):
+    parsed = urlsplit(base_url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update(parameters)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
+
+
+def _valid_email(value):
+    email = str(value or "")
+    if len(email) > 160 or any(character.isspace() for character in email):
+        return False
+    local, separator, domain = email.rpartition("@")
+    return bool(separator and local and "." in domain and not domain.startswith(".") and not domain.endswith("."))

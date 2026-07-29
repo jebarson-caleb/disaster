@@ -14,10 +14,12 @@ MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
 BASELINE_REVISION = "20260721_01"
 SECURITY_REVISION = "20260721_02"
 MFA_REVISION = "20260721_03"
-HEAD_REVISION = "20260727_04"
+ONBOARDING_REVISION = "20260727_04"
+HEAD_REVISION = "20260729_05"
 SECURITY_TABLES = {"account_security", "audit_events", "auth_sessions"}
 MFA_TABLES = {"mfa_credentials", "mfa_challenges"}
-POST_BASELINE_TABLES = SECURITY_TABLES | MFA_TABLES
+RECOVERY_TABLES = {"password_reset_tokens"}
+POST_BASELINE_TABLES = SECURITY_TABLES | MFA_TABLES | RECOVERY_TABLES
 POSTGRESQL_MIGRATION_LOCK_ID = int.from_bytes(b"RSQC", byteorder="big")
 MYSQL_MIGRATION_LOCK_NAME = "resq_command_schema_migration"
 
@@ -73,6 +75,7 @@ def apply_schema_migrations():
                 missing_baseline = baseline_tables - table_names
                 existing_security = SECURITY_TABLES & table_names
                 existing_mfa = MFA_TABLES & table_names
+                existing_recovery = RECOVERY_TABLES & table_names
                 if missing_baseline:
                     missing = ", ".join(sorted(missing_baseline))
                     raise RuntimeError(
@@ -93,6 +96,8 @@ def apply_schema_migrations():
                     )
                 if existing_mfa and existing_security != SECURITY_TABLES:
                     raise RuntimeError("The existing unversioned database has MFA tables without the security schema")
+                if existing_recovery and existing_mfa != MFA_TABLES:
+                    raise RuntimeError("The existing unversioned database has recovery tables without the MFA schema")
 
                 if existing_mfa == MFA_TABLES:
                     auth_session_columns = {
@@ -110,7 +115,10 @@ def apply_schema_migrations():
                         "must_change_password" in account_security_columns
                         and {"hospital_id", "shelter_id", "ambulance_id"} <= role_profile_columns
                     )
-                    legacy_revision = HEAD_REVISION if onboarding_columns_present else MFA_REVISION
+                    if onboarding_columns_present:
+                        legacy_revision = HEAD_REVISION if existing_recovery else ONBOARDING_REVISION
+                    else:
+                        legacy_revision = MFA_REVISION
                 elif existing_security == SECURITY_TABLES:
                     legacy_revision = SECURITY_REVISION
                 else:

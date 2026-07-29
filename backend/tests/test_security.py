@@ -127,6 +127,72 @@ def test_readiness_and_production_configuration_gate(client, app):
     assert production_configuration_issues(safe_production) == []
 
 
+def test_optional_integration_configuration_is_fail_closed(app):
+    base = dict(app.config)
+    base.update(
+        APP_ENV="production",
+        SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
+        SECRET_KEY="a" * 64,
+        JWT_SECRET_KEY="b" * 64,
+        MFA_ENCRYPTION_KEY="vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=",
+        MFA_REQUIRED_ROLES={"Admin"},
+        DEMO_MODE=False,
+        AUTO_MIGRATE=True,
+        SESSION_COOKIE_SECURE=True,
+        CORS_ORIGINS=[],
+        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
+        BOOTSTRAP_ADMIN_PASSWORD="Production-Admin-Password-77",
+    )
+    invalid = {
+        **base,
+        "DONATION_PAYMENT_URL": "http://payments.example/checkout",
+        "OLLAMA_BASE_URL": "file:///private/model",
+        "RATELIMIT_STORAGE_URI": "redis://redis.example/0",
+        "SMTP_HOST": "smtp.example",
+        "SMTP_FROM_EMAIL": "",
+        "SMTP_USERNAME": "mailer",
+        "SMTP_PASSWORD": "",
+        "SMTP_USE_TLS": True,
+        "SMTP_USE_SSL": True,
+        "SMTP_PORT": 0,
+        "SMTP_TIMEOUT_SECONDS": 0,
+        "PUBLIC_BASE_URL": "http://resq.example/?source=unsafe",
+        "PASSWORD_RESET_MINUTES": 2,
+    }
+    issues = production_configuration_issues(invalid)
+    assert any("DONATION_PAYMENT_URL" in issue for issue in issues)
+    assert any("OLLAMA_BASE_URL" in issue for issue in issues)
+    assert any("RATELIMIT_STORAGE_URI" in issue for issue in issues)
+    assert any("SMTP_HOST and SMTP_FROM_EMAIL" in issue for issue in issues)
+    assert any("SMTP_USERNAME and SMTP_PASSWORD" in issue for issue in issues)
+    assert any("cannot both" in issue for issue in issues)
+    assert any("SMTP_PORT" in issue for issue in issues)
+    assert any("SMTP_TIMEOUT_SECONDS" in issue for issue in issues)
+    assert any("PUBLIC_BASE_URL" in issue for issue in issues)
+    assert any("PASSWORD_RESET_MINUTES" in issue for issue in issues)
+
+    configured = {
+        **base,
+        "DONATION_PAYMENT_URL": "https://payments.example/checkout",
+        "OLLAMA_BASE_URL": "https://private-ai.example",
+        "RATELIMIT_STORAGE_URI": "rediss://redis.example/0",
+        "SMTP_HOST": "smtp.example",
+        "SMTP_FROM_EMAIL": "security@resq.example",
+        "SMTP_USERNAME": "mailer",
+        "SMTP_PASSWORD": "private-mail-password",
+        "SMTP_USE_TLS": True,
+        "SMTP_USE_SSL": False,
+        "SMTP_PORT": 587,
+        "SMTP_TIMEOUT_SECONDS": 8,
+        "PUBLIC_BASE_URL": "https://resq.example",
+        "PASSWORD_RESET_MINUTES": 30,
+    }
+    assert production_configuration_issues(configured) == []
+
+    invalid_sender = {**configured, "SMTP_FROM_EMAIL": "ResQ Security <security@resq.example>"}
+    assert any("SMTP_FROM_EMAIL" in issue for issue in production_configuration_issues(invalid_sender))
+
+
 def test_password_change_revokes_previous_session(client):
     registered = client.post(
         "/api/v1/auth/register",

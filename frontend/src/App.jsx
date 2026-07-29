@@ -58,6 +58,7 @@ import {
   api,
   beginMfaSetup,
   changePassword,
+  completePasswordReset,
   completeMfaLogin,
   confirmMfaSetup,
   disableMfa,
@@ -69,6 +70,7 @@ import {
   openDemoSession,
   regenerateMfaRecoveryCodes,
   register,
+  requestPasswordReset,
   revokeSession,
   restoreSession,
 } from './services/api.js';
@@ -199,6 +201,7 @@ const emptyResponseHub = {
 };
 const emptyAuthDraft = { name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' };
 const emptyPasswordDraft = { current_password: '', new_password: '', new_password_confirmation: '' };
+const emptyRecoveryDraft = { email: '', new_password: '', new_password_confirmation: '' };
 const emptyProvisionDraft = {
   name: '',
   email: '',
@@ -243,9 +246,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionMode, setSessionMode] = useState(DEMO_ENABLED ? 'demo' : 'checking');
   const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
-  const [authMode, setAuthMode] = useState('login');
+  const [passwordResetToken, setPasswordResetToken] = useState(
+    () => new URLSearchParams(window.location.search).get('reset_token') || '',
+  );
+  const [authMode, setAuthMode] = useState(passwordResetToken ? 'reset' : 'login');
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
   const [passwordDraft, setPasswordDraft] = useState(emptyPasswordDraft);
+  const [recoveryDraft, setRecoveryDraft] = useState(emptyRecoveryDraft);
   const [mfaChallenge, setMfaChallenge] = useState({ token: '', code: '' });
   const [mfaSession, setMfaSession] = useState({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
   const [mfaSetup, setMfaSetup] = useState({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
@@ -1185,6 +1192,50 @@ export default function App() {
     }
   }
 
+  async function submitPasswordResetRequest(event) {
+    event.preventDefault();
+    try {
+      const response = await requestPasswordReset({ email: recoveryDraft.email });
+      setRecoveryDraft((current) => ({ ...current, email: '' }));
+      setOperatorNotice(response.message);
+      if (response.recovery_available) setAuthMode('login');
+    } catch (error) {
+      setOperatorNotice(`Password recovery request failed: ${error.message}`);
+    }
+  }
+
+  async function submitPasswordResetCompletion(event) {
+    event.preventDefault();
+    if (!passwordResetToken) {
+      setOperatorNotice('Password reset failed: the reset link is missing');
+      return;
+    }
+    if (recoveryDraft.new_password !== recoveryDraft.new_password_confirmation) {
+      setOperatorNotice('Password reset failed: password confirmation does not match');
+      return;
+    }
+    try {
+      const response = await completePasswordReset({
+        token: passwordResetToken,
+        new_password: recoveryDraft.new_password,
+      });
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('reset_token');
+      window.history.replaceState({}, document.title, cleanUrl);
+      setPasswordResetToken('');
+      setRecoveryDraft(emptyRecoveryDraft);
+      setAuthMode('login');
+      setOperatorNotice(response.message);
+    } catch (error) {
+      setRecoveryDraft((current) => ({
+        ...current,
+        new_password: '',
+        new_password_confirmation: '',
+      }));
+      setOperatorNotice(`Password reset failed: ${error.message}`);
+    }
+  }
+
   async function submitMfaChallenge(event) {
     event.preventDefault();
     try {
@@ -1463,6 +1514,11 @@ export default function App() {
             draft={authDraft}
             setDraft={setAuthDraft}
             onSubmit={submitAuthentication}
+            recoveryDraft={recoveryDraft}
+            setRecoveryDraft={setRecoveryDraft}
+            passwordResetToken={passwordResetToken}
+            onPasswordResetRequest={submitPasswordResetRequest}
+            onPasswordResetComplete={submitPasswordResetCompletion}
             currentUser={currentUser}
             sessionMode={sessionMode}
             demoEnabled={false}
@@ -1605,6 +1661,11 @@ export default function App() {
             draft={authDraft}
             setDraft={setAuthDraft}
             onSubmit={submitAuthentication}
+            recoveryDraft={recoveryDraft}
+            setRecoveryDraft={setRecoveryDraft}
+            passwordResetToken={passwordResetToken}
+            onPasswordResetRequest={submitPasswordResetRequest}
+            onPasswordResetComplete={submitPasswordResetCompletion}
             currentUser={currentUser}
             sessionMode={sessionMode}
             demoEnabled={DEMO_ENABLED}
@@ -1839,6 +1900,11 @@ function AccountPanel({
   draft,
   setDraft,
   onSubmit,
+  recoveryDraft,
+  setRecoveryDraft,
+  passwordResetToken,
+  onPasswordResetRequest,
+  onPasswordResetComplete,
   currentUser,
   sessionMode,
   demoEnabled,
@@ -1866,11 +1932,18 @@ function AccountPanel({
   const hasAccountSession = sessionMode === 'account' && Boolean(currentUser);
   const awaitingMfa = Boolean(mfaChallenge?.token);
   const passwordChangeRequired = Boolean(currentUser?.password_change_required);
+  const accessTitle = mode === 'register'
+    ? 'Create a citizen or volunteer account'
+    : mode === 'forgot'
+      ? 'Request a password reset link'
+      : mode === 'reset'
+        ? 'Choose a new account password'
+        : 'Sign in to your operational account';
   return (
     <section className="panel account-panel" aria-label="Account access">
       <div>
         <p className="eyebrow">Authenticated access</p>
-        <h2>{hasAccountSession ? 'Your operational account' : mode === 'login' ? 'Sign in to your operational account' : 'Create a citizen or volunteer account'}</h2>
+        <h2>{hasAccountSession ? 'Your operational account' : accessTitle}</h2>
         <span>
           {hasAccountSession
             ? `Signed in as ${currentUser?.name} (${currentUser?.role})`
@@ -1880,7 +1953,7 @@ function AccountPanel({
         </span>
       </div>
       {!hasAccountSession && notice && <p className="account-notice" role="status">{notice}</p>}
-      {!hasAccountSession && !awaitingMfa && (
+      {!hasAccountSession && !awaitingMfa && ['login', 'register'].includes(mode) && (
         <form className="account-form" onSubmit={onSubmit}>
           {mode === 'register' && (
             <>
@@ -1898,7 +1971,56 @@ function AccountPanel({
             <UserRound size={18} /> {mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
           {mode === 'login' && (
-            <p className="muted-copy">Forgot your password? Ask your organization’s ResQ administrator to verify your identity and issue a temporary replacement.</p>
+            <button type="button" className="compact-button secondary-button" onClick={() => setMode('forgot')}>
+              Forgot password
+            </button>
+          )}
+        </form>
+      )}
+      {!hasAccountSession && !awaitingMfa && mode === 'forgot' && (
+        <form className="account-form" onSubmit={onPasswordResetRequest}>
+          <p className="muted-copy">
+            Enter the account email. If secure email recovery is configured and the account is active, a short-lived single-use link will be sent.
+          </p>
+          <Input
+            label="Account email"
+            type="email"
+            value={recoveryDraft.email}
+            onChange={(value) => setRecoveryDraft({ ...recoveryDraft, email: value })}
+            required
+            autoComplete="email"
+          />
+          <button className="primary-action" type="submit">Send reset link</button>
+          <p className="muted-copy">If email recovery is unavailable, an administrator can verify your identity and issue a temporary password.</p>
+        </form>
+      )}
+      {!hasAccountSession && !awaitingMfa && mode === 'reset' && (
+        <form className="account-form" onSubmit={onPasswordResetComplete}>
+          {passwordResetToken ? (
+            <>
+              <p className="muted-copy">This reset link is single-use. Completing it signs out every active device; configured MFA remains required.</p>
+              <Input
+                label="New password (15+ characters)"
+                type="password"
+                value={recoveryDraft.new_password}
+                onChange={(value) => setRecoveryDraft({ ...recoveryDraft, new_password: value })}
+                required
+                minLength={15}
+                autoComplete="new-password"
+              />
+              <Input
+                label="Confirm new password"
+                type="password"
+                value={recoveryDraft.new_password_confirmation}
+                onChange={(value) => setRecoveryDraft({ ...recoveryDraft, new_password_confirmation: value })}
+                required
+                minLength={15}
+                autoComplete="new-password"
+              />
+              <button className="primary-action" type="submit">Reset password</button>
+            </>
+          ) : (
+            <p className="muted-copy">The password reset token is missing. Request a new link or contact your administrator.</p>
           )}
         </form>
       )}
@@ -1987,10 +2109,13 @@ function AccountPanel({
         </section>
       )}
       <div className="account-actions">
-        {!hasAccountSession && !awaitingMfa && (
+        {!hasAccountSession && !awaitingMfa && ['login', 'register'].includes(mode) && (
           <button type="button" className="compact-button secondary-button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'Create an account' : 'I already have an account'}
           </button>
+        )}
+        {!hasAccountSession && !awaitingMfa && ['forgot', 'reset'].includes(mode) && (
+          <button type="button" className="compact-button secondary-button" onClick={() => setMode('login')}>Back to sign in</button>
         )}
         {hasAccountSession && onLogout && (
           <button type="button" className="compact-button secondary-button" onClick={onLogout}>Sign out</button>

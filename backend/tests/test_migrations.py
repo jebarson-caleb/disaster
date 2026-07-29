@@ -8,6 +8,7 @@ from app.bootstrap import (
     HEAD_REVISION,
     MFA_REVISION,
     MIGRATIONS_DIRECTORY,
+    ONBOARDING_REVISION,
     SECURITY_REVISION,
     initialize_database,
 )
@@ -37,7 +38,14 @@ def test_fresh_database_migrates_to_head_and_is_idempotent(tmp_path):
         initialize_database()
 
         tables = set(inspect(db.engine).get_table_names())
-        assert {"users", "account_security", "auth_sessions", "audit_events", "alembic_version"} <= tables
+        assert {
+            "users",
+            "account_security",
+            "auth_sessions",
+            "audit_events",
+            "password_reset_tokens",
+            "alembic_version",
+        } <= tables
         assert "must_change_password" in {
             column["name"] for column in inspect(db.engine).get_columns("account_security")
         }
@@ -144,6 +152,21 @@ def test_unversioned_mfa_release_upgrades_to_secure_onboarding_schema(tmp_path):
         assert {"hospital_id", "shelter_id", "ambulance_id"} <= {
             column["name"] for column in inspect(db.engine).get_columns("role_profiles")
         }
+        assert current_revision() == HEAD_REVISION
+        db.session.remove()
+        db.engine.dispose()
+
+
+def test_unversioned_onboarding_release_upgrades_to_password_recovery(tmp_path):
+    application = build_migration_app(tmp_path / "onboarding-release.db")
+    with application.app_context():
+        upgrade(directory=str(MIGRATIONS_DIRECTORY), revision=ONBOARDING_REVISION)
+        db.session.execute(text("DROP TABLE alembic_version"))
+        db.session.commit()
+
+        initialize_database()
+
+        assert "password_reset_tokens" in set(inspect(db.engine).get_table_names())
         assert current_revision() == HEAD_REVISION
         db.session.remove()
         db.engine.dispose()

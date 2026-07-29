@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 import pytest
 from werkzeug.security import generate_password_hash
 
+from app.auth import digest, utcnow
 from app.extensions import db
 from app.maintenance import PURGE_CONFIRMATION, TRAINING_EMAILS, build_training_cleanup_plan, purge_training_data
 from app.models import (
@@ -10,6 +13,7 @@ from app.models import (
     Disaster,
     Hospital,
     Notification,
+    PasswordResetToken,
     RoleProfile,
     Shelter,
     User,
@@ -83,6 +87,13 @@ def create_training_fixtures():
         user_by_role[role] = user
 
     db.session.add(Volunteer(user_id=user_by_role["Volunteer"].id, skills="training", availability_status="available"))
+    db.session.add(
+        PasswordResetToken(
+            user_id=user_by_role["Citizen"].id,
+            token_hash=digest("training-password-reset-token"),
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+    )
     db.session.add(AuditEvent(event_type="training_login", user_id=user_by_role["Citizen"].id, outcome="success"))
     db.session.commit()
     return user_by_role
@@ -103,6 +114,7 @@ def test_training_cleanup_purges_only_exact_unreferenced_fixtures(app):
         plan = build_training_cleanup_plan()
         assert plan.state == "ready"
         assert plan.records_to_remove["users"] == 8
+        assert plan.records_to_remove["password_reset_tokens"] == 1
         assert plan.records_to_remove["audit_events_anonymized"] == 1
 
         result = purge_training_data(PURGE_CONFIRMATION)

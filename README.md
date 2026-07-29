@@ -22,6 +22,7 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - 15-character minimum passwords, scrypt hashing, login throttling, and timed account lockout
 - Mandatory replacement of administrator-issued temporary passwords before any operational API is available
 - Encrypted RFC 6238 authenticator MFA, single-use challenges, replay protection, recovery codes, and mandatory privileged-role enrollment
+- Hashed, expiring, single-use email password-recovery tokens with full session revocation after reset
 - Server-side idle and absolute session expiry, logout, in-app session listing, and per-device revocation
 - Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
@@ -42,6 +43,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 - Hospital/shelter capacity, resource inventory, transactional distribution, volunteer assignment, welfare checks, and isolated-survivor supply cases
 - Consent-based device location, auditable donation campaigns, offline citizen submission queue, reconnect replay, Leaflet maps, and Chart.js analytics
 - Optional Ollama explanations; operational decisions continue with deterministic rules if Ollama is unavailable
+- Standard SMTP password recovery that remains disabled until a verified sender, public URL, and provider credentials are configured
 
 The feature-to-problem mapping is documented in [Hackathon alignment](docs/HACKATHON_ALIGNMENT.md).
 The provisioning, MFA, workspace, and authorization expectations for every login are documented in [Role access](docs/ROLE_ACCESS.md).

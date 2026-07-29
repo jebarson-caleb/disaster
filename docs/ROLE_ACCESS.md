@@ -28,11 +28,12 @@ Hospital, shelter, and ambulance accounts must be linked to their managed record
 2. In **User Access**, create or verify the accounts the incident organization has authorized.
 3. Bind hospital, shelter, and ambulance users to the correct operational record.
 4. Deliver each temporary password through an approved secure channel; never send it in a public channel or commit it to source control.
-5. In **Operational Setup**, add resource inventory, professional responder units, and any verified donation campaign.
-6. Ask every user to replace the temporary password, enroll MFA when required, store recovery codes offline, and review active sessions.
-7. Deactivate departed or unverified users immediately. A deactivation, password reset, or administrator-assisted MFA reset revokes their active sessions.
-8. Use **User Access → Reset MFA** only after verifying the user out of band when every authenticator and recovery code is lost. The reset is audit logged; privileged roles remain locked until a new authenticator is enrolled.
+5. When SMTP recovery is enabled, verify that **Forgot password** delivers an expiring, single-use link from the approved sender. Otherwise, use the administrator-assisted reset flow after an out-of-band identity check.
+6. In **Operational Setup**, add resource inventory, professional responder units, and any verified donation campaign.
+7. Ask every user to replace the temporary password, enroll MFA when required, store recovery codes offline, and review active sessions.
+8. Deactivate departed or unverified users immediately. A deactivation, password reset, or administrator-assisted MFA reset revokes their active sessions.
+9. Use **User Access → Reset MFA** only after verifying the user out of band when every authenticator and recovery code is lost. The reset is audit logged; privileged roles remain locked until a new authenticator is enrolled.
 
 ## Acceptance evidence
 
-The backend acceptance suite provisions all nine roles, exercises temporary-password replacement, completes required MFA, opens each role’s bootstrap workspace, verifies facility ownership, checks citizen case isolation, and exercises resource/responder/campaign setup. The production smoke workflow separately verifies the public UI, liveness, database/configuration readiness, authentication boundary, and security headers.
+The backend acceptance suite provisions all nine roles, exercises temporary-password replacement and secure self-service recovery, completes required MFA, opens each role’s bootstrap workspace, verifies facility ownership, checks citizen case isolation, and exercises resource/responder/campaign setup. The production smoke workflow separately verifies the public UI, liveness, database/configuration readiness, authentication and recovery boundaries, demo-mode isolation, and security headers.

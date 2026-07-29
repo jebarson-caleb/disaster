@@ -1,5 +1,16 @@
+from urllib.parse import parse_qs, urlsplit
+
 from app.extensions import db
-from app.models import Ambulance, HospitalNotification, LocationPing, ResponderUnit, ResponseDispatch, Volunteer
+from app.models import (
+    Ambulance,
+    AuditEvent,
+    Donation,
+    HospitalNotification,
+    LocationPing,
+    ResponderUnit,
+    ResponseDispatch,
+    Volunteer,
+)
 from app.seed import seed_demo_data
 
 
@@ -213,3 +224,64 @@ def test_donation_campaign_pledge_and_confirmation(client, app):
     assert confirmed.status_code == 200
     refreshed = client.get("/api/v1/donation-campaigns").get_json()["campaigns"][0]
     assert refreshed["confirmed_amount"] == 1500.0
+    with app.app_context():
+        assert AuditEvent.query.filter_by(
+            event_type="donation.status_update",
+            outcome="success",
+        ).count() == 1
+
+
+def test_donation_checkout_and_inputs_are_safe(client, app):
+    with app.app_context():
+        seed_demo_data()
+    app.config["DONATION_PAYMENT_URL"] = "https://payments.example/checkout?merchant=resq#secure"
+    campaign = client.get("/api/v1/donation-campaigns").get_json()["campaigns"][0]
+
+    for amount in ("NaN", "Infinity", "-Infinity"):
+        invalid = client.post(
+            "/api/v1/donations",
+            json={
+                "campaign_id": campaign["id"],
+                "donor_name": "Invalid Amount",
+                "donor_email": "invalid@example.com",
+                "amount": amount,
+            },
+        )
+        assert invalid.status_code == 400
+    invalid_email = client.post(
+        "/api/v1/donations",
+        json={
+            "campaign_id": campaign["id"],
+            "donor_name": "Invalid Email",
+            "donor_email": "not-an-email",
+            "amount": 500,
+        },
+    )
+    assert invalid_email.status_code == 400
+
+    created = client.post(
+        "/api/v1/donations",
+        json={
+            "campaign_id": campaign["id"],
+            "donor_name": "Secure Donor",
+            "donor_email": "secure-donor@example.com",
+            "amount": "1250.50",
+        },
+    )
+    assert created.status_code == 201
+    payload = created.get_json()
+    assert payload["donation"]["status"] == "pending_payment"
+    checkout = urlsplit(payload["checkout_url"])
+    assert (checkout.scheme, checkout.netloc, checkout.path, checkout.fragment) == (
+        "https",
+        "payments.example",
+        "/checkout",
+        "secure",
+    )
+    query = parse_qs(checkout.query)
+    assert query["merchant"] == ["resq"]
+    assert query["reference"] == [payload["donation"]["reference"]]
+    assert query["amount"] == ["1250.50"]
+    assert query["currency"] == [payload["donation"]["currency"]]
+    with app.app_context():
+        assert Donation.query.count() == 1

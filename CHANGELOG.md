@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## 1.2.0 - 2026-07-29
+
+### Added
+
+- Standard SMTP self-service password recovery with hashed, expiring, single-use tokens and a complete browser flow.
+- Data-preserving password-recovery migration and upgrade coverage from every previously supported schema release.
+- Production validation for optional payment, Ollama, Redis, SMTP, and public-base URL configuration.
+
+### Changed
+
+- Completing password recovery revokes all active sessions and pending password-derived MFA challenges while preserving configured MFA.
+- Optional Ollama prompts now use a strict allowlist of non-identifying operational fields.
+- Hosted donation checkout URLs preserve approved provider parameters and fragments while safely adding the auditable reference, amount, and currency.
+
+### Security
+
+- Password-reset requests use generic anti-enumeration responses and rate limits; failed mail delivery invalidates the generated token.
+- Donation inputs reject non-finite amounts, malformed email addresses, and invalid donor names.
+- Donation status changes are recorded in the security/operations audit trail.
+
 ## 1.1.3 - 2026-07-29
 
 ### Added

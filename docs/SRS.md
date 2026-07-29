@@ -7,6 +7,7 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 ## Functional Requirements
 
 - Users can register and log in by role.
+- Users can request a non-enumerating, expiring, single-use password-reset link when an approved email provider is configured; completing recovery revokes existing sessions and preserves MFA requirements.
 - Administrator-issued credentials must be replaced on first login; privileged roles must complete authenticator MFA before operational access.
 - Hospital, shelter, and ambulance accounts are assigned to their managed operational record and cannot mutate another facility.
 - Citizens can report disasters with location, type, affected people, severity hint, and optional image URL.
@@ -38,6 +39,7 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - Backend configuration must support MySQL through environment variables.
 - Tests must cover auth, core emergency workflows, facility updates, and AI endpoints.
 - Acceptance tests must cover onboarding and workspace access for every supported role.
+- Acceptance tests must cover password-recovery privacy, expiry, single-use enforcement, delivery failure, and session revocation.
 - Sensitive welfare, supply, and location records must be filtered by authenticated role and requester ownership.
 
 ## Actors
@@ -64,3 +66,4 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 - A citizen can submit and track both a family welfare check and an isolated-survivor supply case.
 - Location sharing fails without explicit consent and succeeds with permission and coordinates.
 - A donation pledge receives a unique reference and confirmed payments update campaign totals.
+- A password-reset request does not reveal whether an account exists, and a valid reset link can be used only once.
