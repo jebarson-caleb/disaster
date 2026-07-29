@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 - Authentication mode changes now remount and clear credential fields so browser-autofilled sign-in secrets cannot carry into public registration.
 - Leaving a password-reset link now removes its token from the address bar and clears the recovery draft.
 - Account registration and recovery screens now present mode-specific guidance and explicit autofill field names.
+- Production smoke now exercises account-mode credential isolation, recovery navigation, and mobile login usability in Chromium without creating users.
 
 ## 1.2.0 - 2026-07-29
 

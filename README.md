@@ -87,9 +87,11 @@ npm ci
 npm audit --audit-level=high
 npm run lint
 npm run build
+npx playwright install chromium
+BASE_URL=https://disaster-delta-eight.vercel.app npm run test:e2e -- --project=chromium
 ```
 
-The liveness endpoint is `/api/v1/health`; the database/configuration readiness endpoint is `/api/v1/ready`.
+The browser smoke only fills synthetic values and does not submit registration, login, or recovery forms. On PowerShell, set `$env:BASE_URL` before the test command. The liveness endpoint is `/api/v1/health`; the database/configuration readiness endpoint is `/api/v1/ready`.
 
 ## Documentation
 

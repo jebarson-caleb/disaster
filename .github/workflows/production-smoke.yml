@@ -18,7 +18,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     environment:
       name: production
       url: https://disaster-delta-eight.vercel.app
@@ -182,3 +182,21 @@ jobs:
               assert any(value in line for line in matching), f"unexpected {name}"
 
           print("Production root, readiness, auth/recovery boundaries, demo isolation, and headers are healthy.")
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install browser-smoke dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Exercise public account flows in Chromium
+        working-directory: frontend
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+        run: npm run test:e2e -- --project=chromium
