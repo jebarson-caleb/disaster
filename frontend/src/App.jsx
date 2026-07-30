@@ -205,6 +205,11 @@ const emptyResponseHub = {
   dispatches: [],
   responder_units: [],
 };
+const emptyIntegrationReadiness = {
+  generated_at: null,
+  summary: { active: 0, fallback: 0, total: 0, external_activation_complete: false },
+  integrations: [],
+};
 const emptyAuthDraft = { name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' };
 const emptyPasswordDraft = { current_password: '', new_password: '', new_password_confirmation: '' };
 const emptyRecoveryDraft = { email: '', new_password: '', new_password_confirmation: '' };
@@ -271,6 +276,7 @@ export default function App() {
   const [mfaAction, setMfaAction] = useState({ current_password: '', code: '' });
   const [accountSessions, setAccountSessions] = useState([]);
   const [managedUsers, setManagedUsers] = useState([]);
+  const [integrationReadiness, setIntegrationReadiness] = useState(emptyIntegrationReadiness);
   const [provisionDraft, setProvisionDraft] = useState(emptyProvisionDraft);
   const [resetDraft, setResetDraft] = useState({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
   const [mfaResetDraft, setMfaResetDraft] = useState({ user_id: '', admin_password: '' });
@@ -514,6 +520,7 @@ export default function App() {
       setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
       setMfaAction({ current_password: '', code: '' });
       setAccountSessions([]);
+      setIntegrationReadiness(emptyIntegrationReadiness);
       setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
       setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
       setMfaResetDraft({ user_id: '', admin_password: '' });
@@ -573,6 +580,21 @@ export default function App() {
       })
       .catch((error) => {
         if (!cancelled) setOperatorNotice(`User access list could not be loaded: ${error.message}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleActiveView, currentUser]);
+
+  useEffect(() => {
+    if (visibleActiveView !== 'setup' || currentUser?.role !== 'Admin') return;
+    let cancelled = false;
+    api.adminIntegrations()
+      .then((readiness) => {
+        if (!cancelled) setIntegrationReadiness(readiness);
+      })
+      .catch((error) => {
+        if (!cancelled) setOperatorNotice(`Integration readiness could not be loaded: ${error.message}`);
       });
     return () => {
       cancelled = true;
@@ -1533,6 +1555,7 @@ export default function App() {
     setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
     setMfaAction({ current_password: '', code: '' });
     setAccountSessions([]);
+    setIntegrationReadiness(emptyIntegrationReadiness);
     setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
     setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
     setMfaResetDraft({ user_id: '', admin_password: '' });
@@ -1906,6 +1929,7 @@ export default function App() {
             <MotionPage key="setup" reduceMotion={reduceMotion}>
               <OperationalSetupView
                 disasters={disasters}
+                integrationReadiness={integrationReadiness}
                 resourceDraft={resourceDraft}
                 setResourceDraft={setResourceDraft}
                 onResourceSubmit={submitResource}
@@ -2369,6 +2393,7 @@ function UserAccessView({
 
 function OperationalSetupView({
   disasters,
+  integrationReadiness,
   resourceDraft,
   setResourceDraft,
   onResourceSubmit,
@@ -2385,6 +2410,8 @@ function OperationalSetupView({
   ];
   return (
     <div className="access-layout">
+      <IntegrationReadinessPanel readiness={integrationReadiness} />
+
       <section className="panel">
         <PanelTitle eyebrow="Logistics baseline" title="Add resource inventory" />
         <p className="muted-copy">Resources become available to NGO and administrator distribution planning immediately.</p>
@@ -2426,6 +2453,59 @@ function OperationalSetupView({
         </form>
       </section>
     </div>
+  );
+}
+
+function IntegrationReadinessPanel({ readiness }) {
+  const { integrations = [], summary = {} } = readiness || emptyIntegrationReadiness;
+  return (
+    <section className="panel integration-readiness-panel">
+      <div className="panel-header integration-readiness-header">
+        <div>
+          <p>Production connections</p>
+          <h2>Integration readiness</h2>
+        </div>
+        <div className="integration-summary" aria-label="Integration readiness summary">
+          <StatusPill value={`${summary.active || 0} active`} />
+          <StatusPill value={`${summary.fallback || 0} fallback`} />
+        </div>
+      </div>
+      <p className="muted-copy">
+        Active means the approved production connection is configured. Fallback means the feature remains usable
+        in its documented safe mode until an owner adds the listed variables and completes provider acceptance.
+      </p>
+      <div className="integration-readiness-grid">
+        {integrations.map((integration) => (
+          <article className="integration-readiness-card" key={integration.id}>
+            <div className="integration-readiness-title">
+              <strong>{integration.name}</strong>
+              <StatusPill value={integration.status === 'active' ? 'Active' : 'Fallback'} />
+            </div>
+            <p>{integration.mode}</p>
+            {integration.status === 'fallback' && integration.activation_variables.length > 0 && (
+              <span>
+                Activate with{' '}
+                {integration.activation_variables.map((variable, index) => (
+                  <React.Fragment key={variable}>
+                    {index > 0 ? ', ' : ''}
+                    <code>{variable}</code>
+                  </React.Fragment>
+                ))}
+              </span>
+            )}
+            {integration.status === 'active' && (
+              <span>{integration.required_for_core ? 'Required core service is connected.' : 'Configured for this deployment.'}</span>
+            )}
+          </article>
+        ))}
+        {!integrations.length && (
+          <EmptyState
+            title="Readiness is loading"
+            detail="Provider state will appear without exposing endpoint addresses, accounts, or secrets."
+          />
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -5,7 +5,7 @@ export default function StatusPill({ value }) {
   const tone =
     normalized.includes('critical') || normalized.includes('pending') || normalized.includes('maintenance') || normalized.includes('failed') || normalized.includes('unavailable') || normalized.includes('offline')
       ? 'danger'
-      : normalized.includes('high') || normalized.includes('assigned') || normalized.includes('busy') || normalized.includes('dispatched') || normalized.includes('not configured')
+      : normalized.includes('high') || normalized.includes('assigned') || normalized.includes('busy') || normalized.includes('dispatched') || normalized.includes('not configured') || normalized.includes('fallback')
         ? 'warning'
         : normalized.includes('medium') || normalized.includes('route') || normalized.includes('monitoring') || normalized.includes('triage') || normalized.includes('gis')
           ? 'info'

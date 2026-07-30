@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## 1.3.1 - 2026-07-30
+
+### Added
+
+- Administrator-only integration readiness reporting with active/fallback modes and required environment-variable names.
+- A secret-safe Operational Setup panel covering the database, public-warning gateway, email recovery, hosted payments, shared throttling, private AI, and maps.
+- Authorization, privacy, configured-provider, and full-stack browser acceptance coverage for the readiness view.
+
 ## 1.3.0 - 2026-07-29
 
 ### Added

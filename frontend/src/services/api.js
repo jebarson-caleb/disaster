@@ -99,6 +99,7 @@ export function revokeSession(id) {
 export const api = {
   bootstrap: () => request('/operations/bootstrap'),
   adminUsers: () => request('/admin/users'),
+  adminIntegrations: () => request('/admin/integrations'),
   provisionUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUserAccess: (id, payload) => request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   resetUserPassword: (id, payload) => request(`/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify(payload) }),

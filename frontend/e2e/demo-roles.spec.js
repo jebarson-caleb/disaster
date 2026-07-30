@@ -129,6 +129,9 @@ test.describe('controlled full-stack role acceptance', () => {
         await expect(navigationButton).toBeVisible();
         await navigationButton.click();
         await expect(page.getByRole('heading', { name: viewHeading, level: 2 })).toBeVisible();
+        if (navigationLabel === 'Operational Setup') {
+          await expect(page.getByRole('heading', { name: 'Integration readiness', level: 2 })).toBeVisible();
+        }
       }
 
       if (workspace.dashboardAction) {

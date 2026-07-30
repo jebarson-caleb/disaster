@@ -29,7 +29,7 @@ Hospital, shelter, and ambulance accounts must be linked to their managed record
 3. Bind hospital, shelter, and ambulance users to the correct operational record.
 4. Deliver each temporary password through an approved secure channel; never send it in a public channel or commit it to source control.
 5. When SMTP recovery is enabled, verify that **Forgot password** delivers an expiring, single-use link from the approved sender. Otherwise, use the administrator-assisted reset flow after an out-of-band identity check.
-6. In **Operational Setup**, add resource inventory, professional responder units, and any verified donation campaign.
+6. In **Operational Setup**, review **Integration readiness**, then add resource inventory, professional responder units, and any verified donation campaign. The readiness view reports active and fallback modes without exposing provider endpoints, accounts, or secrets.
 7. Ask every user to replace the temporary password, enroll MFA when required, store recovery codes offline, and review active sessions.
 8. Deactivate departed or unverified users immediately. A deactivation, password reset, or administrator-assisted MFA reset revokes their active sessions.
 9. Use **User Access → Reset MFA** only after verifying the user out of band when every authenticator and recovery code is lost. The reset is audit logged; privileged roles remain locked until a new authenticator is enrolled.

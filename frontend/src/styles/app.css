@@ -1937,6 +1937,52 @@ button {
 .muted-copy { color: var(--muted); }
 .access-users-panel { grid-column: 1 / -1; }
 
+.integration-readiness-panel {
+  grid-column: 1 / -1;
+}
+
+.integration-readiness-header,
+.integration-readiness-title,
+.integration-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.integration-summary {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.integration-readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.integration-readiness-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.integration-readiness-card p,
+.integration-readiness-card span {
+  margin: 0;
+  color: var(--muted);
+}
+
+.integration-readiness-card code {
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
 .managed-user-list { display: grid; gap: 10px; }
 
 .managed-user {
@@ -1968,6 +2014,7 @@ button {
   .access-layout,
   .access-form,
   .managed-user { grid-template-columns: 1fr; }
+  .integration-readiness-grid { grid-template-columns: 1fr; }
 
   .account-panel { margin: 12px 16px 0; }
   .recovery-code-grid { grid-template-columns: 1fr; }

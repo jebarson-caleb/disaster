@@ -31,6 +31,7 @@ from ..models import (
     User,
     Volunteer,
 )
+from ..services.integration_status_service import integration_readiness
 from .auth import VALID_ROLES, public_user
 
 admin_bp = Blueprint("admin", __name__)
@@ -39,6 +40,12 @@ FACILITY_ROLE_MODELS = {
     "Shelter": Shelter,
     "Ambulance": Ambulance,
 }
+
+
+@admin_bp.get("/integrations")
+@login_required(roles=["Admin"])
+def list_integration_readiness():
+    return jsonify(integration_readiness())
 
 
 @admin_bp.post("/users")

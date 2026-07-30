@@ -60,6 +60,8 @@ After deployment:
 8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions. Manual rescue and supply assignment must accept only a registered available asset, reserve it while active, and release it after completion or cancellation.
 9. Test account deactivation/reactivation, administrator-assisted password reset, active-session revocation, a non-critical alert, Citizen registration and tracking, mobile layout, location consent denial/approval, offline submission/reconnect, and the emergency hotline.
 
+The administrator-only **Operational Setup → Integration readiness** panel reports whether each optional provider is active or using its documented safe fallback. It exposes only capability names and the required environment-variable names; it never returns configured endpoint addresses, account names, credentials, or secrets. Treat it as a configuration inventory, not as a substitute for provider delivery, reconciliation, or recovery testing.
+
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
 The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. A headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials.
