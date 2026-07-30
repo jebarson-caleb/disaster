@@ -52,6 +52,8 @@ jobs:
           done
           test "$vercel_state" = "success"
 
+      - uses: actions/checkout@v7
+
       - name: Probe live application
         shell: bash
         run: |
@@ -148,6 +150,7 @@ jobs:
         shell: python {0}
         run: |
           import json
+          import os
           from pathlib import Path
 
           health = json.loads(Path("health.json").read_text())
@@ -156,6 +159,9 @@ jobs:
           recovery = json.loads(Path("recovery.json").read_text())
 
           assert health["status"] == "ok", health
+          expected_version = json.loads(Path("frontend/package.json").read_text())["version"]
+          assert health["version"] == expected_version, (health, expected_version)
+          assert health["commit"] == os.environ["GITHUB_SHA"], health
           assert readiness["status"] == "ready", readiness
           assert readiness["checks"]["configuration"] is True, readiness
           assert readiness["checks"]["database"] is True, readiness
@@ -193,8 +199,6 @@ jobs:
               assert any(value in line for line in matching), f"unexpected {name}"
 
           print("Production root, readiness, auth/recovery boundaries, demo isolation, and headers are healthy.")
-
-      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:

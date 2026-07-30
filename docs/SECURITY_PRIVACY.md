@@ -18,6 +18,8 @@ Configured outbound public warnings are sent only to an approved HTTPS webhook a
 
 Runtime dependencies are pinned and checked in CI with `pip-audit` and `npm audit`. Backend and frontend linting, migration drift detection, warning-free tests, a 75% backend coverage floor, and the production frontend build are release gates. Dependabot proposes weekly Python and npm updates and monthly GitHub Actions updates; every update must pass the same gates before merge.
 
+The public liveness response exposes only the application version and source commit. Production smoke compares both values with the checked-out release so a stale or rolled-back public alias cannot silently pass release verification.
+
 This design follows the current [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [OWASP Multifactor Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html), and [IETF RFC 6238](https://www.rfc-editor.org/rfc/rfc6238).
 
 ## Personal and sensitive data

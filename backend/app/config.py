@@ -1,8 +1,11 @@
 import base64
 import os
+import re
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
+
+from .release import APPLICATION_VERSION, release_commit
 
 load_dotenv()
 
@@ -88,6 +91,9 @@ class Config:
     RATELIMIT_HEADERS_ENABLED = True
     RATELIMIT_ENABLED = os.getenv("RATELIMIT_ENABLED", "true").lower() in {"1", "true", "yes"}
     TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "true" if os.getenv("VERCEL") else "false").lower() in {"1", "true", "yes"}
+    RELEASE_VERSION = APPLICATION_VERSION
+    RELEASE_COMMIT = release_commit()
+    RUNNING_ON_VERCEL = bool(os.getenv("VERCEL"))
     BOOTSTRAP_ADMIN_EMAIL = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
     BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
     BOOTSTRAP_ADMIN_NAME = os.getenv("BOOTSTRAP_ADMIN_NAME", "Incident Commander")
@@ -132,6 +138,9 @@ def production_configuration_issues(config):
         issues.append("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required for first production access")
     elif len(config.get("BOOTSTRAP_ADMIN_PASSWORD", "")) < 15:
         issues.append("BOOTSTRAP_ADMIN_PASSWORD must contain at least 15 characters")
+    release_commit_value = str(config.get("RELEASE_COMMIT") or "")
+    if config.get("RUNNING_ON_VERCEL") and not re.fullmatch(r"[0-9a-f]{40}", release_commit_value):
+        issues.append("A 40-character Vercel Git commit SHA is required for production release provenance")
     payment_url = str(config.get("DONATION_PAYMENT_URL") or "")
     if payment_url and not _is_secure_public_url(payment_url):
         issues.append("DONATION_PAYMENT_URL must be an absolute HTTPS URL without embedded credentials")

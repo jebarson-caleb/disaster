@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## 1.3.2 - 2026-07-30
+
+### Added
+
+- Public version and Git-commit provenance in the liveness response without exposing configuration or secrets.
+- A Vercel readiness requirement for a valid Git commit SHA.
+- Production smoke enforcement that the public alias serves the exact pushed commit and application version.
+
 ## 1.3.1 - 2026-07-30
 
 ### Added

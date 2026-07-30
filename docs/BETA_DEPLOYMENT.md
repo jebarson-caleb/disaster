@@ -50,7 +50,7 @@ Keep `AUTO_MIGRATE=true` for the Vercel one-click flow. Teams that later move mi
 
 After deployment:
 
-1. Open `https://<deployment>/api/v1/health`; expect HTTP 200 and `status: ok`.
+1. Open `https://<deployment>/api/v1/health`; expect HTTP 200, `status: ok`, the deployed application `version`, and the exact 40-character Git `commit`. Vercel deployments without valid Git provenance fail readiness.
 2. Open `https://<deployment>/api/v1/ready`; expect HTTP 200, `status: ready`, and both checks `true`. A 503 means the release must not receive beta traffic; inspect Vercel function logs using the returned request ID.
 3. Open the site in a private browser. Confirm operational data is hidden behind the login screen.
 4. Sign in as the bootstrap administrator and replace the bootstrap password. The temporary-password gate must prevent access to operational data until this succeeds.

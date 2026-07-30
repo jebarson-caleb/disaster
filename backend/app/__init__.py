@@ -80,7 +80,14 @@ def create_app(config_object=Config):
     @app.get("/api/v1/health")
     @limiter.exempt
     def health():
-        return jsonify({"status": "ok", "service": "disaster-response-api"})
+        return jsonify(
+            {
+                "status": "ok",
+                "service": "disaster-response-api",
+                "version": app.config.get("RELEASE_VERSION"),
+                "commit": app.config.get("RELEASE_COMMIT") or None,
+            }
+        )
 
     @app.get("/api/v1/ready")
     @limiter.exempt
