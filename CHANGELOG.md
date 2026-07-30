@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## 1.3.3 - 2026-07-30
+
+### Added
+
+- A production-mode full-stack browser acceptance gate that signs every supported role in through the real account UI.
+- End-to-end MFA enrollment, recovery-code challenge, role-locking, and live-workspace verification for every privileged role.
+
 ## 1.3.2 - 2026-07-30
 
 ### Added

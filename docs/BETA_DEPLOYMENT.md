@@ -64,7 +64,7 @@ The administrator-only **Operational Setup → Integration readiness** panel rep
 
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
-The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. A headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials.
+The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. Its headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials. CI separately runs an isolated production-mode account environment where every role signs in through the real UI and every privileged role proves MFA enrollment plus a recovery-code challenge before its role-locked workspace opens.
 
 ## Real-user cutover and acceptance-data removal
 

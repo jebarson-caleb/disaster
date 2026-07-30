@@ -27,7 +27,7 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
 - Production login wall; demo data and role switching require explicit demo build/runtime flags
-- CI for linting, migration drift, warning-free tests, backend coverage, production builds, and dependency vulnerability audits
+- CI for linting, migration drift, warning-free tests, backend coverage, production builds, dependency vulnerability audits, and real-account browser login for every role
 - Pinned runtime dependencies with automated weekly update proposals
 - Versioned, data-preserving database migrations with serialized PostgreSQL/MySQL startup upgrades
 
