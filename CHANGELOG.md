@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented here.
 
+## 1.3.4 - 2026-07-31
+
+### Added
+
+- Guarded, dry-run-first provisioning and credential verification for the requested live test-role cohort.
+- Credential reissue limited to accounts previously created by the managed test-account command.
+- Production verification of password hashes, direct-login state, verified profiles, and required facility or volunteer bindings.
+
+### Changed
+
+- Sign-in accepts existing account passwords without applying the new-password length constraint in the browser; registration and password changes still enforce 15 or more characters.
+- Password authentication now opens the user’s server-authorized role workspace directly.
+- Managed live test accounts use reusable credentials and no first-login password-replacement gate.
+
+### Removed
+
+- MFA login challenges, enrollment, recovery-code controls, administrator MFA reset, and the production MFA-key requirement.
+
+### Security
+
+- Live test-role accounts require unique policy-compliant passwords and remain restricted by server-side role authorization.
+- Non-operational facility bindings start with zero capacity or offline status so incomplete configuration cannot be represented as an available emergency resource.
+
 ## 1.3.3 - 2026-07-30
 
 ### Added

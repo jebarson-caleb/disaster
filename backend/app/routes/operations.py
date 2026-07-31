@@ -366,7 +366,7 @@ def demo_session():
     user = User.query.filter_by(role=role).order_by(User.id).first()
     if user is None:
         return jsonify({"error": f"No demo user is configured for {role}"}), 404
-    response = session_response(user, mfa_state="not_required")
+    response = session_response(user)
     db.session.commit()
     return response
 

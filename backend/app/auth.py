@@ -73,9 +73,7 @@ def create_token(user, auth_session):
     return jwt.encode(payload, current_app.config["JWT_SECRET_KEY"], algorithm="HS256")
 
 
-def create_session(user, mfa_state=None):
-    from .mfa import required_for
-
+def create_session(user):
     now = utcnow()
     raw_token = secrets.token_urlsafe(48)
     csrf_token = secrets.token_urlsafe(32)
@@ -88,7 +86,8 @@ def create_session(user, mfa_state=None):
         last_seen_at=now,
         idle_expires_at=now + timedelta(minutes=current_app.config["SESSION_IDLE_MINUTES"]),
         absolute_expires_at=now + timedelta(hours=current_app.config["SESSION_ABSOLUTE_HOURS"]),
-        mfa_state=mfa_state or ("setup_required" if required_for(user) else "not_required"),
+        # Keep the legacy column populated for databases created before MFA was removed.
+        mfa_state="not_required",
     )
     db.session.add(auth_session)
     db.session.flush()
@@ -118,18 +117,16 @@ def clear_session_cookies(response):
     return response
 
 
-def session_response(user, status=200, mfa_state=None):
+def session_response(user, status=200):
     from .routes.auth import public_user
 
-    auth_session, raw_token, csrf_token, access_token = create_session(user, mfa_state=mfa_state)
+    auth_session, raw_token, csrf_token, access_token = create_session(user)
     user_payload = public_user(user)
     response = jsonify(
         {
             "user": user_payload,
             "token": access_token,
             "password_change_required": user_payload["password_change_required"],
-            "mfa_setup_required": auth_session.mfa_state == "setup_required",
-            "mfa_verified": auth_session.mfa_state == "verified",
         }
     )
     response.status_code = status
@@ -210,7 +207,6 @@ def enforce_csrf():
     if request.endpoint in {
         "auth.login",
         "auth.register",
-        "auth.complete_mfa_login",
         "auth.request_password_reset",
         "auth.complete_password_reset",
         "operations.demo_session",
@@ -286,24 +282,6 @@ def login_required(roles=None):
                         {
                             "error": "A password change is required before operational access",
                             "code": "password_change_required",
-                        }
-                    ),
-                    403,
-                )
-            enrollment_endpoints = {
-                "auth.me",
-                "auth.logout",
-                "auth.change_password",
-                "auth.mfa_status",
-                "auth.begin_mfa_setup",
-                "auth.confirm_mfa_setup",
-            }
-            if request.auth_session.mfa_state == "setup_required" and request.endpoint not in enrollment_endpoints:
-                return (
-                    jsonify(
-                        {
-                            "error": "Multi-factor authentication setup is required",
-                            "code": "mfa_setup_required",
                         }
                     ),
                     403,

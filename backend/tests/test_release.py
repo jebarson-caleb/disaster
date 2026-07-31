@@ -29,8 +29,6 @@ def test_vercel_production_requires_git_release_provenance(app):
         SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
         SECRET_KEY="a" * 64,
         JWT_SECRET_KEY="b" * 64,
-        MFA_ENCRYPTION_KEY="vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=",
-        MFA_REQUIRED_ROLES={"Admin"},
         DEMO_MODE=False,
         AUTO_MIGRATE=True,
         SESSION_COOKIE_SECURE=True,

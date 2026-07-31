@@ -7,7 +7,7 @@ Live beta: [disaster-delta-eight.vercel.app](https://disaster-delta-eight.vercel
 
 ResQ Command is a full-stack disaster-response platform for citizen reporting, rescue triage and dispatch, public warnings, hospitals, shelters, relief logistics, family welfare checks, supply requests, and donation pledges.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster&project-name=resq-command&repository-name=resq-command&env=DATABASE_URL%2CSECRET_KEY%2CJWT_SECRET_KEY%2CMFA_ENCRYPTION_KEY%2CBOOTSTRAP_ADMIN_EMAIL%2CBOOTSTRAP_ADMIN_PASSWORD&envDescription=Persistent%20PostgreSQL%2C%20two%20independent%2032%2B-character%20application%20secrets%2C%20a%20Fernet%20MFA%20key%2C%20and%20the%20first%20administrator.%20See%20the%20deployment%20guide.&envLink=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster%2Fblob%2Fmain%2Fdocs%2FBETA_DEPLOYMENT.md)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster&project-name=resq-command&repository-name=resq-command&env=DATABASE_URL%2CSECRET_KEY%2CJWT_SECRET_KEY%2CBOOTSTRAP_ADMIN_EMAIL%2CBOOTSTRAP_ADMIN_PASSWORD&envDescription=Persistent%20PostgreSQL%2C%20two%20independent%2032%2B-character%20application%20secrets%2C%20and%20the%20first%20administrator.%20See%20the%20deployment%20guide.&envLink=https%3A%2F%2Fgithub.com%2Fjebarson-caleb%2Fdisaster%2Fblob%2Fmain%2Fdocs%2FBETA_DEPLOYMENT.md)
 
 ## Deploy on Vercel
 
@@ -21,7 +21,7 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - CSRF validation for cookie-authenticated writes and short-lived bearer tokens for API clients
 - 15-character minimum passwords, scrypt hashing, login throttling, and timed account lockout
 - Mandatory replacement of administrator-issued temporary passwords before any operational API is available
-- Encrypted RFC 6238 authenticator MFA, single-use challenges, replay protection, recovery codes, and mandatory privileged-role enrollment
+- Direct password sign-in to a server-authorized, role-locked workspace
 - Hashed, expiring, single-use email password-recovery tokens with full session revocation after reset
 - Server-side idle and absolute session expiry, logout, in-app session listing, and per-device revocation
 - Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
@@ -36,7 +36,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 ## Features
 
 - Role-aware workspaces for citizens, administrators, police, fire, hospitals, shelters, ambulances, NGOs, and volunteers
-- Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password and lost-MFA recovery, and automatic session revocation
+- Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password recovery, and automatic session revocation
 - Operational Setup workspace for live resource inventory, responder units, verified donation campaigns, and secret-safe integration readiness
 - Incident reporting, deterministic damage scoring, rescue priority, automatic nearest-team/volunteer/ambulance dispatch, and hospital preparation
 - CAP-inspired public alerts, acknowledgements, India-wide alert aggregation, verified field updates, and safe-route advice
@@ -47,7 +47,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 - Standard SMTP password recovery that remains disabled until a verified sender, public URL, and provider credentials are configured
 
 The feature-to-problem mapping is documented in [Hackathon alignment](docs/HACKATHON_ALIGNMENT.md).
-The provisioning, MFA, workspace, and authorization expectations for every login are documented in [Role access](docs/ROLE_ACCESS.md).
+The provisioning, workspace, and authorization expectations for every login are documented in [Role access](docs/ROLE_ACCESS.md).
 
 ## Local development
 

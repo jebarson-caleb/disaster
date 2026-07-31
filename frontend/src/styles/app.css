@@ -1865,43 +1865,9 @@ button {
   background: #f0fdfa;
 }
 
-.mfa-recovery-panel,
 .account-panel > section.account-form {
   grid-column: 1 / -1;
 }
-
-.mfa-recovery-panel {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid #f59e0b;
-  border-radius: 12px;
-  background: #fffbeb;
-}
-
-.recovery-code-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.recovery-code-grid code,
-.mfa-secret code {
-  padding: 7px 9px;
-  border-radius: 7px;
-  background: #e2e8f0;
-  color: #0f172a;
-  letter-spacing: 0.06em;
-  overflow-wrap: anywhere;
-}
-
-.mfa-secret {
-  display: grid;
-  gap: 5px;
-  grid-column: 1 / -1;
-}
-
-.mfa-secret span { color: var(--muted); font-size: 0.82rem; }
 
 .access-layout {
   display: grid;

@@ -2,7 +2,7 @@
 
 import os
 
-APPLICATION_VERSION = "1.3.3"
+APPLICATION_VERSION = "1.3.4"
 
 
 def release_commit():

@@ -1,4 +1,3 @@
-import json
 import secrets
 import smtplib
 from datetime import timedelta
@@ -21,22 +20,10 @@ from ..auth import (
     verify_password,
 )
 from ..extensions import db, limiter
-from ..mfa import (
-    begin_setup,
-    enabled_credential,
-    generate_recovery_codes,
-    issue_challenge,
-    required_for,
-    set_recovery_codes,
-    verify_challenge,
-    verify_factor,
-    verify_totp,
-)
 from ..models import (
     AccountSecurity,
     AuthSession,
     MfaChallenge,
-    MfaCredential,
     PasswordResetToken,
     RoleProfile,
     User,
@@ -246,7 +233,7 @@ def complete_password_reset():
     )
     audit_event("account.password_reset_complete", "success", user.id)
     db.session.commit()
-    return jsonify({"message": "Password reset. Sign in with the new password; MFA remains required when enabled."})
+    return jsonify({"message": "Password reset. Sign in with the new password."})
 
 
 @auth_bp.post("/login")
@@ -284,51 +271,8 @@ def login():
     state.failed_login_attempts = 0
     state.locked_until = None
     state.last_login_at = now
-    if enabled_credential(user.id):
-        _, challenge_token = issue_challenge(user)
-        audit_event("account.login", "mfa_required", user.id)
-        db.session.commit()
-        return (
-            jsonify(
-                {
-                    "mfa_required": True,
-                    "challenge_token": challenge_token,
-                    "message": "Enter a code from your authenticator or a recovery code.",
-                }
-            ),
-            202,
-        )
-
-    mfa_state = "setup_required" if required_for(user) else "not_required"
-    response = session_response(user, mfa_state=mfa_state)
-    audit_event("account.login", "mfa_setup_required" if mfa_state == "setup_required" else "success", user.id)
-    db.session.commit()
-    return response
-
-
-@auth_bp.post("/mfa/challenge")
-@limiter.limit("10 per minute")
-def complete_mfa_login():
-    data = request.get_json(silent=True) or {}
-    challenge, factor = verify_challenge(data.get("challenge_token"), data.get("code"))
-    if challenge is None or factor is None:
-        audit_event(
-            "account.mfa_challenge",
-            "failure",
-            challenge.user_id if challenge else None,
-            "invalid_or_expired_challenge",
-        )
-        db.session.commit()
-        return jsonify({"error": "Invalid or expired verification code"}), 401
-
-    user = db.session.get(User, challenge.user_id)
-    if user is None or not user.is_active:
-        audit_event("account.mfa_challenge", "failure", challenge.user_id, "inactive_account")
-        db.session.commit()
-        return jsonify({"error": "Invalid or expired verification code"}), 401
-
-    response = session_response(user, mfa_state="verified")
-    audit_event("account.login", "success", user.id, f"mfa_factor={factor}")
+    response = session_response(user)
+    audit_event("account.login", "success", user.id)
     db.session.commit()
     return response
 
@@ -341,124 +285,6 @@ def me():
         {
             "user": user_payload,
             "password_change_required": user_payload["password_change_required"],
-            "mfa_setup_required": request.auth_session.mfa_state == "setup_required",
-            "mfa_verified": request.auth_session.mfa_state == "verified",
-        }
-    )
-
-
-@auth_bp.get("/mfa/status")
-@login_required()
-def mfa_status():
-    credential = enabled_credential(request.user.id)
-    recovery_count = len(json.loads(credential.recovery_code_hashes or "[]")) if credential else 0
-    return jsonify(
-        {
-            "required": required_for(request.user),
-            "enabled": credential is not None,
-            "verified": request.auth_session.mfa_state == "verified",
-            "setup_required": request.auth_session.mfa_state == "setup_required",
-            "recovery_codes_remaining": recovery_count,
-        }
-    )
-
-
-@auth_bp.post("/mfa/setup")
-@login_required()
-@limiter.limit("5 per hour", key_func=authenticated_rate_key)
-def begin_mfa_setup():
-    data = request.get_json(silent=True) or {}
-    if not verify_password(request.user.password_hash, str(data.get("current_password", ""))):
-        audit_event("account.mfa_setup", "failure", request.user.id, "invalid_current_password")
-        db.session.commit()
-        return jsonify({"error": "Current password is incorrect"}), 401
-    try:
-        _, secret, provisioning_uri = begin_setup(request.user)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 409
-    audit_event("account.mfa_setup", "pending", request.user.id)
-    db.session.commit()
-    return jsonify({"secret": secret, "provisioning_uri": provisioning_uri})
-
-
-@auth_bp.post("/mfa/confirm")
-@login_required()
-@limiter.limit("10 per hour", key_func=authenticated_rate_key)
-def confirm_mfa_setup():
-    credential = MfaCredential.query.filter_by(user_id=request.user.id, enabled_at=None).first()
-    code = (request.get_json(silent=True) or {}).get("code")
-    if credential is None or not verify_totp(credential, code):
-        audit_event("account.mfa_setup", "failure", request.user.id, "invalid_confirmation_code")
-        db.session.commit()
-        return jsonify({"error": "Invalid verification code"}), 400
-
-    recovery_codes = generate_recovery_codes()
-    set_recovery_codes(credential, recovery_codes)
-    credential.enabled_at = utcnow()
-    request.auth_session.mfa_state = "verified"
-    AuthSession.query.filter(
-        AuthSession.user_id == request.user.id,
-        AuthSession.id != request.auth_session.id,
-        AuthSession.revoked_at.is_(None),
-    ).update({AuthSession.revoked_at: utcnow()}, synchronize_session=False)
-    audit_event("account.mfa_setup", "success", request.user.id)
-    db.session.commit()
-    return jsonify(
-        {
-            "message": "Multi-factor authentication enabled. Store these recovery codes securely.",
-            "recovery_codes": recovery_codes,
-        }
-    )
-
-
-@auth_bp.post("/mfa/recovery-codes")
-@login_required()
-@limiter.limit("3 per hour", key_func=authenticated_rate_key)
-def regenerate_mfa_recovery_codes():
-    data = request.get_json(silent=True) or {}
-    credential = enabled_credential(request.user.id)
-    if (
-        credential is None
-        or not verify_password(request.user.password_hash, str(data.get("current_password", "")))
-        or verify_factor(credential, data.get("code")) is None
-    ):
-        audit_event("account.mfa_recovery_codes", "failure", request.user.id)
-        db.session.commit()
-        return jsonify({"error": "Password or verification code is incorrect"}), 401
-    recovery_codes = generate_recovery_codes()
-    set_recovery_codes(credential, recovery_codes)
-    audit_event("account.mfa_recovery_codes", "success", request.user.id)
-    db.session.commit()
-    return jsonify({"recovery_codes": recovery_codes})
-
-
-@auth_bp.post("/mfa/disable")
-@login_required()
-@limiter.limit("3 per hour", key_func=authenticated_rate_key)
-def disable_mfa():
-    data = request.get_json(silent=True) or {}
-    credential = enabled_credential(request.user.id)
-    if (
-        credential is None
-        or not verify_password(request.user.password_hash, str(data.get("current_password", "")))
-        or verify_factor(credential, data.get("code")) is None
-    ):
-        audit_event("account.mfa_disable", "failure", request.user.id)
-        db.session.commit()
-        return jsonify({"error": "Password or verification code is incorrect"}), 401
-    db.session.delete(credential)
-    request.auth_session.mfa_state = "setup_required" if required_for(request.user) else "not_required"
-    AuthSession.query.filter(
-        AuthSession.user_id == request.user.id,
-        AuthSession.id != request.auth_session.id,
-        AuthSession.revoked_at.is_(None),
-    ).update({AuthSession.revoked_at: utcnow()}, synchronize_session=False)
-    audit_event("account.mfa_disable", "success", request.user.id)
-    db.session.commit()
-    return jsonify(
-        {
-            "message": "Multi-factor authentication disabled",
-            "setup_required": request.auth_session.mfa_state == "setup_required",
         }
     )
 
@@ -502,7 +328,7 @@ def change_password():
     ).update({AuthSession.revoked_at: utcnow()}, synchronize_session=False)
     MfaChallenge.query.filter_by(user_id=request.user.id).delete(synchronize_session=False)
     request.auth_session.revoked_at = utcnow()
-    response = session_response(request.user, mfa_state=request.auth_session.mfa_state)
+    response = session_response(request.user)
     audit_event("account.password_change", "success", request.user.id)
     db.session.commit()
     return response
@@ -564,8 +390,6 @@ def public_user(user):
         "is_active": user.is_active,
         "created_at": user.created_at.isoformat(),
         "verification_status": profile.verification_status if profile else "verified",
-        "mfa_enabled": enabled_credential(user.id) is not None,
-        "mfa_required": required_for(user),
         "password_change_required": bool(state and state.must_change_password),
         "managed_facility": managed_facility,
     }

@@ -21,7 +21,7 @@ This implementation treats the repository SRS as its primary acceptance statemen
 | Resource and volunteer silos | Shared inventory/distribution/volunteer snapshot; allocation decrements inventory and assignments change availability atomically | `GET /api/v1/coordination` |
 | Slow prioritization | Deterministic, offline-capable damage and rescue scoring with audit records | `/api/v1/ai/*` and `ai_assessments` |
 | Role ambiguity | Production login wall, administrator-provisioned operational roles, backend authorization, and controlled demo sessions | `/api/v1/auth/*`; demo endpoint only when explicitly enabled |
-| Loss of trust through insecure shared access | Revocable server-side sessions, mandatory privileged-role authenticator MFA, CSRF defense, lockout, audit events, request IDs, reviewed migrations, and production readiness gates | `/api/v1/auth/mfa/*`, `/api/v1/auth/sessions`, `/api/v1/ready`, `audit_events` |
+| Loss of trust through insecure shared access | Revocable server-side sessions, CSRF defense, lockout, role authorization, audit events, request IDs, reviewed migrations, and production readiness gates | `/api/v1/auth/sessions`, `/api/v1/ready`, `audit_events` |
 | Regional information silos | Public India-wide active incident, warning, and verified field-news aggregation | `GET /api/v1/national-alerts` |
 | Unverified or missing disaster-area coverage | Authorized, source-labelled field updates with optional live-stream URLs and verification state | `GET/POST /api/v1/news-updates` |
 | Families cannot trace relatives in affected areas | Consent-based welfare-check cases, emergency calling, responder ownership, notes, and status tracking | `/api/v1/welfare-checks` |

@@ -1,12 +1,7 @@
-import { Buffer } from 'node:buffer';
-import { createHmac } from 'node:crypto';
-
 import { expect, test } from '@playwright/test';
 
 const realAccountE2eEnabled = globalThis.process?.env.REAL_ACCOUNT_E2E === 'true';
 const accountPassword = 'DemoPassword123!';
-const base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-const privilegedRoles = new Set(['Admin', 'Police', 'Fire Service', 'Hospital', 'Shelter', 'Ambulance', 'NGO']);
 
 const roleAccounts = [
   {
@@ -65,34 +60,10 @@ const roleAccounts = [
   },
 ];
 
-function decodeBase32(value) {
-  let bits = '';
-  for (const character of value.replace(/=+$/u, '').toUpperCase()) {
-    const index = base32Alphabet.indexOf(character);
-    if (index < 0) throw new Error('Invalid base32 authenticator secret');
-    bits += index.toString(2).padStart(5, '0');
-  }
-  const bytes = [];
-  for (let offset = 0; offset + 8 <= bits.length; offset += 8) {
-    bytes.push(Number.parseInt(bits.slice(offset, offset + 8), 2));
-  }
-  return Buffer.from(bytes);
-}
-
-function currentTotp(secret) {
-  const counter = Math.floor(Date.now() / 1000 / 30);
-  const counterBytes = Buffer.alloc(8);
-  counterBytes.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac('sha1', decodeBase32(secret)).update(counterBytes).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
-  return String(value).padStart(6, '0');
-}
-
 async function submitPassword(page, account) {
   await expect(page.getByRole('heading', { name: 'Sign in to your operational account' })).toBeVisible();
   await page.getByLabel('Email').fill(account.email);
-  await page.getByLabel('Password (15+ characters)').fill(accountPassword);
+  await page.getByLabel('Password').fill(accountPassword);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 }
 
@@ -117,33 +88,12 @@ test.describe('production-mode account acceptance', () => {
   test.skip(!realAccountE2eEnabled, 'Runs only against the isolated real-account acceptance environment.');
   test.describe.configure({ retries: 0 });
 
-  test('every supported role signs in through the real account and MFA UI', async ({ page }) => {
+  test('every supported role signs in directly to its role-locked workspace', async ({ page }) => {
     test.setTimeout(180_000);
 
     for (const account of roleAccounts) {
       await page.goto('/');
       await submitPassword(page, account);
-
-      if (privilegedRoles.has(account.role)) {
-        await expect(page.getByText('Multi-factor authentication is required', { exact: true })).toBeVisible();
-        await page.getByLabel('Current password').fill(accountPassword);
-        await page.getByRole('button', { name: 'Start authenticator setup', exact: true }).click();
-
-        const secret = (await page.locator('.mfa-secret code').innerText()).trim();
-        await page.getByLabel('Six-digit code').fill(currentTotp(secret));
-        await page.getByRole('button', { name: 'Confirm and enable MFA', exact: true }).click();
-
-        await expectWorkspace(page, account);
-        const recoveryCodes = await page.locator('.recovery-code-grid code').allTextContents();
-        expect(recoveryCodes.length).toBeGreaterThan(0);
-        const recoveryCode = recoveryCodes[0].trim();
-        await signOut(page, account);
-
-        await submitPassword(page, account);
-        await expect(page.getByLabel('Verification code')).toBeVisible();
-        await page.getByLabel('Verification code').fill(recoveryCode);
-        await page.getByRole('button', { name: 'Verify and sign in', exact: true }).click();
-      }
 
       await expectWorkspace(page, account);
       await signOut(page, account);

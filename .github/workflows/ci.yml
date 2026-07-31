@@ -145,7 +145,7 @@ jobs:
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Exercise real account login and MFA for every role
+      - name: Exercise direct real-account login for every role
         shell: bash
         env:
           APP_ENV: testing
@@ -154,7 +154,6 @@ jobs:
           DATABASE_URL: sqlite:////tmp/resq-account-acceptance.sqlite
           DEMO_MODE: 'false'
           JWT_SECRET_KEY: account-acceptance-jwt-secret-key-32-characters
-          MFA_ENCRYPTION_KEY: vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=
           RATELIMIT_ENABLED: 'false'
           SECRET_KEY: account-acceptance-app-secret-key-32-characters
           VITE_API_BASE_URL: http://127.0.0.1:5000/api/v1

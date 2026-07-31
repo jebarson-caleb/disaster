@@ -56,19 +56,13 @@ import StatusPill from './components/StatusPill.jsx';
 import { allocateResources, estimateDamage, prioritizeRescue } from './services/ai.js';
 import {
   api,
-  beginMfaSetup,
   changePassword,
   completePasswordReset,
-  completeMfaLogin,
-  confirmMfaSetup,
-  disableMfa,
-  getMfaStatus,
   isNetworkFailure,
   listSessions,
   login,
   logout,
   openDemoSession,
-  regenerateMfaRecoveryCodes,
   register,
   requestPasswordReset,
   revokeSession,
@@ -270,16 +264,11 @@ export default function App() {
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
   const [passwordDraft, setPasswordDraft] = useState(emptyPasswordDraft);
   const [recoveryDraft, setRecoveryDraft] = useState(emptyRecoveryDraft);
-  const [mfaChallenge, setMfaChallenge] = useState({ token: '', code: '' });
-  const [mfaSession, setMfaSession] = useState({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
-  const [mfaSetup, setMfaSetup] = useState({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
-  const [mfaAction, setMfaAction] = useState({ current_password: '', code: '' });
   const [accountSessions, setAccountSessions] = useState([]);
   const [managedUsers, setManagedUsers] = useState([]);
   const [integrationReadiness, setIntegrationReadiness] = useState(emptyIntegrationReadiness);
   const [provisionDraft, setProvisionDraft] = useState(emptyProvisionDraft);
   const [resetDraft, setResetDraft] = useState({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
-  const [mfaResetDraft, setMfaResetDraft] = useState({ user_id: '', admin_password: '' });
   const [resourceDraft, setResourceDraft] = useState({ name: '', category: 'food', unit: 'units', available_quantity: 0, storage_location: '' });
   const [responderDraft, setResponderDraft] = useState({ name: '', unit_type: 'professional rescue', skills: '', contact_phone: '', latitude: '', longitude: '' });
   const [campaignDraft, setCampaignDraft] = useState({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
@@ -481,21 +470,12 @@ export default function App() {
         setCurrentUser(user);
         setActiveRole(user.role);
         setSessionMode('account');
-        setMfaSession({
-          required: Boolean(user.mfa_required),
-          enabled: Boolean(user.mfa_enabled),
-          verified: Boolean(session.mfa_verified),
-          setup_required: Boolean(session.mfa_setup_required),
-          recovery_codes_remaining: 0,
-        });
         const passwordRequired = Boolean(user.password_change_required);
-        setShowAccountPanel(passwordRequired || Boolean(session.mfa_setup_required));
+        setShowAccountPanel(passwordRequired);
         setOperatorNotice(
           passwordRequired
             ? 'Replace your temporary password to continue.'
-            : session.mfa_setup_required
-              ? 'Set up multi-factor authentication to continue.'
-              : `${user.name} session restored`,
+            : `${user.name} session restored`,
         );
       })
       .catch(() => {
@@ -515,15 +495,10 @@ export default function App() {
       setCurrentUser(null);
       setAuthDraft(emptyAuthDraft);
       setPasswordDraft(emptyPasswordDraft);
-      setMfaChallenge({ token: '', code: '' });
-      setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
-      setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
-      setMfaAction({ current_password: '', code: '' });
       setAccountSessions([]);
       setIntegrationReadiness(emptyIntegrationReadiness);
       setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
       setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
-      setMfaResetDraft({ user_id: '', admin_password: '' });
       setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
       setShowAccountPanel(!DEMO_ENABLED);
       setActiveRole('Citizen');
@@ -534,27 +509,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (sessionMode !== 'account' || !currentUserId || passwordChangeRequired) return;
-    let cancelled = false;
-    getMfaStatus()
-      .then((status) => {
-        if (!cancelled) setMfaSession(status);
-      })
-      .catch((error) => {
-        if (!cancelled) setOperatorNotice(`MFA status could not be loaded: ${error.message}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionMode, currentUserId, passwordChangeRequired]);
-
-  useEffect(() => {
     if (
       !showAccountPanel
       || sessionMode !== 'account'
       || !currentUserId
       || passwordChangeRequired
-      || mfaSession.setup_required
     ) {
       return;
     }
@@ -569,7 +528,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [showAccountPanel, sessionMode, currentUserId, passwordChangeRequired, mfaSession.setup_required]);
+  }, [showAccountPanel, sessionMode, currentUserId, passwordChangeRequired]);
 
   useEffect(() => {
     if (visibleActiveView !== 'access' || currentUser?.role !== 'Admin') return;
@@ -606,7 +565,7 @@ export default function App() {
     async function connect() {
       if (
         sessionMode === 'checking'
-        || (sessionMode === 'account' && (!currentUserId || passwordChangeRequired || mfaSession.setup_required))
+        || (sessionMode === 'account' && (!currentUserId || passwordChangeRequired))
       ) return;
       setConnectionState('connecting');
       try {
@@ -643,11 +602,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, sessionMode, passwordChangeRequired, mfaSession.setup_required, currentUserId, currentUserName]);
+  }, [activeRole, sessionMode, passwordChangeRequired, currentUserId, currentUserName]);
 
   useEffect(() => {
     function reconnect() {
-      if (sessionMode === 'account' && (passwordChangeRequired || mfaSession.setup_required)) return;
+      if (sessionMode === 'account' && passwordChangeRequired) return;
       if (navigator.onLine) {
         (sessionMode === 'demo' ? openDemoSession(activeRole) : Promise.resolve())
           .then(() => flushOfflineQueue())
@@ -681,7 +640,7 @@ export default function App() {
       window.removeEventListener('online', reconnect);
       window.removeEventListener('offline', reconnect);
     };
-  }, [activeRole, sessionMode, passwordChangeRequired, mfaSession.setup_required]);
+  }, [activeRole, sessionMode, passwordChangeRequired]);
 
   async function submitIncident(event) {
     event.preventDefault();
@@ -1203,7 +1162,6 @@ export default function App() {
   function changeAuthMode(nextMode) {
     setAuthDraft({ ...emptyAuthDraft });
     setRecoveryDraft({ ...emptyRecoveryDraft });
-    setMfaChallenge({ token: '', code: '' });
     if (nextMode !== 'reset' && passwordResetToken) {
       const cleanUrl = new URL(window.location.href);
       cleanUrl.searchParams.delete('reset_token');
@@ -1224,12 +1182,6 @@ export default function App() {
       const session = authMode === 'login'
         ? await login({ email: authDraft.email, password: authDraft.password })
         : await register(authDraft);
-      if (session.mfa_required) {
-        setMfaChallenge({ token: session.challenge_token, code: '' });
-        setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
-        setOperatorNotice(session.message);
-        return;
-      }
       if (session.pending_verification) {
         setCurrentUser(null);
         setSessionMode('account');
@@ -1240,23 +1192,13 @@ export default function App() {
       setCurrentUser(session.user);
       setSessionMode('account');
       setActiveRole(session.user.role);
-      setMfaSession({
-        required: Boolean(session.user.mfa_required),
-        enabled: Boolean(session.user.mfa_enabled),
-        verified: Boolean(session.mfa_verified),
-        setup_required: Boolean(session.mfa_setup_required),
-        recovery_codes_remaining: 0,
-      });
       setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
-      setMfaChallenge({ token: '', code: '' });
       const passwordRequired = Boolean(session.user.password_change_required);
-      setShowAccountPanel(passwordRequired || Boolean(session.mfa_setup_required));
+      setShowAccountPanel(passwordRequired);
       setOperatorNotice(
         passwordRequired
           ? 'Password accepted. Replace the temporary password to continue.'
-          : session.mfa_setup_required
-            ? 'Set up multi-factor authentication to continue.'
-            : `${session.user.name} signed in successfully`,
+          : `${session.user.name} signed in successfully`,
       );
     } catch (error) {
       setOperatorNotice(`${authMode === 'login' ? 'Sign in' : 'Registration'} failed: ${error.message}`);
@@ -1302,85 +1244,6 @@ export default function App() {
     }
   }
 
-  async function submitMfaChallenge(event) {
-    event.preventDefault();
-    try {
-      const session = await completeMfaLogin({ challenge_token: mfaChallenge.token, code: mfaChallenge.code });
-      setCurrentUser(session.user);
-      setSessionMode('account');
-      setActiveRole(session.user.role);
-      setMfaSession({
-        required: Boolean(session.user.mfa_required),
-        enabled: true,
-        verified: true,
-        setup_required: false,
-        recovery_codes_remaining: 0,
-      });
-      setMfaChallenge({ token: '', code: '' });
-      setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
-      const passwordRequired = Boolean(session.user.password_change_required);
-      setShowAccountPanel(passwordRequired);
-      setOperatorNotice(
-        passwordRequired
-          ? 'Identity verified. Replace the temporary password to continue.'
-          : `${session.user.name} signed in with multi-factor authentication`,
-      );
-    } catch (error) {
-      setMfaChallenge((current) => ({ ...current, code: '' }));
-      setOperatorNotice(`Verification failed: ${error.message}`);
-    }
-  }
-
-  async function startMfaSetup(event) {
-    event.preventDefault();
-    try {
-      const setup = await beginMfaSetup({ current_password: mfaSetup.current_password });
-      setMfaSetup((current) => ({ ...current, ...setup, current_password: '', code: '', recovery_codes: [] }));
-      setOperatorNotice('Authenticator secret created. Confirm the six-digit code to finish setup.');
-    } catch (error) {
-      setOperatorNotice(`MFA setup failed: ${error.message}`);
-    }
-  }
-
-  async function confirmMfaEnrollment(event) {
-    event.preventDefault();
-    try {
-      const result = await confirmMfaSetup({ code: mfaSetup.code });
-      setMfaSetup((current) => ({ ...current, code: '', secret: '', provisioning_uri: '', recovery_codes: result.recovery_codes }));
-      setMfaSession((current) => ({ ...current, enabled: true, verified: true, setup_required: false, recovery_codes_remaining: result.recovery_codes.length }));
-      setShowAccountPanel(true);
-      setOperatorNotice('Multi-factor authentication enabled. Save every recovery code now.');
-    } catch (error) {
-      setOperatorNotice(`MFA confirmation failed: ${error.message}`);
-    }
-  }
-
-  async function regenerateRecoveryCodes() {
-    try {
-      const result = await regenerateMfaRecoveryCodes(mfaAction);
-      setMfaSetup((current) => ({ ...current, recovery_codes: result.recovery_codes }));
-      setMfaAction({ current_password: '', code: '' });
-      setMfaSession((current) => ({ ...current, recovery_codes_remaining: result.recovery_codes.length }));
-      setOperatorNotice('New recovery codes generated. Previous recovery codes no longer work.');
-    } catch (error) {
-      setOperatorNotice(`Recovery-code regeneration failed: ${error.message}`);
-    }
-  }
-
-  async function turnOffMfa() {
-    try {
-      const result = await disableMfa(mfaAction);
-      const setupRequired = Boolean(result.setup_required);
-      setMfaAction({ current_password: '', code: '' });
-      setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
-      setMfaSession((current) => ({ ...current, enabled: false, verified: false, setup_required: setupRequired, recovery_codes_remaining: 0 }));
-      setShowAccountPanel(true);
-      setOperatorNotice(setupRequired ? 'MFA must be enrolled again before operational access resumes.' : 'Multi-factor authentication disabled.');
-    } catch (error) {
-      setOperatorNotice(`MFA disable failed: ${error.message}`);
-    }
-  }
-
   async function submitPasswordChange(event) {
     event.preventDefault();
     if (passwordDraft.new_password !== passwordDraft.new_password_confirmation) {
@@ -1394,17 +1257,8 @@ export default function App() {
       });
       setCurrentUser(response.user);
       setPasswordDraft(emptyPasswordDraft);
-      setMfaSession((current) => ({
-        ...current,
-        verified: Boolean(response.mfa_verified),
-        setup_required: Boolean(response.mfa_setup_required),
-      }));
-      setShowAccountPanel(Boolean(response.mfa_setup_required));
-      setOperatorNotice(
-        response.mfa_setup_required
-          ? 'Password changed and other sessions revoked. Set up multi-factor authentication to continue.'
-          : 'Password changed and other sessions revoked',
-      );
+      setShowAccountPanel(false);
+      setOperatorNotice('Password changed and other sessions revoked');
     } catch (error) {
       setOperatorNotice(`Password change failed: ${error.message}`);
     }
@@ -1459,26 +1313,6 @@ export default function App() {
       setOperatorNotice('Password reset completed; the user must replace it at next sign-in and all sessions were revoked');
     } catch (error) {
       setOperatorNotice(`Password reset failed: ${error.message}`);
-    }
-  }
-
-  async function submitMfaReset(event) {
-    event.preventDefault();
-    try {
-      const response = await api.resetUserMfa(mfaResetDraft.user_id, mfaResetDraft);
-      setManagedUsers((items) => items.map((item) => (
-        String(item.id) === String(mfaResetDraft.user_id)
-          ? response.user
-          : item
-      )));
-      setMfaResetDraft({ user_id: '', admin_password: '' });
-      setOperatorNotice(
-        response.mfa_setup_required
-          ? 'MFA reset completed; sessions were revoked and the user must enroll a new authenticator'
-          : 'MFA reset completed and all active sessions were revoked',
-      );
-    } catch (error) {
-      setOperatorNotice(`MFA reset failed: ${error.message}`);
     }
   }
 
@@ -1550,22 +1384,17 @@ export default function App() {
     setCurrentUser(null);
     setAuthDraft(emptyAuthDraft);
     setPasswordDraft(emptyPasswordDraft);
-    setMfaChallenge({ token: '', code: '' });
-    setMfaSession({ required: false, enabled: false, verified: false, setup_required: false, recovery_codes_remaining: 0 });
-    setMfaSetup({ current_password: '', code: '', secret: '', provisioning_uri: '', recovery_codes: [] });
-    setMfaAction({ current_password: '', code: '' });
     setAccountSessions([]);
     setIntegrationReadiness(emptyIntegrationReadiness);
     setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
     setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
-    setMfaResetDraft({ user_id: '', admin_password: '' });
     setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
     setShowAccountPanel(!DEMO_ENABLED);
     setActiveRole('Citizen');
     setOperatorNotice('Signed out successfully');
   }
 
-  if (!DEMO_ENABLED && (!currentUser || passwordChangeRequired || mfaSession.setup_required)) {
+  if (!DEMO_ENABLED && (!currentUser || passwordChangeRequired)) {
     return (
       <main className="auth-gate">
         <div className="auth-gate-brand">
@@ -1593,18 +1422,6 @@ export default function App() {
             passwordDraft={passwordDraft}
             setPasswordDraft={setPasswordDraft}
             onPasswordChange={submitPasswordChange}
-            mfaChallenge={mfaChallenge}
-            setMfaChallenge={setMfaChallenge}
-            onMfaChallenge={submitMfaChallenge}
-            mfaSession={mfaSession}
-            mfaSetup={mfaSetup}
-            setMfaSetup={setMfaSetup}
-            onMfaSetup={startMfaSetup}
-            onMfaConfirm={confirmMfaEnrollment}
-            mfaAction={mfaAction}
-            setMfaAction={setMfaAction}
-            onRecoveryRegenerate={regenerateRecoveryCodes}
-            onMfaDisable={turnOffMfa}
             sessions={accountSessions}
             onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
@@ -1740,18 +1557,6 @@ export default function App() {
             passwordDraft={passwordDraft}
             setPasswordDraft={setPasswordDraft}
             onPasswordChange={submitPasswordChange}
-            mfaChallenge={mfaChallenge}
-            setMfaChallenge={setMfaChallenge}
-            onMfaChallenge={submitMfaChallenge}
-            mfaSession={mfaSession}
-            mfaSetup={mfaSetup}
-            setMfaSetup={setMfaSetup}
-            onMfaSetup={startMfaSetup}
-            onMfaConfirm={confirmMfaEnrollment}
-            mfaAction={mfaAction}
-            setMfaAction={setMfaAction}
-            onRecoveryRegenerate={regenerateRecoveryCodes}
-            onMfaDisable={turnOffMfa}
             sessions={accountSessions}
             onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
@@ -1918,9 +1723,6 @@ export default function App() {
                 resetDraft={resetDraft}
                 setResetDraft={setResetDraft}
                 onResetPassword={submitPasswordReset}
-                mfaResetDraft={mfaResetDraft}
-                setMfaResetDraft={setMfaResetDraft}
-                onResetMfa={submitMfaReset}
                 facilities={facilities}
               />
             </MotionPage>
@@ -1994,23 +1796,10 @@ function AccountPanel({
   onPasswordChange,
   onLogout,
   onReturnToDemo,
-  mfaChallenge,
-  setMfaChallenge,
-  onMfaChallenge,
-  mfaSession,
-  mfaSetup,
-  setMfaSetup,
-  onMfaSetup,
-  onMfaConfirm,
-  mfaAction,
-  setMfaAction,
-  onRecoveryRegenerate,
-  onMfaDisable,
   sessions,
   onSessionRevoke,
 }) {
   const hasAccountSession = sessionMode === 'account' && Boolean(currentUser);
-  const awaitingMfa = Boolean(mfaChallenge?.token);
   const passwordChangeRequired = Boolean(currentUser?.password_change_required);
   const accessTitle = mode === 'register'
     ? 'Create a citizen or volunteer account'
@@ -2040,7 +1829,7 @@ function AccountPanel({
         </span>
       </div>
       {!hasAccountSession && notice && <p className="account-notice" role="status">{notice}</p>}
-      {!hasAccountSession && !awaitingMfa && ['login', 'register'].includes(mode) && (
+      {!hasAccountSession && ['login', 'register'].includes(mode) && (
         <form className="account-form" key={`account-${mode}`} onSubmit={onSubmit}>
           {mode === 'register' && (
             <>
@@ -2050,7 +1839,7 @@ function AccountPanel({
             </>
           )}
           <Input label="Email" name="email" type="email" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} required autoComplete={mode === 'login' ? 'username' : 'email'} />
-          <Input label="Password (15+ characters)" name={mode === 'login' ? 'password' : 'new_password'} type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required minLength={15} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          <Input label={mode === 'login' ? 'Password' : 'Password (15+ characters)'} name={mode === 'login' ? 'password' : 'new_password'} type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} required minLength={mode === 'login' ? undefined : 15} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
           {mode === 'register' && (
             <Input label="Confirm password" name="password_confirmation" type="password" value={draft.password_confirmation} onChange={(value) => setDraft({ ...draft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           )}
@@ -2064,7 +1853,7 @@ function AccountPanel({
           )}
         </form>
       )}
-      {!hasAccountSession && !awaitingMfa && mode === 'forgot' && (
+      {!hasAccountSession && mode === 'forgot' && (
         <form className="account-form" onSubmit={onPasswordResetRequest}>
           <p className="muted-copy">
             Enter the account email. If secure email recovery is configured and the account is active, a short-lived single-use link will be sent.
@@ -2082,11 +1871,11 @@ function AccountPanel({
           <p className="muted-copy">If email recovery is unavailable, an administrator can verify your identity and issue a temporary password.</p>
         </form>
       )}
-      {!hasAccountSession && !awaitingMfa && mode === 'reset' && (
+      {!hasAccountSession && mode === 'reset' && (
         <form className="account-form" onSubmit={onPasswordResetComplete}>
           {passwordResetToken ? (
             <>
-              <p className="muted-copy">This reset link is single-use. Completing it signs out every active device; configured MFA remains required.</p>
+              <p className="muted-copy">This reset link is single-use. Completing it signs out every active device.</p>
               <Input
                 label="New password (15+ characters)"
                 name="new_password"
@@ -2114,60 +1903,7 @@ function AccountPanel({
           )}
         </form>
       )}
-      {!hasAccountSession && awaitingMfa && (
-        <form className="account-form" onSubmit={onMfaChallenge}>
-          <p className="muted-copy">Your password was accepted. Enter the current six-digit authenticator code or one unused recovery code.</p>
-          <Input
-            label="Verification code"
-            value={mfaChallenge.code}
-            onChange={(value) => setMfaChallenge({ ...mfaChallenge, code: value })}
-            required
-            autoComplete="one-time-code"
-          />
-          <button className="primary-action" type="submit"><ShieldAlert size={18} /> Verify and sign in</button>
-          <button type="button" className="compact-button secondary-button" onClick={() => setMfaChallenge({ token: '', code: '' })}>Use a different account</button>
-        </form>
-      )}
-      {hasAccountSession && !passwordChangeRequired && mfaSetup.recovery_codes.length > 0 && (
-        <section className="mfa-recovery-panel" aria-live="polite">
-          <strong>Save these one-time recovery codes now</strong>
-          <p className="muted-copy">Each code works once. Store them offline; they will not be shown again after this panel closes.</p>
-          <div className="recovery-code-grid">
-            {mfaSetup.recovery_codes.map((code) => <code key={code}>{code}</code>)}
-          </div>
-        </section>
-      )}
-      {hasAccountSession && !passwordChangeRequired && !mfaSession.enabled && !mfaSetup.secret && (
-        <form className="account-form" onSubmit={onMfaSetup}>
-          <strong>{mfaSession.required ? 'Multi-factor authentication is required' : 'Add multi-factor authentication'}</strong>
-          <p className="muted-copy">Use any RFC 6238-compatible authenticator app. Re-enter your password to create a private setup key.</p>
-          <Input label="Current password" type="password" value={mfaSetup.current_password} onChange={(value) => setMfaSetup({ ...mfaSetup, current_password: value })} required autoComplete="current-password" />
-          <button className="primary-action" type="submit"><ShieldAlert size={18} /> Start authenticator setup</button>
-        </form>
-      )}
-      {hasAccountSession && !passwordChangeRequired && !mfaSession.enabled && mfaSetup.secret && (
-        <form className="account-form" onSubmit={onMfaConfirm}>
-          <strong>Connect your authenticator</strong>
-          <p className="muted-copy">Open the setup link on this device or enter the manual key in your authenticator. Then confirm a current code.</p>
-          <a className="compact-button secondary-button" href={mfaSetup.provisioning_uri}>Open in authenticator app</a>
-          <div className="mfa-secret"><span>Manual setup key</span><code>{mfaSetup.secret}</code></div>
-          <Input label="Six-digit code" value={mfaSetup.code} onChange={(value) => setMfaSetup({ ...mfaSetup, code: value })} required autoComplete="one-time-code" inputMode="numeric" />
-          <button className="primary-action" type="submit">Confirm and enable MFA</button>
-        </form>
-      )}
-      {hasAccountSession && !passwordChangeRequired && mfaSession.enabled && (
-        <section className="account-form">
-          <strong>Multi-factor authentication is active</strong>
-          <p className="muted-copy">{mfaSession.recovery_codes_remaining} recovery codes remain. Re-enter your password and a current authenticator or recovery code for either action below.</p>
-          <Input label="Current password" type="password" value={mfaAction.current_password} onChange={(value) => setMfaAction({ ...mfaAction, current_password: value })} autoComplete="current-password" />
-          <Input label="Verification code" value={mfaAction.code} onChange={(value) => setMfaAction({ ...mfaAction, code: value })} autoComplete="one-time-code" />
-          <div className="account-actions">
-            <button type="button" className="compact-button secondary-button" onClick={onRecoveryRegenerate}>Replace recovery codes</button>
-            <button type="button" className="compact-button secondary-button" onClick={onMfaDisable}>Disable MFA</button>
-          </div>
-        </section>
-      )}
-      {hasAccountSession && (passwordChangeRequired || !mfaSession.setup_required) && (
+      {hasAccountSession && (
         <form className="account-form" onSubmit={onPasswordChange}>
           <strong>{passwordChangeRequired ? 'Replace your temporary password' : 'Change password'}</strong>
           {passwordChangeRequired && (
@@ -2179,7 +1915,7 @@ function AccountPanel({
           <button className="primary-action" type="submit">Change password</button>
         </form>
       )}
-      {hasAccountSession && !passwordChangeRequired && !mfaSession.setup_required && sessions?.length > 0 && (
+      {hasAccountSession && !passwordChangeRequired && sessions?.length > 0 && (
         <section className="account-form">
           <strong>Active sessions</strong>
           <p className="muted-copy">Revoke devices you no longer recognize. Revoking this device signs you out immediately.</p>
@@ -2199,12 +1935,12 @@ function AccountPanel({
         </section>
       )}
       <div className="account-actions">
-        {!hasAccountSession && !awaitingMfa && ['login', 'register'].includes(mode) && (
+        {!hasAccountSession && ['login', 'register'].includes(mode) && (
           <button type="button" className="compact-button secondary-button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'Create an account' : 'I already have an account'}
           </button>
         )}
-        {!hasAccountSession && !awaitingMfa && ['forgot', 'reset'].includes(mode) && (
+        {!hasAccountSession && ['forgot', 'reset'].includes(mode) && (
           <button type="button" className="compact-button secondary-button" onClick={() => setMode('login')}>Back to sign in</button>
         )}
         {hasAccountSession && onLogout && (
@@ -2228,9 +1964,6 @@ function UserAccessView({
   resetDraft,
   setResetDraft,
   onResetPassword,
-  mfaResetDraft,
-  setMfaResetDraft,
-  onResetMfa,
   facilities,
 }) {
   const resetCandidates = users
@@ -2343,18 +2076,6 @@ function UserAccessView({
           <Input label="Confirm new password" type="password" value={resetDraft.password_confirmation} onChange={(value) => setResetDraft({ ...resetDraft, password_confirmation: value })} required minLength={15} autoComplete="new-password" />
           <button className="primary-action" type="submit" disabled={!resetDraft.user_id}>Reset password</button>
         </form>
-        <div className="account-divider" />
-        <p className="muted-copy">If a user has lost every authenticator and recovery code, remove the enrolled factor. All sessions are revoked, and roles that require MFA must enroll a new authenticator before operational access resumes.</p>
-        <form className="access-form" onSubmit={onResetMfa}>
-          <Select
-            label="User with lost MFA"
-            value={mfaResetDraft.user_id}
-            options={[{ label: 'Select a user', value: '' }, ...resetCandidates]}
-            onChange={(value) => setMfaResetDraft({ ...mfaResetDraft, user_id: value })}
-          />
-          <Input label="Your administrator password" type="password" value={mfaResetDraft.admin_password} onChange={(value) => setMfaResetDraft({ ...mfaResetDraft, admin_password: value })} required autoComplete="current-password" />
-          <button className="primary-action" type="submit" disabled={!mfaResetDraft.user_id}>Reset MFA</button>
-        </form>
       </section>
 
       <section className="panel access-users-panel">
@@ -2366,7 +2087,6 @@ function UserAccessView({
                 <strong>{user.name}</strong>
                 <span>{user.email} · {user.role}{user.organization_name ? ` · ${user.organization_name}` : ''}</span>
                 {user.password_change_required && <span>Temporary password must be replaced</span>}
-                {user.mfa_required && <span>{user.mfa_enabled ? 'MFA enrolled' : 'MFA enrollment required'}</span>}
               </div>
               <StatusPill value={user.is_active ? user.verification_status : 'inactive'} />
               <div className="managed-user-actions">

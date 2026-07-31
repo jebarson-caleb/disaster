@@ -7,8 +7,8 @@ Provide a centralized platform for citizens, hospitals, shelters, NGOs, police, 
 ## Functional Requirements
 
 - Users can register and log in by role.
-- Users can request a non-enumerating, expiring, single-use password-reset link when an approved email provider is configured; completing recovery revokes existing sessions and preserves MFA requirements.
-- Administrator-issued credentials must be replaced on first login; privileged roles must complete authenticator MFA before operational access.
+- Users can request a non-enumerating, expiring, single-use password-reset link when an approved email provider is configured; completing recovery revokes existing sessions.
+- Administrator-issued credentials must be replaced on first login; password authentication then opens the server-authorized role workspace.
 - Hospital, shelter, and ambulance accounts are assigned to their managed operational record and cannot mutate another facility.
 - Citizens can report disasters with location, type, affected people, severity hint, and optional image URL.
 - Citizens can create rescue requests and track status.

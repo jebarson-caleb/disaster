@@ -40,10 +40,6 @@ export function login(payload) {
   return request('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export function completeMfaLogin(payload) {
-  return request('/auth/mfa/challenge', { method: 'POST', body: JSON.stringify(payload) });
-}
-
 export function register(payload) {
   return request('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
 }
@@ -68,26 +64,6 @@ export function changePassword(payload) {
   return request('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export function getMfaStatus() {
-  return request('/auth/mfa/status');
-}
-
-export function beginMfaSetup(payload) {
-  return request('/auth/mfa/setup', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function confirmMfaSetup(payload) {
-  return request('/auth/mfa/confirm', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function regenerateMfaRecoveryCodes(payload) {
-  return request('/auth/mfa/recovery-codes', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function disableMfa(payload) {
-  return request('/auth/mfa/disable', { method: 'POST', body: JSON.stringify(payload) });
-}
-
 export function listSessions() {
   return request('/auth/sessions');
 }
@@ -103,7 +79,6 @@ export const api = {
   provisionUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUserAccess: (id, payload) => request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   resetUserPassword: (id, payload) => request(`/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify(payload) }),
-  resetUserMfa: (id, payload) => request(`/admin/users/${id}/reset-mfa`, { method: 'POST', body: JSON.stringify(payload) }),
   createResource: (payload) => request('/admin/resources', { method: 'POST', body: JSON.stringify(payload) }),
   createResponder: (payload) => request('/admin/responders', { method: 'POST', body: JSON.stringify(payload) }),
   createDonationCampaign: (payload) => request('/admin/donation-campaigns', { method: 'POST', body: JSON.stringify(payload) }),

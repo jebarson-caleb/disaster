@@ -14,7 +14,6 @@ from ..auth import (
     verify_password,
 )
 from ..extensions import db, limiter
-from ..mfa import enabled_credential, required_for
 from ..models import (
     Ambulance,
     AuthSession,
@@ -22,7 +21,6 @@ from ..models import (
     DonationCampaign,
     Hospital,
     MfaChallenge,
-    MfaCredential,
     RescueRequest,
     Resource,
     ResponderUnit,
@@ -205,43 +203,6 @@ def reset_user_password(user_id):
     return jsonify({"message": "Password reset and active sessions revoked"})
 
 
-@admin_bp.post("/users/<int:user_id>/reset-mfa")
-@login_required(roles=["Admin"])
-@limiter.limit("10 per hour", key_func=authenticated_rate_key)
-def reset_user_mfa(user_id):
-    target = db.get_or_404(User, user_id)
-    data = request.get_json(silent=True) or {}
-    if target.id == request.user.id:
-        return jsonify({"error": "Use the account security panel to manage your own MFA"}), 400
-    if not verify_password(request.user.password_hash, str(data.get("admin_password", ""))):
-        audit_event("admin.mfa_reset", "failure", request.user.id, f"target_user_id={target.id}")
-        db.session.commit()
-        return jsonify({"error": "Administrator password is incorrect"}), 401
-
-    credential = MfaCredential.query.filter_by(user_id=target.id).first()
-    MfaChallenge.query.filter_by(user_id=target.id).delete(synchronize_session=False)
-    if credential is not None:
-        db.session.delete(credential)
-    AuthSession.query.filter_by(user_id=target.id, revoked_at=None).update(
-        {AuthSession.revoked_at: utcnow()}, synchronize_session=False
-    )
-    audit_event(
-        "admin.mfa_reset",
-        "success",
-        request.user.id,
-        f"target_user_id={target.id};credential_removed={credential is not None}",
-    )
-    db.session.commit()
-    return jsonify(
-        {
-            "message": "MFA reset and active sessions revoked",
-            "mfa_reset": credential is not None,
-            "mfa_setup_required": required_for(target),
-            "user": managed_user(target),
-        }
-    )
-
-
 @admin_bp.post("/resources")
 @login_required(roles=["Admin"])
 @limiter.limit("60 per hour", key_func=authenticated_rate_key)
@@ -344,8 +305,6 @@ def managed_user(user):
         **public_user(user),
         "organization_name": profile.organization_name if profile else None,
         "verification_status": profile.verification_status if profile else "verified",
-        "mfa_enabled": enabled_credential(user.id) is not None,
-        "mfa_required": required_for(user),
     }
 
 

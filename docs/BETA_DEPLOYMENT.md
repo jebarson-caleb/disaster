@@ -4,11 +4,10 @@
 
 1. Provision PostgreSQL through a Vercel Marketplace integration such as Neon, or another managed provider. Copy its pooled, TLS-enabled connection URL to `DATABASE_URL`. Do not use SQLite on Vercel; the writable `/tmp` directory is temporary.
 2. Generate two different application secrets. For example, run `openssl rand -hex 32` twice and assign the results to `SECRET_KEY` and `JWT_SECRET_KEY`.
-3. Generate the independent MFA encryption key with `python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"` and assign it to `MFA_ENCRYPTION_KEY`.
-4. Set `BOOTSTRAP_ADMIN_EMAIL` and a unique `BOOTSTRAP_ADMIN_PASSWORD` of at least 15 characters. Set `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_PHONE` if desired.
-5. Leave `DEMO_MODE=false`, `APP_ENV=production`, `AUTO_MIGRATE=true`, and `COOKIE_SECURE=true`. These are already the Vercel defaults. Do not set `VITE_DEMO_MODE` on production builds.
-6. Optional but recommended for multi-instance beta traffic: provision Redis and set `RATELIMIT_STORAGE_URI` to its TLS `rediss://` URL. Database-backed account lockout remains active even when this is not configured.
-7. Keep the Vercel application preset as **Services**, root directory `./`, frontend service `frontend` (Vite), and backend service `backend` (`index:app`). Deploy.
+3. Set `BOOTSTRAP_ADMIN_EMAIL` and a unique `BOOTSTRAP_ADMIN_PASSWORD` of at least 15 characters. Set `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_PHONE` if desired.
+4. Leave `DEMO_MODE=false`, `APP_ENV=production`, `AUTO_MIGRATE=true`, and `COOKIE_SECURE=true`. These are already the Vercel defaults. Do not set `VITE_DEMO_MODE` on production builds.
+5. Optional but recommended for multi-instance beta traffic: provision Redis and set `RATELIMIT_STORAGE_URI` to its TLS `rediss://` URL. Database-backed account lockout remains active even when this is not configured.
+6. Keep the Vercel application preset as **Services**, root directory `./`, frontend service `frontend` (Vite), and backend service `backend` (`index:app`). Deploy.
 
 ## Required environment variables
 
@@ -17,7 +16,6 @@
 | `DATABASE_URL` | Persistent `postgresql://...` or `mysql+pymysql://...` database; PostgreSQL is recommended |
 | `SECRET_KEY` | Random 32+ character secret, different from the JWT secret |
 | `JWT_SECRET_KEY` | A second independent random 32+ character secret |
-| `MFA_ENCRYPTION_KEY` | URL-safe base64 encoding of 32 independent random bytes; use the command above |
 | `BOOTSTRAP_ADMIN_EMAIL` | First authorized administrator email |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Unique 15–128 character initial administrator password |
 
@@ -54,7 +52,7 @@ After deployment:
 2. Open `https://<deployment>/api/v1/ready`; expect HTTP 200, `status: ready`, and both checks `true`. A 503 means the release must not receive beta traffic; inspect Vercel function logs using the returned request ID.
 3. Open the site in a private browser. Confirm operational data is hidden behind the login screen.
 4. Sign in as the bootstrap administrator and replace the bootstrap password. The temporary-password gate must prevent access to operational data until this succeeds.
-5. Enroll an authenticator, save the one-time recovery codes offline, sign out, and verify both authenticator-code and recovery-code login. Every privileged role listed in `MFA_REQUIRED_ROLES` is restricted to MFA setup until enrollment completes. If SMTP recovery is enabled, request a password-reset link, verify its expiry/single-use behavior, and confirm completion revokes every prior session while leaving MFA required.
+5. Sign out and sign in again with the new password. Confirm password authentication opens the administrator workspace directly. If SMTP recovery is enabled, request a password-reset link, verify its expiry/single-use behavior, and confirm completion revokes every prior session.
 6. Open **User Access** and provision one account for each operational role in use. Hospital, shelter, and ambulance accounts must be assigned to an existing facility or create their facility atomically. Confirm every issued password must be replaced on first sign-in.
 7. For hospital, shelter, and ambulance accounts, confirm the workspace shows only the assigned operational record and rejects attempts to update another facility. For citizens, confirm rescue lists contain only cases created by that citizen.
 8. Open **Operational Setup** and register at least one resource and professional responder unit. Create a non-critical incident and verify automatic dispatch, hospital preparation, capacity updates, and role-specific status actions. Manual rescue and supply assignment must accept only a registered available asset, reserve it while active, and release it after completion or cancellation.
@@ -64,7 +62,7 @@ The administrator-only **Operational Setup → Integration readiness** panel rep
 
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
-The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. Its headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials. CI separately runs an isolated production-mode account environment where every role signs in through the real UI and every privileged role proves MFA enrollment plus a recovery-code challenge before its role-locked workspace opens.
+The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. Its headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials. CI separately runs an isolated production-mode account environment where every role signs in directly to its role-locked workspace.
 
 ## Real-user cutover and acceptance-data removal
 
@@ -87,7 +85,7 @@ vercel env run -e production -- python -m scripts.purge_training_data
 
 The final preview must report `state: already_clean`. Keep demo accounts, demo seed code, and test fixtures in source control only; they are required for deterministic CI and controlled local demonstrations. `DEMO_MODE=false`, an unset `VITE_DEMO_MODE`, a disabled production demo-session endpoint, and the production bundle smoke check prevent those credentials and records from entering the public runtime.
 
-After cleanup, keep the bootstrap administrator as the only initial identity. Citizens and volunteers may register through the public account flow; volunteers remain pending until an administrator verifies them. Provision every privileged or facility role through **User Access**, using unique real email/phone details, first-login password replacement, and mandatory MFA.
+After cleanup, keep the bootstrap administrator as the only initial identity. Citizens and volunteers may register through the public account flow; volunteers remain pending until an administrator verifies them. Provision every privileged or facility role through **User Access**, using unique real email/phone details and first-login password replacement.
 
 ## Integration cutover matrix
 

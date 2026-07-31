@@ -21,8 +21,6 @@ class TestConfig(Config):
     ALERT_DELIVERY_TIMEOUT_SECONDS = 5
     DEMO_MODE = True
     AUTO_MIGRATE = True
-    MFA_ENCRYPTION_KEY = "vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A="
-    MFA_REQUIRED_ROLES = {"Admin", "Police", "Fire Service", "Hospital", "Ambulance", "Shelter", "NGO"}
     SESSION_COOKIE_SECURE = False
     SESSION_IDLE_MINUTES = 30
     SESSION_ABSOLUTE_HOURS = 12

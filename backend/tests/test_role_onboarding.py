@@ -1,22 +1,9 @@
-import pyotp
-
 from app.extensions import db
 from app.models import Ambulance, Disaster, Hospital, HospitalNotification, RoleProfile, Shelter, User
 from app.seed import seed_demo_data
 
 TEMPORARY_PASSWORD = "Temporary-Access-Password-71"
 PRIVATE_PASSWORD = "Private-Account-Password-83"
-MFA_REQUIRED_ROLES = {
-    "Admin",
-    "Police",
-    "Fire Service",
-    "Hospital",
-    "Shelter",
-    "Ambulance",
-    "NGO",
-}
-
-
 def csrf_headers(client):
     return {"X-CSRF-Token": client.get_cookie("resq_csrf").value}
 
@@ -63,7 +50,7 @@ def facility_payload(role, suffix):
     return {}
 
 
-def test_every_supported_role_completes_secure_onboarding_and_opens_workspace(client, auth_headers):
+def test_every_supported_role_changes_temporary_password_and_opens_workspace(client, auth_headers):
     roles = [
         "Citizen",
         "Volunteer",
@@ -113,23 +100,6 @@ def test_every_supported_role_completes_secure_onboarding_and_opens_workspace(cl
         )
         assert changed.status_code == 200, changed.get_json()
         assert changed.get_json()["password_change_required"] is False
-
-        if role in MFA_REQUIRED_ROLES:
-            assert changed.get_json()["mfa_setup_required"] is True
-            setup = client.post(
-                "/api/v1/auth/mfa/setup",
-                json={"current_password": PRIVATE_PASSWORD},
-                headers=csrf_headers(client),
-            )
-            assert setup.status_code == 200, setup.get_json()
-            confirmed = client.post(
-                "/api/v1/auth/mfa/confirm",
-                json={"code": pyotp.TOTP(setup.get_json()["secret"]).now()},
-                headers=csrf_headers(client),
-            )
-            assert confirmed.status_code == 200, confirmed.get_json()
-        else:
-            assert changed.get_json()["mfa_setup_required"] is False
 
         workspace = client.get("/api/v1/operations/bootstrap")
         assert workspace.status_code == 200, workspace.get_json()

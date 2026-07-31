@@ -1,14 +1,12 @@
 from datetime import timedelta
 from types import SimpleNamespace
 
-import pyotp
 from flask import request
 
 from app.auth import authenticated_rate_key, utcnow
 from app.config import production_configuration_issues
 from app.extensions import db
-from app.mfa import begin_setup
-from app.models import AuthSession, MfaChallenge, MfaCredential, User
+from app.models import AuthSession
 from app.seed import seed_demo_data
 
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
@@ -99,15 +97,11 @@ def test_readiness_and_production_configuration_gate(client, app):
         RATELIMIT_STORAGE_URI="memory://",
         BOOTSTRAP_ADMIN_EMAIL="",
         BOOTSTRAP_ADMIN_PASSWORD="",
-        MFA_ENCRYPTION_KEY="",
-        MFA_REQUIRED_ROLES=set(),
     )
     issues = production_configuration_issues(unsafe_production)
     assert len(issues) >= 6
     assert any("persistent MySQL or PostgreSQL" in issue for issue in issues)
     assert any("DEMO_MODE" in issue for issue in issues)
-    assert any("MFA_ENCRYPTION_KEY" in issue for issue in issues)
-    assert any("MFA_REQUIRED_ROLES" in issue for issue in issues)
 
     safe_production = dict(app.config)
     safe_production.update(
@@ -115,8 +109,6 @@ def test_readiness_and_production_configuration_gate(client, app):
         SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
         SECRET_KEY="a" * 64,
         JWT_SECRET_KEY="b" * 64,
-        MFA_ENCRYPTION_KEY="vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=",
-        MFA_REQUIRED_ROLES={"Admin", "Police"},
         DEMO_MODE=False,
         AUTO_MIGRATE=True,
         SESSION_COOKIE_SECURE=True,
@@ -134,8 +126,6 @@ def test_optional_integration_configuration_is_fail_closed(app):
         SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
         SECRET_KEY="a" * 64,
         JWT_SECRET_KEY="b" * 64,
-        MFA_ENCRYPTION_KEY="vcj-xKSir33ctWSpSznDQCuve0mHFAtAANrhMecuK-A=",
-        MFA_REQUIRED_ROLES={"Admin"},
         DEMO_MODE=False,
         AUTO_MIGRATE=True,
         SESSION_COOKIE_SECURE=True,
@@ -393,126 +383,3 @@ def test_volunteer_requires_admin_verification(client, app):
         "/api/v1/auth/login",
         json={"email": "pending-volunteer@example.com", "password": "Reset-Volunteer-Password-49"},
     ).status_code == 200
-
-
-def test_admin_can_reset_another_users_lost_mfa(client, app, auth_headers):
-    with app.app_context():
-        police = User.query.filter_by(role="Police").first()
-        credential, _, _ = begin_setup(police)
-        credential.enabled_at = utcnow()
-        db.session.commit()
-        police_id = police.id
-
-    wrong_password = client.post(
-        f"/api/v1/admin/users/{police_id}/reset-mfa",
-        headers=auth_headers,
-        json={"admin_password": "not-the-administrator-password"},
-    )
-    assert wrong_password.status_code == 401
-    with app.app_context():
-        assert MfaCredential.query.filter_by(user_id=police_id).one_or_none() is not None
-
-    reset = client.post(
-        f"/api/v1/admin/users/{police_id}/reset-mfa",
-        headers=auth_headers,
-        json={"admin_password": "DemoPassword123!"},
-    )
-    assert reset.status_code == 200
-    assert reset.get_json()["mfa_reset"] is True
-    assert reset.get_json()["mfa_setup_required"] is True
-    assert reset.get_json()["user"]["mfa_enabled"] is False
-    with app.app_context():
-        assert MfaCredential.query.filter_by(user_id=police_id).one_or_none() is None
-
-
-def test_password_rotation_invalidates_password_derived_mfa_challenges(client, app, auth_headers):
-    with app.app_context():
-        administrator = User.query.filter_by(role="Admin").one()
-        credential, secret, _ = begin_setup(administrator)
-        credential.enabled_at = utcnow()
-        db.session.commit()
-        administrator_id = administrator.id
-
-    challenger = app.test_client()
-    pending = challenger.post(
-        "/api/v1/auth/login",
-        json={"email": "admin@rescue.local", "password": "DemoPassword123!"},
-    )
-    assert pending.status_code == 202
-    challenge_token = pending.get_json()["challenge_token"]
-
-    changed = client.post(
-        "/api/v1/auth/change-password",
-        headers=auth_headers,
-        json={
-            "current_password": "DemoPassword123!",
-            "new_password": "Rotated-Administrator-Password-84",
-        },
-    )
-    assert changed.status_code == 200
-    with app.app_context():
-        assert MfaChallenge.query.filter_by(user_id=administrator_id).count() == 0
-
-    stale = challenger.post(
-        "/api/v1/auth/mfa/challenge",
-        json={"challenge_token": challenge_token, "code": pyotp.TOTP(secret).now()},
-    )
-    assert stale.status_code == 401
-
-
-def test_admin_reset_and_deactivation_invalidate_pending_mfa_challenges(client, app, auth_headers):
-    with app.app_context():
-        police = User.query.filter_by(role="Police").one()
-        credential, secret, _ = begin_setup(police)
-        credential.enabled_at = utcnow()
-        db.session.commit()
-        police_id = police.id
-
-    challenger = app.test_client()
-    pending_reset = challenger.post(
-        "/api/v1/auth/login",
-        json={"email": "police@rescue.local", "password": "DemoPassword123!"},
-    )
-    assert pending_reset.status_code == 202
-
-    reset = client.post(
-        f"/api/v1/admin/users/{police_id}/reset-password",
-        headers=auth_headers,
-        json={
-            "admin_password": "DemoPassword123!",
-            "new_password": "Reset-Police-Password-85",
-        },
-    )
-    assert reset.status_code == 200
-    stale_reset = challenger.post(
-        "/api/v1/auth/mfa/challenge",
-        json={
-            "challenge_token": pending_reset.get_json()["challenge_token"],
-            "code": pyotp.TOTP(secret).now(),
-        },
-    )
-    assert stale_reset.status_code == 401
-
-    pending_deactivation = challenger.post(
-        "/api/v1/auth/login",
-        json={"email": "police@rescue.local", "password": "Reset-Police-Password-85"},
-    )
-    assert pending_deactivation.status_code == 202
-    assert client.patch(
-        f"/api/v1/admin/users/{police_id}",
-        headers=auth_headers,
-        json={"is_active": False},
-    ).status_code == 200
-    assert client.patch(
-        f"/api/v1/admin/users/{police_id}",
-        headers=auth_headers,
-        json={"is_active": True},
-    ).status_code == 200
-    stale_deactivation = challenger.post(
-        "/api/v1/auth/mfa/challenge",
-        json={
-            "challenge_token": pending_deactivation.get_json()["challenge_token"],
-            "code": pyotp.TOTP(secret).now(),
-        },
-    )
-    assert stale_deactivation.status_code == 401

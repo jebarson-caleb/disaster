@@ -1,4 +1,3 @@
-import base64
 import os
 import re
 from urllib.parse import urlsplit
@@ -51,17 +50,6 @@ class Config:
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
     DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() in {"1", "true", "yes"}
     AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "true").lower() in {"1", "true", "yes"}
-    MFA_ENCRYPTION_KEY = os.getenv("MFA_ENCRYPTION_KEY", "")
-    MFA_ISSUER = os.getenv("MFA_ISSUER", "ResQ Command")
-    MFA_CHALLENGE_MINUTES = int(os.getenv("MFA_CHALLENGE_MINUTES", "5"))
-    MFA_REQUIRED_ROLES = {
-        item.strip()
-        for item in os.getenv(
-            "MFA_REQUIRED_ROLES",
-            "Admin,Police,Fire Service,Hospital,Ambulance,Shelter,NGO",
-        ).split(",")
-        if item.strip()
-    }
     EMERGENCY_HOTLINE = os.getenv("EMERGENCY_HOTLINE", "112")
     ALERT_DELIVERY_WEBHOOK_URL = os.getenv("ALERT_DELIVERY_WEBHOOK_URL", "").strip()
     ALERT_DELIVERY_WEBHOOK_SECRET = os.getenv("ALERT_DELIVERY_WEBHOOK_SECRET", "")
@@ -118,15 +106,6 @@ def production_configuration_issues(config):
         issues.append("DEMO_MODE must be false in production")
     if not config.get("AUTO_MIGRATE"):
         issues.append("AUTO_MIGRATE must be true for one-click production deployment")
-    mfa_key = str(config.get("MFA_ENCRYPTION_KEY") or "")
-    try:
-        decoded_mfa_key = base64.urlsafe_b64decode(mfa_key.encode("ascii"))
-    except (ValueError, UnicodeEncodeError):
-        decoded_mfa_key = b""
-    if len(decoded_mfa_key) != 32:
-        issues.append("MFA_ENCRYPTION_KEY must be a Fernet key containing 32 random bytes")
-    if "Admin" not in set(config.get("MFA_REQUIRED_ROLES") or []):
-        issues.append("MFA_REQUIRED_ROLES must include Admin")
     origins = config.get("CORS_ORIGINS") or []
     if "*" in origins:
         issues.append("CORS_ORIGINS cannot contain * when credentials are enabled")

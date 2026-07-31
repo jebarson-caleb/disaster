@@ -315,7 +315,7 @@ def test_admin_can_provision_operational_user(client, auth_headers):
     )
     assert changed.status_code == 200
     assert changed.get_json()["user"]["password_change_required"] is False
-    assert changed.get_json()["mfa_setup_required"] is True
+    assert client.get("/api/v1/operations/bootstrap").status_code == 200
 
 
 def test_bootstrap_alert_acknowledgement_and_safe_route(client, app):
