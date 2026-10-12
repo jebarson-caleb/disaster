@@ -73,7 +73,7 @@ def create_app(config_object=Config):
         )
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
-        if app.config.get("APP_ENV") == "production":
+        if app.config.get("APP_ENV") in {"production", "demo"}:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
@@ -101,7 +101,7 @@ def create_app(config_object=Config):
             db.session.rollback()
             app.logger.exception("Database readiness check failed")
         if issues:
-            app.logger.error("Production configuration is not ready: %s", "; ".join(issues))
+            app.logger.error("Hosted configuration is not ready: %s", "; ".join(issues))
         ready_status = database_ready and not issues
         return (
             jsonify(

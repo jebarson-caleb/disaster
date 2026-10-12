@@ -120,6 +120,28 @@ button {
   background: #f7f7ef;
 }
 
+.demo-app-shell {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.demo-mode-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 9px 16px;
+  color: #713f12;
+  border-bottom: 1px solid #f4c96b;
+  background: #fff7df;
+  font-size: 0.86rem;
+}
+
+.demo-mode-banner strong {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .sidebar {
   position: relative;
   display: flex;
@@ -1342,6 +1364,16 @@ button {
   background: #171717;
 }
 
+.demo-link-button {
+  text-decoration: none;
+}
+
+.demo-link-note {
+  margin: -4px 0 0;
+  color: #667680;
+  font-size: 0.82rem;
+}
+
 .secondary-button {
   color: #171717;
   border: 1px solid #d8d7ce;
@@ -1473,6 +1505,16 @@ button {
   .app-shell {
     grid-template-columns: 1fr;
     height: auto;
+  }
+
+  .demo-app-shell {
+    grid-template-rows: auto auto auto;
+  }
+
+  .demo-mode-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .sidebar {

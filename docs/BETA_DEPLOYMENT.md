@@ -21,6 +21,32 @@
 
 Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `ALERT_DELIVERY_WEBHOOK_URL`, `ALERT_DELIVERY_WEBHOOK_SECRET`, `ALERT_DELIVERY_TIMEOUT_SECONDS`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PUBLIC_BASE_URL`, `PASSWORD_RESET_MINUTES`, and the `SMTP_*` settings documented in `backend/.env.example`.
 
+## Public demo sandbox
+
+The login page shows **Play demo** only when the production frontend is built with `VITE_DEMO_URL` set to an absolute HTTPS URL on a different origin. The link opens that URL in a new tab with `noopener noreferrer`. Leave it unset until the separate sandbox has passed its acceptance checks.
+
+Create a separate Vercel Services project and hostname from this repository for the demo. Attach a dedicated managed PostgreSQL database and Redis instance. Do not copy production environment variables, database credentials, provider secrets, or user data into the demo project. Configure the demo backend with:
+
+| Variable | Demo requirement |
+| --- | --- |
+| `APP_ENV` | `demo` |
+| `DATABASE_URL` | Demo-only persistent PostgreSQL or MySQL database |
+| `SECRET_KEY`, `JWT_SECRET_KEY` | Separate random values, each 32+ characters and different from one another and production |
+| `DEMO_MODE` | `true` |
+| `AUTO_MIGRATE`, `COOKIE_SECURE` | Both `true` |
+| `RATELIMIT_STORAGE_URI` | Demo Redis TLS URL beginning with `rediss://` |
+| `CORS_ORIGINS` | Empty for the same-origin Vercel Services deployment |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` | Unset |
+| Alert webhook, donation checkout, Ollama, and all `SMTP_*` settings | Unset; hosted demo validation rejects live provider configuration |
+
+Build the demo frontend with `VITE_DEMO_MODE=true` and the production frontend with `VITE_DEMO_MODE=false` and `VITE_DEMO_URL=https://<demo-host>`. The backend only enables demo sessions when `DEMO_MODE=true`; production readiness rejects that flag. Both hosted environments enforce persistent storage, independent secrets, secure cookies, migration readiness, and release provenance. The demo requires shared Redis throttling because its role-session endpoint is public.
+
+The demo opens the existing synthetic role accounts and displays a persistent warning not to enter real personal or incident information. All writes remain in the isolated demo database; external messaging, email, payments, and AI providers stay disabled. The scheduled **Reset demo sandbox** GitHub Actions workflow runs nightly at 03:23 UTC and can also be started manually. Configure the GitHub Actions environment named `demo` with these demo-only secrets: `DEMO_DATABASE_URL`, `DEMO_SECRET_KEY`, `DEMO_JWT_SECRET_KEY`, and `DEMO_RATELIMIT_STORAGE_URI`; set the environment variable `DEMO_DATABASE_NAME` to the exact database name in that URL, including the word `demo`. The reset command refuses non-demo environments, invalid hosted configuration, and non-persistent databases; it drops the demo schema, reapplies checked-in migrations, and recreates synthetic seed data. Never point those secrets at a production database.
+
+Restrict the GitHub `demo` environment's deployment branch policy to `main`. The reset job also refuses to run from another branch, so every destructive reset uses the reviewed release code.
+
+Before enabling the production link, verify `/api/v1/health` and `/api/v1/ready` on both hosts, confirm the demo role flows, create a demo record and verify it is absent from production, and run **Reset demo sandbox** once to confirm it returns to the seed state.
+
 ## Database migrations
 
 Checked-in Alembic migrations run automatically before the backend accepts requests. PostgreSQL and MySQL deployments use a database advisory lock so concurrent cold starts cannot apply the same migration at once. A database created by an earlier `db.create_all()` release is detected, validated against the supported legacy schema, stamped, upgraded, and kept intact. Startup fails instead of guessing when an unversioned database is incomplete or only partially upgraded.
@@ -37,7 +63,7 @@ pytest -q -W error --cov=app --cov-report=term-missing --cov-fail-under=75
 
 cd ../frontend
 npm ci
-npm audit --audit-level=high
+npm audit --audit-level=moderate
 npm run lint
 npm run build
 ```
@@ -119,6 +145,7 @@ The gateway must return any `2xx` status only after accepting responsibility for
 ## Beta operations
 
 - Limit the first cohort, name an incident commander and privacy contact, and publish support/escalation channels before inviting users.
+- Name the pilot owner and support/on-call contact; document escalation steps and retention periods before collecting real incident, contact, location, or welfare data.
 - Monitor Vercel errors, readiness, database capacity, failed login/audit events, dispatch queues, and unacknowledged hospital notices.
 - Back up PostgreSQL daily and perform a restoration drill before handling real incidents.
 - Rotate initial administrator credentials after first use. Rotate application secrets through a coordinated maintenance window because doing so invalidates active sessions.
@@ -129,4 +156,4 @@ The gateway must return any `2xx` status only after accepting responsibility for
 
 ## Release gate
 
-The code is beta-deployable when CI passes, the production dependency audits report no known vulnerabilities, and `/ready` is green. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.
+The controlled pilot is ready only when CI passes, Python and npm dependency audits report no known vulnerabilities, production and demo `/ready` checks are green, the demo isolation/reset checks pass, and the pilot owner has documented support/escalation, data retention, monitoring, and a successful database restore drill. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.

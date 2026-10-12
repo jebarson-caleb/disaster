@@ -1,3 +1,6 @@
+import pytest
+
+from app.bootstrap import initialize_database
 from app.extensions import db
 from app.models import Ambulance, Hospital, ResponderUnit, ResponseDispatch, RoleProfile, Shelter, User, Volunteer
 from app.seed import seed_demo_data
@@ -388,6 +391,26 @@ def test_demo_session_can_be_disabled(client, app):
     app.config["DEMO_MODE"] = False
     response = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
     assert response.status_code == 404
+
+
+def test_production_rejects_demo_mode_before_seeding_or_issuing_sessions(client, app):
+    app.config.update(
+        APP_ENV="production",
+        SQLALCHEMY_DATABASE_URI="postgresql+psycopg://resq:secret@db.example/resq?sslmode=require",
+        SECRET_KEY="a" * 64,
+        JWT_SECRET_KEY="b" * 64,
+        DEMO_MODE=True,
+        AUTO_MIGRATE=True,
+        SESSION_COOKIE_SECURE=True,
+        CORS_ORIGINS=[],
+        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
+        BOOTSTRAP_ADMIN_PASSWORD="Production-Admin-Password-77",
+    )
+
+    with app.app_context(), pytest.raises(RuntimeError, match="DEMO_MODE must be false"):
+        initialize_database()
+
+    assert client.post("/api/v1/auth/demo-session", json={"role": "Admin"}).status_code == 404
 
 
 def test_resource_distribution_and_volunteer_assignment_are_transactional(client, app):

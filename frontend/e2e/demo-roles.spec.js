@@ -113,6 +113,8 @@ test.describe('controlled full-stack role acceptance', () => {
 
   test('every supported role can open each advertised workspace', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByRole('note', { name: 'Demo environment notice' }))
+      .toContainText('Do not enter real personal or incident information');
     const rolePicker = page.getByLabel('Active role');
     await expect(rolePicker).toBeVisible();
 

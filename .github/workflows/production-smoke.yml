@@ -24,6 +24,7 @@ jobs:
       url: https://disaster-delta-eight.vercel.app
     env:
       BASE_URL: https://disaster-delta-eight.vercel.app
+      DEMO_BASE_URL: ${{ vars.DEMO_BASE_URL }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Wait for this commit's Vercel deployment

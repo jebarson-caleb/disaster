@@ -16,3 +16,4 @@ frontend/test-results/
 *.log
 .env.local
 .vercel
+.env*.local

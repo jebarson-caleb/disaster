@@ -359,8 +359,9 @@ def coordination():
 
 
 @operations_bp.post("/auth/demo-session")
+@limiter.limit("30 per minute")
 def demo_session():
-    if not current_app.config.get("DEMO_MODE"):
+    if current_app.config.get("APP_ENV") == "production" or not current_app.config.get("DEMO_MODE"):
         return jsonify({"error": "Demo sessions are disabled"}), 404
     role = (request.get_json() or {}).get("role", "Citizen")
     user = User.query.filter_by(role=role).order_by(User.id).first()

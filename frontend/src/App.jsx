@@ -40,6 +40,7 @@ import {
   Navigation,
   Package,
   Plus,
+  Play,
   RadioTower,
   RefreshCw,
   Route,
@@ -57,6 +58,7 @@ import {
 import MetricTile from './components/MetricTile.jsx';
 import StatusPill from './components/StatusPill.jsx';
 import { allocateResources, estimateDamage, prioritizeRescue } from './services/ai.js';
+import { getPublicDemoUrl } from './services/demo.js';
 import {
   api,
   changePassword,
@@ -191,6 +193,7 @@ const OFFLINE_QUEUE_KEY = 'resq-command-offline-queue';
 const OFFLINE_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const OFFLINE_QUEUE_LIMIT = 50;
 const DEMO_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
+
 const emptyFacilities = { hospitals: [], shelters: [], ambulances: [] };
 const emptyResponseHub = {
   emergency_hotline: '112',
@@ -1435,7 +1438,13 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${DEMO_ENABLED ? ' demo-app-shell' : ''}`}>
+        {DEMO_ENABLED && (
+          <div className="demo-mode-banner" role="note" aria-label="Demo environment notice">
+            <strong>Demo environment</strong>
+            <span>Sample data only. Do not enter real personal or incident information.</span>
+          </div>
+        )}
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">
@@ -1814,6 +1823,7 @@ function AccountPanel({
   onSessionRevoke,
 }) {
   const hasAccountSession = sessionMode === 'account' && Boolean(currentUser);
+  const publicDemoUrl = getPublicDemoUrl(import.meta.env.VITE_DEMO_URL, window.location.origin);
   const passwordChangeRequired = Boolean(currentUser?.password_change_required);
   const accessTitle = mode === 'register'
     ? 'Create a citizen or volunteer account'
@@ -1959,6 +1969,20 @@ function AccountPanel({
         )}
         {hasAccountSession && onLogout && (
           <button type="button" className="compact-button secondary-button" onClick={onLogout}>Sign out</button>
+        )}
+        {!hasAccountSession && mode === 'login' && !demoEnabled && publicDemoUrl && (
+          <>
+            <a
+              className="compact-button secondary-button demo-link-button"
+              href={publicDemoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Play size={16} aria-hidden="true" />
+              Play demo
+            </a>
+            <p className="demo-link-note">Explore a separate sandbox with sample data.</p>
+          </>
         )}
         {demoEnabled && sessionMode === 'account' && (
           <button type="button" className="compact-button secondary-button" onClick={onReturnToDemo}>Return to demo mode</button>

@@ -50,9 +50,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=moderate
         working-directory: frontend
       - run: npm run lint
+        working-directory: frontend
+      - run: npm run test:unit
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
@@ -153,10 +155,12 @@ jobs:
           CORS_ORIGINS: http://127.0.0.1:5173
           DATABASE_URL: sqlite:////tmp/resq-account-acceptance.sqlite
           DEMO_MODE: 'false'
+          DEMO_BASE_URL: https://demo.example.invalid
           JWT_SECRET_KEY: account-acceptance-jwt-secret-key-32-characters
           RATELIMIT_ENABLED: 'false'
           SECRET_KEY: account-acceptance-app-secret-key-32-characters
           VITE_API_BASE_URL: http://127.0.0.1:5000/api/v1
+          VITE_DEMO_URL: https://demo.example.invalid
           VITE_DEMO_MODE: 'false'
         run: |
           set -euo pipefail
@@ -193,3 +197,13 @@ jobs:
 
           cd frontend
           REAL_ACCOUNT_E2E=true BASE_URL=http://127.0.0.1:5173 npm run test:e2e -- e2e/real-account-roles.spec.js --project=chromium
+      - name: Preserve isolated account acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: account-browser-diagnostics
+          retention-days: 3
+          path: |
+            frontend/test-results/
+            ${{ runner.temp }}/resq-account-backend.log
+            ${{ runner.temp }}/resq-account-frontend.log

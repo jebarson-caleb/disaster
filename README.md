@@ -27,6 +27,7 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
 - Production login wall; demo data and role switching require explicit demo build/runtime flags
+- Optional **Play demo** login link to a separate HTTPS demo deployment; it remains hidden until `VITE_DEMO_URL` points to a different origin
 - CI for linting, migration drift, warning-free tests, backend coverage, production builds, dependency vulnerability audits, and real-account browser login for every role
 - Pinned runtime dependencies with automated weekly update proposals
 - Versioned, data-preserving database migrations with serialized PostgreSQL/MySQL startup upgrades
@@ -71,7 +72,9 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. For the controlled local role-switching demo, keep `DEMO_MODE=true` in `backend/.env` and start Vite with `VITE_DEMO_MODE=true`. Seeded demo accounts use `DemoPassword123!` with addresses such as `admin@rescue.local` and `citizen@rescue.local`. Never enable demo mode on a public deployment.
+Open `http://localhost:5173`. For the controlled local role-switching demo, keep `DEMO_MODE=true` in `backend/.env` and start Vite with `VITE_DEMO_MODE=true`. Seeded demo accounts use `DemoPassword123!` with addresses such as `admin@rescue.local` and `citizen@rescue.local`. Never enable demo mode on the production deployment.
+
+The public **Play demo** link uses `VITE_DEMO_URL` to open a separately hosted sandbox. Its Vercel project, database, Redis, and secrets must be separate from production; see [Beta deployment](docs/BETA_DEPLOYMENT.md) before enabling the link.
 
 ## Verification
 
@@ -85,7 +88,7 @@ pytest -q -W error --cov=app --cov-report=term-missing --cov-fail-under=75
 
 cd ../frontend
 npm ci
-npm audit --audit-level=high
+npm audit --audit-level=moderate
 npm run lint
 npm run build
 npx playwright install chromium

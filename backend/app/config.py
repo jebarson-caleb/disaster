@@ -24,7 +24,7 @@ def database_url():
 
 def cors_origins():
     environment = os.getenv("APP_ENV", "production" if os.getenv("VERCEL") else "development").lower()
-    default_origins = "" if environment == "production" else "http://localhost:5173"
+    default_origins = "" if environment in {"production", "demo"} else "http://localhost:5173"
     return [item.strip() for item in os.getenv("CORS_ORIGINS", default_origins).split(",") if item.strip()]
 
 
@@ -67,7 +67,9 @@ class Config:
     SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS", "8"))
     SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "resq_session")
     CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "resq_csrf")
-    SESSION_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true" if APP_ENV == "production" else "false").lower() in {"1", "true", "yes"}
+    SESSION_COOKIE_SECURE = os.getenv(
+        "COOKIE_SECURE", "true" if APP_ENV in {"production", "demo"} else "false"
+    ).lower() in {"1", "true", "yes"}
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_IDLE_MINUTES = int(os.getenv("SESSION_IDLE_MINUTES", "30"))
     SESSION_ABSOLUTE_HOURS = int(os.getenv("SESSION_ABSOLUTE_HOURS", "12"))
@@ -86,13 +88,16 @@ class Config:
     BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
     BOOTSTRAP_ADMIN_NAME = os.getenv("BOOTSTRAP_ADMIN_NAME", "Incident Commander")
     BOOTSTRAP_ADMIN_PHONE = os.getenv("BOOTSTRAP_ADMIN_PHONE", "")
+    DEMO_DATABASE_NAME = os.getenv("DEMO_DATABASE_NAME", "").strip()
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
 
 def production_configuration_issues(config):
     issues = []
-    if config.get("APP_ENV") != "production":
+    environment = config.get("APP_ENV")
+    if environment not in {"production", "demo"}:
         return issues
+    is_demo_environment = environment == "demo"
     database_uri = str(config.get("SQLALCHEMY_DATABASE_URI") or "")
     if not database_uri.startswith(("postgresql+psycopg://", "mysql+pymysql://")):
         issues.append("DATABASE_URL must point to persistent MySQL or PostgreSQL storage")
@@ -102,8 +107,10 @@ def production_configuration_issues(config):
             issues.append(f"{name} must be an independent random value of at least 32 characters")
     if config.get("SECRET_KEY") == config.get("JWT_SECRET_KEY"):
         issues.append("SECRET_KEY and JWT_SECRET_KEY must be different values")
-    if config.get("DEMO_MODE"):
+    if environment == "production" and config.get("DEMO_MODE"):
         issues.append("DEMO_MODE must be false in production")
+    if is_demo_environment and not config.get("DEMO_MODE"):
+        issues.append("DEMO_MODE must be true in the isolated demo environment")
     if not config.get("AUTO_MIGRATE"):
         issues.append("AUTO_MIGRATE must be true for one-click production deployment")
     origins = config.get("CORS_ORIGINS") or []
@@ -112,11 +119,29 @@ def production_configuration_issues(config):
     if any("localhost" in origin or "127.0.0.1" in origin for origin in origins):
         issues.append("CORS_ORIGINS cannot contain local development origins in production")
     if not config.get("SESSION_COOKIE_SECURE"):
-        issues.append("COOKIE_SECURE must be true in production")
-    if not config.get("BOOTSTRAP_ADMIN_EMAIL") or not config.get("BOOTSTRAP_ADMIN_PASSWORD"):
-        issues.append("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required for first production access")
-    elif len(config.get("BOOTSTRAP_ADMIN_PASSWORD", "")) < 15:
-        issues.append("BOOTSTRAP_ADMIN_PASSWORD must contain at least 15 characters")
+        issues.append("COOKIE_SECURE must be true in hosted environments")
+    if is_demo_environment:
+        if config.get("BOOTSTRAP_ADMIN_EMAIL") or config.get("BOOTSTRAP_ADMIN_PASSWORD"):
+            issues.append("Bootstrap administrator credentials must not be configured in the demo environment")
+        if not str(config.get("RATELIMIT_STORAGE_URI") or "").startswith("rediss://"):
+            issues.append("RATELIMIT_STORAGE_URI must use rediss:// in the public demo environment")
+        external_providers = (
+            "ALERT_DELIVERY_WEBHOOK_URL",
+            "ALERT_DELIVERY_WEBHOOK_SECRET",
+            "DONATION_PAYMENT_URL",
+            "OLLAMA_BASE_URL",
+            "SMTP_HOST",
+            "SMTP_USERNAME",
+            "SMTP_PASSWORD",
+            "SMTP_FROM_EMAIL",
+        )
+        if any(str(config.get(name) or "").strip() for name in external_providers):
+            issues.append("External provider integrations must be disabled in the public demo environment")
+    else:
+        if not config.get("BOOTSTRAP_ADMIN_EMAIL") or not config.get("BOOTSTRAP_ADMIN_PASSWORD"):
+            issues.append("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required for first production access")
+        elif len(config.get("BOOTSTRAP_ADMIN_PASSWORD", "")) < 15:
+            issues.append("BOOTSTRAP_ADMIN_PASSWORD must contain at least 15 characters")
     release_commit_value = str(config.get("RELEASE_COMMIT") or "")
     if config.get("RUNNING_ON_VERCEL") and not re.fullmatch(r"[0-9a-f]{40}", release_commit_value):
         issues.append("A 40-character Vercel Git commit SHA is required for production release provenance")

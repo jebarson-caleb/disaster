@@ -118,6 +118,41 @@ def test_readiness_and_production_configuration_gate(client, app):
     )
     assert production_configuration_issues(safe_production) == []
 
+    safe_demo = dict(app.config)
+    safe_demo.update(
+        APP_ENV="demo",
+        SQLALCHEMY_DATABASE_URI="postgresql+psycopg://demo:secret@demo-db.example/resq?sslmode=require",
+        SECRET_KEY="c" * 64,
+        JWT_SECRET_KEY="d" * 64,
+        DEMO_MODE=True,
+        AUTO_MIGRATE=True,
+        SESSION_COOKIE_SECURE=True,
+        CORS_ORIGINS=[],
+        BOOTSTRAP_ADMIN_EMAIL="",
+        BOOTSTRAP_ADMIN_PASSWORD="",
+        RATELIMIT_STORAGE_URI="rediss://cache.example/0",
+        RUNNING_ON_VERCEL=True,
+        RELEASE_COMMIT="c" * 40,
+    )
+    assert production_configuration_issues(safe_demo) == []
+
+    unsafe_demo = dict(safe_demo)
+    unsafe_demo.update(
+        SQLALCHEMY_DATABASE_URI="sqlite:////tmp/shared-demo.db",
+        DEMO_MODE=False,
+        SESSION_COOKIE_SECURE=False,
+        RATELIMIT_STORAGE_URI="memory://",
+        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
+        DONATION_PAYMENT_URL="https://payments.example/checkout",
+    )
+    demo_issues = production_configuration_issues(unsafe_demo)
+    assert any("persistent MySQL or PostgreSQL" in issue for issue in demo_issues)
+    assert any("DEMO_MODE" in issue for issue in demo_issues)
+    assert any("COOKIE_SECURE" in issue for issue in demo_issues)
+    assert any("RATELIMIT_STORAGE_URI" in issue for issue in demo_issues)
+    assert any("provider integrations" in issue for issue in demo_issues)
+    assert any("Bootstrap administrator" in issue for issue in demo_issues)
+
 
 def test_optional_integration_configuration_is_fail_closed(app):
     base = dict(app.config)

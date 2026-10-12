@@ -6,6 +6,7 @@ from flask_migrate import stamp, upgrade
 from sqlalchemy import inspect, text
 
 from .auth import hash_password, validate_password
+from .config import production_configuration_issues
 from .extensions import db
 from .models import AccountSecurity, RoleProfile, User
 from .seed import seed_demo_data
@@ -151,6 +152,13 @@ def apply_schema_migrations():
 
 def initialize_database():
     """Apply schema migrations and provision only explicitly requested data."""
+    environment = current_app.config.get("APP_ENV")
+    if environment == "production" and current_app.config.get("DEMO_MODE"):
+        raise RuntimeError("Unsafe production configuration: DEMO_MODE must be false")
+    if environment == "demo":
+        issues = production_configuration_issues(current_app.config)
+        if issues:
+            raise RuntimeError("Unsafe public demo configuration: " + "; ".join(issues))
     if current_app.config.get("AUTO_MIGRATE", True):
         apply_schema_migrations()
     else:
