@@ -1,4 +1,6 @@
 :root {
+  --muted: #667680;
+  --line: #e3e2da;
   color: #171717;
   background: #f7f7ef;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -135,6 +137,11 @@ button {
   border-bottom: 1px solid #f4c96b;
   background: #fff7df;
   font-size: 0.86rem;
+}
+
+.demo-mode-banner .compact-button {
+  min-height: 30px;
+  padding: 4px 10px;
 }
 
 .demo-mode-banner strong {
@@ -1364,16 +1371,6 @@ button {
   background: #171717;
 }
 
-.demo-link-button {
-  text-decoration: none;
-}
-
-.demo-link-note {
-  margin: -4px 0 0;
-  color: #667680;
-  font-size: 0.82rem;
-}
-
 .secondary-button {
   color: #171717;
   border: 1px solid #d8d7ce;
@@ -1448,27 +1445,6 @@ button {
   margin-bottom: 7px;
   color: #667680;
   font-size: 0.84rem;
-}
-
-.stepper {
-  display: grid;
-  grid-template-columns: 34px minmax(48px, auto) 34px;
-  align-items: center;
-  overflow: hidden;
-  border: 1px solid #d8d7ce;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.stepper button {
-  height: 34px;
-  color: #171717;
-  background: #f0f0ec;
-}
-
-.stepper strong {
-  min-width: 48px;
-  text-align: center;
 }
 
 @media (max-width: 1280px) {
@@ -2071,7 +2047,6 @@ button {
   .integration-readiness-grid { grid-template-columns: 1fr; }
 
   .account-panel { margin: 12px 16px 0; }
-  .recovery-code-grid { grid-template-columns: 1fr; }
   .access-users-panel { grid-column: auto; }
 
   .hub-grid,
@@ -2088,4 +2063,195 @@ button {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Demo launcher on the sign-in screen */
+.demo-launcher {
+  width: min(920px, calc(100vw - 48px));
+  display: grid;
+  gap: 16px;
+}
+
+.demo-launcher-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.demo-launcher-heading h2 { margin: 2px 0 4px; font-size: 1.15rem; }
+.demo-launcher-heading span { color: var(--muted); font-size: 0.92rem; }
+
+.demo-launcher-icon {
+  display: grid;
+  flex: 0 0 40px;
+  height: 40px;
+  place-items: center;
+  color: #fff;
+  border-radius: 10px;
+  background: #0f766e;
+}
+
+.demo-role-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.demo-role-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  color: #171717;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.demo-role-button svg { flex: 0 0 auto; margin-top: 2px; color: #0f766e; }
+.demo-role-button span { display: grid; gap: 2px; }
+.demo-role-button small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+
+.demo-role-button:hover:not(:disabled),
+.demo-role-button:focus-visible {
+  border-color: #0f766e;
+  box-shadow: 0 6px 18px rgba(15, 118, 110, 0.14);
+  transform: translateY(-1px);
+}
+
+.demo-role-button:disabled { opacity: 0.6; cursor: progress; }
+
+/* Department panels */
+.department-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.department-grid:empty { display: none; }
+
+.readiness-form,
+.road-closure-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.readiness-items {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfbf7;
+}
+
+.readiness-items legend {
+  float: none;
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.readiness-items .check-row { min-height: 34px; color: #171717; }
+
+.road-closure-panel .hub-feed,
+.volunteer-duty-panel .hub-feed { margin: 12px 0; }
+
+.hub-item-heading strong svg,
+.hub-feed-item small svg { vertical-align: -2px; }
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.incident-status-row .form-select { min-width: 140px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Facility editors */
+.facility-editor {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfbf7;
+}
+
+.facility-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.facility-editor-heading strong,
+.facility-editor-heading span { display: block; }
+.facility-editor-heading span { color: var(--muted); font-size: 0.85rem; }
+
+.facility-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.compact-number-field .form-control { min-height: 38px; }
+.facility-editor-fields .primary-action {
+  grid-column: 1 / -1;
+  min-width: 0;
+  justify-content: center;
+}
+.facility-editor-fields .compact-button { white-space: nowrap; }
+/* A single assigned facility gets the full row instead of a third of it. */
+.facility-grid > .panel:only-child { grid-column: 1 / -1; max-width: 760px; }
+.facility-service-toggles { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented-control button {
+  flex: 1 1 96px;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: #334155;
+  border: 1px solid #d8d7ce;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.segmented-control button.active { color: #fff; border-color: #171717; background: #171717; }
+
+@media (max-width: 1120px) {
+  .department-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .demo-launcher { width: 100%; }
+  .demo-role-grid { grid-template-columns: 1fr; }
+  .facility-editor-heading { flex-direction: column; }
 }

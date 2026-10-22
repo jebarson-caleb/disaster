@@ -32,10 +32,6 @@ async function request(path, options = {}) {
   return body;
 }
 
-export function openDemoSession(role) {
-  return request('/auth/demo-session', { method: 'POST', body: JSON.stringify({ role }) });
-}
-
 export function login(payload) {
   return request('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
 }
@@ -105,6 +101,12 @@ export const api = {
   createDonation: (payload) => request('/donations', { method: 'POST', body: JSON.stringify(payload) }),
   shareLocation: (payload) => request('/location-pings', { method: 'POST', body: JSON.stringify(payload) }),
   autoDispatch: (id) => request(`/rescue-requests/${id}/auto-dispatch`, { method: 'POST', body: '{}' }),
+  updateDisasterStatus: (id, payload) => request(`/disasters/${id}/status`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createRoadClosure: (payload) => request('/road-closures', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRoadClosure: (id, payload) => request(`/road-closures/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createReadinessCheck: (payload) => request('/readiness-checks', { method: 'POST', body: JSON.stringify(payload) }),
+  updateVolunteerAvailability: (payload) => request('/volunteers/me/availability', { method: 'PATCH', body: JSON.stringify(payload) }),
+  updateVolunteerAssignment: (id, payload) => request(`/volunteer-assignments/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   safeRoute: ({ latitude, longitude, destination = 'shelter' }) =>
     request(`/safe-route?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&destination=${encodeURIComponent(destination)}`),
 };

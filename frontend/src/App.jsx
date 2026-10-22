@@ -30,8 +30,6 @@ import {
   Gauge,
   HeartPulse,
   Home,
-  Eye,
-  EyeOff,
   LogOut,
   MapPin,
   Megaphone,
@@ -40,7 +38,6 @@ import {
   Navigation,
   Package,
   Plus,
-  Play,
   RadioTower,
   RefreshCw,
   Route,
@@ -55,10 +52,22 @@ import {
   Wifi,
   Zap,
 } from 'lucide-react';
+import DemoLauncher from './components/DemoLauncher.jsx';
+import { AmbulanceControls, HospitalCapacityEditor, ShelterControls } from './components/FacilityControls.jsx';
+import {
+  IncidentStatusPanel,
+  ReadinessChecklistPanel,
+  ReadinessOverviewPanel,
+  RoadClosurePanel,
+  VolunteerDutyPanel,
+} from './components/FieldOperations.jsx';
+import { EmptyState, Input, PanelTitle, ProgressBar, Select, Textarea } from './components/FormControls.jsx';
 import MetricTile from './components/MetricTile.jsx';
 import StatusPill from './components/StatusPill.jsx';
 import { allocateResources, estimateDamage, prioritizeRescue } from './services/ai.js';
-import { getPublicDemoUrl } from './services/demo.js';
+import { activeClosures, latestReadiness, readinessSummary, readinessTemplates } from './services/fieldOperations.js';
+import { formatCurrency, formatDateTime, formatRelativeTime } from './services/format.js';
+import { distanceKm, estimatedTravelMinutes, nearestItem } from './services/geo.js';
 import {
   api,
   changePassword,
@@ -67,13 +76,13 @@ import {
   listSessions,
   login,
   logout,
-  openDemoSession,
   register,
   requestPasswordReset,
   revokeSession,
   restoreSession,
 } from './services/api.js';
-import { initialDisasters, initialFacilities, initialRescues, initialResponseHub, roles } from './services/mockData.js';
+
+const roles = ['Admin', 'Citizen', 'Hospital', 'Shelter', 'Ambulance', 'NGO', 'Volunteer', 'Police', 'Fire Service'];
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Tooltip);
 
@@ -102,20 +111,6 @@ const standardsFeatures = [
   { label: 'Typed resource inventory', detail: 'Track boats, ambulances, kits, shelters and trained people.', icon: Package },
   { label: 'Mutual-aid requests', detail: 'Escalate shortages to partner NGOs and nearby agencies.', icon: Users },
   { label: 'Situation reports', detail: 'Share verified updates, constraints and next operational needs.', icon: ClipboardList },
-];
-
-const demoResponseTrend = [
-  { time: '08:00', reports: 4, rescued: 1 },
-  { time: '09:00', reports: 9, rescued: 3 },
-  { time: '10:00', reports: 14, rescued: 6 },
-  { time: '11:00', reports: 18, rescued: 10 },
-  { time: '12:00', reports: 24, rescued: 13 },
-  { time: '13:00', reports: 27, rescued: 17 },
-];
-
-const initialAlerts = [
-  { id: 1, audience: 'Ward 176 - Velachery', channel: 'SMS + radio', message: 'Move to Velachery Govt School Relief Camp. Avoid the lake bund service road.', time: '8 min ago' },
-  { id: 2, audience: 'Chennai hospital network', channel: 'Ops dashboard', message: 'Prepare 35 emergency beds for flood and cyclone response corridors.', time: '24 min ago' },
 ];
 
 const roleNavigation = {
@@ -192,7 +187,6 @@ const assignCapableRoles = new Set(['Admin', 'Police', 'Fire Service', 'NGO']);
 const OFFLINE_QUEUE_KEY = 'resq-command-offline-queue';
 const OFFLINE_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 const OFFLINE_QUEUE_LIMIT = 50;
-const DEMO_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
 
 const emptyFacilities = { hospitals: [], shelters: [], ambulances: [] };
 const emptyResponseHub = {
@@ -209,6 +203,22 @@ const emptyIntegrationReadiness = {
   generated_at: null,
   summary: { active: 0, fallback: 0, total: 0, external_activation_complete: false },
   integrations: [],
+};
+const emptyFieldData = { road_closures: [], readiness_checks: [], volunteer: null };
+const emptyCoordination = { volunteers: [], distributions: [], assignments: [] };
+const emptyAlertDraft = { audience: '', channel: '', message: '', instruction: '' };
+const emptyIncidentDraft = { title: '', disaster_type: 'flood', address: '', description: '', latitude: '', longitude: '', people_affected: 1, severity_hint: 'medium' };
+const emptyRescueDraft = { disaster_id: '', victim_name: '', victim_age: '', people_count: 1, condition: 'injured', trapped: false, vulnerable_people: 0, latitude: '', longitude: '', notes: '' };
+const emptyWelfareDraft = { disaster_id: '', relative_name: '', relative_phone: '', relationship: '', last_known_location: '', requester_phone: '', consent_to_contact: false };
+const emptySupplyDraft = { disaster_id: '', category: 'food and water', description: '', people_count: 1, urgency: 'high', contact_phone: '', latitude: '', longitude: '', location_accuracy: '', location_consent: false };
+const emptyDonationDraft = { campaign_id: '', donor_name: '', donor_email: '', amount: '', anonymous: false, message: '' };
+// Chennai sample coordinates prefilled only inside the demo sandbox.
+const demoLocation = { latitude: 12.9806, longitude: 80.2194 };
+const demoAlertDraft = {
+  audience: 'Chennai Zone 13 - Adyar / Velachery',
+  channel: 'SMS + siren + volunteer relay',
+  message: 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.',
+  instruction: 'Use the marked evacuation corridor, assist children and older adults, and acknowledge this warning when safe.',
 };
 const emptyAuthDraft = { name: '', email: '', phone: '', password: '', password_confirmation: '', role: 'Citizen' };
 const emptyPasswordDraft = { current_password: '', new_password: '', new_password_confirmation: '' };
@@ -256,16 +266,12 @@ export default function App() {
     () => new URLSearchParams(window.location.search).get('reset_token') || '',
   );
   const [operatorNotice, setOperatorNotice] = useState(
-    DEMO_ENABLED
-      ? 'India-wide emergency demo data loaded'
-      : passwordResetToken
-        ? ''
-        : 'Sign in to access live emergency operations',
+    passwordResetToken ? '' : 'Sign in to access live emergency operations',
   );
   const [connectionState, setConnectionState] = useState('connecting');
   const [currentUser, setCurrentUser] = useState(null);
-  const [sessionMode, setSessionMode] = useState(DEMO_ENABLED ? 'demo' : 'checking');
-  const [showAccountPanel, setShowAccountPanel] = useState(!DEMO_ENABLED);
+  const [sessionMode, setSessionMode] = useState('checking');
+  const [showAccountPanel, setShowAccountPanel] = useState(true);
   const [authMode, setAuthMode] = useState(passwordResetToken ? 'reset' : 'login');
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
   const [passwordDraft, setPasswordDraft] = useState(emptyPasswordDraft);
@@ -280,47 +286,28 @@ export default function App() {
   const [campaignDraft, setCampaignDraft] = useState({ disaster_id: '', title: '', description: '', goal_amount: '', currency: 'INR', organizer: '' });
   const [pendingOperations, setPendingOperations] = useState(() => readOfflineQueue());
   const [routeResult, setRouteResult] = useState(null);
-  const [coordinationData, setCoordinationData] = useState({ volunteers: [], distributions: [], assignments: [] });
-  const [disasters, setDisasters] = useState(() => (DEMO_ENABLED ? initialDisasters : []));
-  const [rescues, setRescues] = useState(() => (DEMO_ENABLED ? initialRescues : []));
-  const [facilities, setFacilities] = useState(() => (DEMO_ENABLED ? initialFacilities : emptyFacilities));
+  const [coordinationData, setCoordinationData] = useState(emptyCoordination);
+  const [disasters, setDisasters] = useState([]);
+  const [rescues, setRescues] = useState([]);
+  const [facilities, setFacilities] = useState(emptyFacilities);
   const [resources, setResources] = useState([]);
-  const [alerts, setAlerts] = useState(() => (DEMO_ENABLED ? initialAlerts : []));
-  const [responseHub, setResponseHub] = useState(() => (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
-  const [alertDraft, setAlertDraft] = useState({
-    audience: DEMO_ENABLED ? 'Chennai Zone 13 - Adyar / Velachery' : '',
-    channel: DEMO_ENABLED ? 'SMS + siren + volunteer relay' : '',
-    message: DEMO_ENABLED ? 'Heavy rainfall and waterlogging expected. Move vulnerable residents to the nearest open relief camp.' : '',
-    instruction: DEMO_ENABLED ? 'Use the marked evacuation corridor, assist children and older adults, and acknowledge this warning when safe.' : '',
-  });
-  const [incidentDraft, setIncidentDraft] = useState({
-    title: '',
-    disaster_type: 'flood',
-    address: '',
-    description: '',
-    latitude: DEMO_ENABLED ? 12.9798 : '',
-    longitude: DEMO_ENABLED ? 80.2209 : '',
-    people_affected: DEMO_ENABLED ? 25 : 1,
-    severity_hint: 'medium',
-  });
-  const [rescueDraft, setRescueDraft] = useState({
-    disaster_id: '',
-    victim_name: '',
-    victim_age: '',
-    people_count: 1,
-    condition: 'injured',
-    trapped: false,
-    vulnerable_people: 0,
-    latitude: DEMO_ENABLED ? 12.9806 : '',
-    longitude: DEMO_ENABLED ? 80.2194 : '',
-    notes: '',
-  });
-  const [distributionDraft, setDistributionDraft] = useState({ resource_id: '', disaster_id: '', quantity: DEMO_ENABLED ? 25 : 1, destination: DEMO_ENABLED ? 'Velachery Govt School Relief Camp' : '' });
-  const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: '', disaster_id: '', task: DEMO_ENABLED ? 'Support evacuation and first-aid desk' : '' });
-  const [welfareDraft, setWelfareDraft] = useState({ disaster_id: '', relative_name: '', relative_phone: '', relationship: '', last_known_location: '', requester_phone: '', consent_to_contact: false });
-  const [supplyDraft, setSupplyDraft] = useState({ disaster_id: '', category: 'food and water', description: '', people_count: 1, urgency: 'high', contact_phone: '', latitude: DEMO_ENABLED ? 12.9806 : '', longitude: DEMO_ENABLED ? 80.2194 : '', location_accuracy: '', location_consent: false });
-  const [donationDraft, setDonationDraft] = useState({ campaign_id: '', donor_name: '', donor_email: '', amount: '', anonymous: false, message: '' });
+  const [alerts, setAlerts] = useState([]);
+  const [responseHub, setResponseHub] = useState(emptyResponseHub);
+  const [alertDraft, setAlertDraft] = useState(emptyAlertDraft);
+  const [incidentDraft, setIncidentDraft] = useState(emptyIncidentDraft);
+  const [rescueDraft, setRescueDraft] = useState(emptyRescueDraft);
+  const [distributionDraft, setDistributionDraft] = useState({ resource_id: '', disaster_id: '', quantity: 1, destination: '' });
+  const [volunteerDraft, setVolunteerDraft] = useState({ volunteer_id: '', disaster_id: '', task: '' });
+  const [welfareDraft, setWelfareDraft] = useState(emptyWelfareDraft);
+  const [supplyDraft, setSupplyDraft] = useState(emptySupplyDraft);
+  const [donationDraft, setDonationDraft] = useState(emptyDonationDraft);
   const [newsDraft, setNewsDraft] = useState({ disaster_id: '', headline: '', summary: '', source_name: '', stream_url: '', state: '', district: '', is_live: true });
+  const [fieldData, setFieldData] = useState(emptyFieldData);
+  const [demoClient, setDemoClient] = useState(null);
+  const [demoStarting, setDemoStarting] = useState('');
+  const sandboxActive = sessionMode === 'sandbox' && Boolean(demoClient);
+  // The demo sandbox swaps in an in-memory client; it never calls the live API.
+  const client = sandboxActive ? demoClient : api;
 
   const readinessPillars = useMemo(() => {
     const completeDisasters = disasters.filter((item) => (
@@ -407,7 +394,7 @@ export default function App() {
   }, [disasters]);
 
   const trendChart = useMemo(() => {
-    const responseTrend = DEMO_ENABLED ? demoResponseTrend : buildHourlyResponseTrend(disasters, rescues);
+    const responseTrend = buildHourlyResponseTrend(disasters, rescues);
     return {
       labels: responseTrend.map((item) => item.time),
       datasets: [
@@ -467,7 +454,6 @@ export default function App() {
   const visibleRescues = rescueItemsForRole(activeRole, sortedRescues);
 
   useEffect(() => {
-    if (DEMO_ENABLED) return;
     let cancelled = false;
     restoreSession()
       .then((session) => {
@@ -496,6 +482,7 @@ export default function App() {
 
   useEffect(() => {
     function sessionExpired() {
+      resetOperationalState();
       localStorage.removeItem(OFFLINE_QUEUE_KEY);
       setPendingOperations([]);
       setCurrentUser(null);
@@ -505,8 +492,8 @@ export default function App() {
       setIntegrationReadiness(emptyIntegrationReadiness);
       setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
       setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
-      setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
-      setShowAccountPanel(!DEMO_ENABLED);
+      setSessionMode('account');
+      setShowAccountPanel(true);
       setActiveRole('Citizen');
       setOperatorNotice('Your session expired. Sign in again to continue.');
     }
@@ -539,7 +526,7 @@ export default function App() {
   useEffect(() => {
     if (visibleActiveView !== 'access' || currentUser?.role !== 'Admin') return;
     let cancelled = false;
-    api.adminUsers()
+    client.adminUsers()
       .then(({ users }) => {
         if (!cancelled) setManagedUsers(users);
       })
@@ -549,12 +536,12 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [visibleActiveView, currentUser]);
+  }, [visibleActiveView, currentUser, client]);
 
   useEffect(() => {
     if (visibleActiveView !== 'setup' || currentUser?.role !== 'Admin') return;
     let cancelled = false;
-    api.adminIntegrations()
+    client.adminIntegrations()
       .then((readiness) => {
         if (!cancelled) setIntegrationReadiness(readiness);
       })
@@ -564,7 +551,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [visibleActiveView, currentUser]);
+  }, [visibleActiveView, currentUser, client]);
 
   useEffect(() => {
     let cancelled = false;
@@ -572,32 +559,21 @@ export default function App() {
       if (
         sessionMode === 'checking'
         || (sessionMode === 'account' && (!currentUserId || passwordChangeRequired))
+        || (sessionMode === 'sandbox' && !demoClient)
       ) return;
       setConnectionState('connecting');
       try {
-        const session = sessionMode === 'demo'
-          ? await openDemoSession(activeRole)
-          : { user: { id: currentUserId, name: currentUserName } };
-        await flushOfflineQueue();
-        const [snapshot, coordination] = await Promise.all([
-          api.bootstrap(),
-          ['Admin', 'NGO'].includes(activeRole) ? api.coordination() : Promise.resolve(null),
-        ]);
+        if (sessionMode === 'account') await flushOfflineQueue();
+        const loaded = await loadOperationalSnapshot(client, activeRole);
         if (cancelled) return;
-        if (sessionMode === 'demo') setCurrentUser(session.user);
-        setDisasters(snapshot.disasters.map(normalizeDisaster));
-        setRescues(snapshot.rescue_requests);
-        setFacilities(snapshot.facilities);
-        setResources(snapshot.resources || []);
-        if (coordination) {
-          setCoordinationData(coordination);
-          alignOperationalDrafts(snapshot, coordination);
-        }
-        setAlerts(snapshot.alerts.map(normalizeAlert));
-        if (!coordination) alignOperationalDrafts(snapshot);
-        setResponseHub(snapshot.response_hub || (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
+        applyOperationalSnapshot(loaded);
+        alignOperationalDrafts(loaded.snapshot, loaded.coordination);
         setConnectionState('online');
-        setOperatorNotice(`${session.user.name} connected to the live response API${sessionMode === 'demo' ? ' in demo mode' : ''}`);
+        setOperatorNotice(
+          sessionMode === 'sandbox'
+            ? `${activeRole} demo workspace loaded with fictional sample data`
+            : `${currentUserName} connected to the live response API`,
+        );
       } catch (error) {
         if (cancelled) return;
         setConnectionState('offline');
@@ -608,37 +584,24 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRole, sessionMode, passwordChangeRequired, currentUserId, currentUserName]);
+  }, [activeRole, sessionMode, passwordChangeRequired, currentUserId, currentUserName, demoClient, client]);
 
   useEffect(() => {
+    if (sessionMode !== 'account') return undefined;
     function reconnect() {
-      if (sessionMode === 'account' && passwordChangeRequired) return;
-      if (navigator.onLine) {
-        (sessionMode === 'demo' ? openDemoSession(activeRole) : Promise.resolve())
-          .then(() => flushOfflineQueue())
-          .then(() => Promise.all([
-            api.bootstrap(),
-            ['Admin', 'NGO'].includes(activeRole) ? api.coordination() : Promise.resolve(null),
-          ]))
-          .then(([snapshot, coordination]) => {
-            setDisasters(snapshot.disasters.map(normalizeDisaster));
-            setRescues(snapshot.rescue_requests);
-            setFacilities(snapshot.facilities);
-            setResources(snapshot.resources || []);
-            if (coordination) {
-              setCoordinationData(coordination);
-              alignOperationalDrafts(snapshot, coordination);
-            }
-            setAlerts(snapshot.alerts.map(normalizeAlert));
-            if (!coordination) alignOperationalDrafts(snapshot);
-            setResponseHub(snapshot.response_hub || (DEMO_ENABLED ? initialResponseHub : emptyResponseHub));
-            setConnectionState('online');
-            return flushOfflineQueue();
-          })
-          .catch(() => setConnectionState('offline'));
-      } else {
+      if (passwordChangeRequired || !currentUserId) return;
+      if (!navigator.onLine) {
         setConnectionState('offline');
+        return;
       }
+      flushOfflineQueue()
+        .then(() => loadOperationalSnapshot(api, activeRole))
+        .then((loaded) => {
+          applyOperationalSnapshot(loaded);
+          alignOperationalDrafts(loaded.snapshot, loaded.coordination);
+          setConnectionState('online');
+        })
+        .catch(() => setConnectionState('offline'));
     }
     window.addEventListener('online', reconnect);
     window.addEventListener('offline', reconnect);
@@ -646,7 +609,86 @@ export default function App() {
       window.removeEventListener('online', reconnect);
       window.removeEventListener('offline', reconnect);
     };
-  }, [activeRole, sessionMode, passwordChangeRequired]);
+  }, [activeRole, sessionMode, passwordChangeRequired, currentUserId]);
+
+  function applyOperationalSnapshot({ snapshot, coordination }) {
+    setDisasters(snapshot.disasters.map(normalizeDisaster));
+    setRescues(snapshot.rescue_requests);
+    setFacilities(snapshot.facilities);
+    setResources(snapshot.resources || []);
+    setCoordinationData(coordination || emptyCoordination);
+    setAlerts(snapshot.alerts.map(normalizeAlert));
+    setResponseHub(snapshot.response_hub || emptyResponseHub);
+    setFieldData(snapshot.field || emptyFieldData);
+  }
+
+  function resetOperationalState() {
+    setDisasters([]);
+    setRescues([]);
+    setFacilities(emptyFacilities);
+    setResources([]);
+    setAlerts([]);
+    setResponseHub(emptyResponseHub);
+    setFieldData(emptyFieldData);
+    setCoordinationData(emptyCoordination);
+    setManagedUsers([]);
+    setIntegrationReadiness(emptyIntegrationReadiness);
+    setRouteResult(null);
+    setSelectedRescueId(null);
+    setAlertDraft(emptyAlertDraft);
+    setIncidentDraft(emptyIncidentDraft);
+    setRescueDraft(emptyRescueDraft);
+    setWelfareDraft(emptyWelfareDraft);
+    setSupplyDraft(emptySupplyDraft);
+    setDonationDraft(emptyDonationDraft);
+    setConnectionState('connecting');
+  }
+
+  async function startDemo(role) {
+    setDemoStarting(role);
+    try {
+      const { createDemoClient } = await import('./services/demoApi.js');
+      const sandbox = createDemoClient(role);
+      resetOperationalState();
+      setDemoClient(sandbox);
+      setCurrentUser(sandbox.currentUser());
+      setActiveRole(role);
+      setActiveView('command');
+      setSessionMode('sandbox');
+      setShowAccountPanel(false);
+      setIncidentDraft({ ...emptyIncidentDraft, ...demoLocation, people_affected: 25 });
+      setRescueDraft({ ...emptyRescueDraft, ...demoLocation });
+      setSupplyDraft({ ...emptySupplyDraft, ...demoLocation });
+      setAlertDraft(demoAlertDraft);
+      setOperatorNotice(`Demo started as ${role}. Sample data only.`);
+    } catch (error) {
+      setOperatorNotice(`The demo could not be started: ${error.message}`);
+    } finally {
+      setDemoStarting('');
+    }
+  }
+
+  function switchDemoRole(role) {
+    if (!demoClient) return;
+    demoClient.setRole(role);
+    setCurrentUser(demoClient.currentUser());
+    setActiveRole(role);
+    setActiveView('command');
+    setSelectedRescueId(null);
+    setRouteResult(null);
+  }
+
+  function exitDemo() {
+    resetOperationalState();
+    setDemoClient(null);
+    setCurrentUser(null);
+    setSessionMode('account');
+    setShowAccountPanel(true);
+    setActiveRole('Citizen');
+    setActiveView('command');
+    setAuthMode('login');
+    setOperatorNotice('Demo closed. Sign in to access live emergency operations.');
+  }
 
   async function submitIncident(event) {
     event.preventDefault();
@@ -665,7 +707,7 @@ export default function App() {
     let next = optimistic;
     let queuedOffline = false;
     try {
-      const response = await api.createDisaster(incidentDraft);
+      const response = await client.createDisaster(incidentDraft);
       next = { ...response.disaster, score: response.damage_estimation.score, label: response.damage_estimation.label };
       setRescueDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
       setWelfareDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
@@ -673,7 +715,7 @@ export default function App() {
       setNewsDraft((current) => ({ ...current, disaster_id: current.disaster_id || next.id }));
       setConnectionState('online');
     } catch (error) {
-      if (!isNetworkFailure(error)) {
+      if (!isNetworkFailure(error) || sessionMode !== 'account') {
         setOperatorNotice(`Report rejected: ${error.message}`);
         return;
       }
@@ -683,7 +725,7 @@ export default function App() {
       setConnectionState('offline');
     }
     setDisasters((items) => [next, ...items]);
-    setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: DEMO_ENABLED ? 25 : 1 });
+    setIncidentDraft({ ...incidentDraft, title: '', address: '', description: '', people_affected: 1 });
     setOperatorNotice(
       queuedOffline
         ? `${assessment.label} ${incidentDraft.disaster_type} report saved on this device and queued for reconnection`
@@ -713,13 +755,13 @@ export default function App() {
     let next = optimistic;
     let queuedOffline = false;
     try {
-      const response = await api.createRescue(rescueDraft);
+      const response = await client.createRescue(rescueDraft);
       next = response.rescue_request;
       const allocated = [response.automatic_allocation?.rescue_unit?.name, response.automatic_allocation?.volunteer?.name, response.automatic_allocation?.ambulance?.vehicle_number].filter(Boolean).join(' + ');
       if (allocated) setOperatorNotice(`${priority.label} request auto-dispatched to ${allocated}; receiving hospital alerted`);
       setConnectionState('online');
     } catch (error) {
-      if (!isNetworkFailure(error)) {
+      if (!isNetworkFailure(error) || sessionMode !== 'account') {
         setOperatorNotice(`Rescue request rejected: ${error.message}`);
         return;
       }
@@ -744,7 +786,7 @@ export default function App() {
   async function sendAlert(event) {
     event.preventDefault();
     try {
-      const response = await api.createAlert({
+      const response = await client.createAlert({
         audience: alertDraft.audience,
         channels: alertDraft.channel,
         message: alertDraft.message,
@@ -769,7 +811,7 @@ export default function App() {
 
   async function retryAlertDelivery(alert) {
     try {
-      const response = await api.retryAlertDelivery(alert.id);
+      const response = await client.retryAlertDelivery(alert.id);
       const updated = normalizeAlert(response.alert);
       setAlerts((items) => items.map((item) => (item.id === updated.id ? updated : item)));
       if (response.delivery.status === 'delivered') {
@@ -809,8 +851,8 @@ export default function App() {
       }
       try {
         const response = rescue.assigned_unit
-          ? await api.updateRescue(id, { status: nextStatus, note: `${role} advanced the response` })
-          : await api.assignRescue(id, { status: nextStatus, assigned_unit: unit });
+          ? await client.updateRescue(id, { status: nextStatus, note: `${role} advanced the response` })
+          : await client.assignRescue(id, { status: nextStatus, assigned_unit: unit });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
         setOperatorNotice(`${rescue.victim_name} moved to ${nextStatus} with ${unit}`);
       } catch (error) {
@@ -827,7 +869,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await api.updateRescue(id, {
+        const response = await client.updateRescue(id, {
           status: nextStatus,
           note: 'Assigned ambulance advanced the response',
         });
@@ -848,7 +890,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Accepted by hospital triage' });
+        const response = await client.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Accepted by hospital triage' });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
         setOperatorNotice(`${rescue.victim_name} accepted for hospital triage`);
       } catch (error) {
@@ -866,7 +908,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await api.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Volunteer check-in recorded' });
+        const response = await client.updateRescue(id, { status: nextStatus, assigned_unit: assignedUnit, note: 'Volunteer check-in recorded' });
         setRescues((items) => items.map((item) => (item.id === id ? response.rescue_request : item)));
         setOperatorNotice(`Volunteer check-in recorded for ${rescue.victim_name}`);
       } catch (error) {
@@ -879,18 +921,16 @@ export default function App() {
     setOperatorNotice(`Showing live tracking for ${rescue.victim_name}: ${rescue.status}`);
   }
 
-  async function updateHospital(id, delta) {
+  async function saveHospitalCapacity(id, payload) {
     const hospital = facilities.hospitals.find((item) => item.id === id);
-    if (hospital) {
-      const availableBeds = clampNumber(hospital.available_beds + delta, 0, hospital.total_beds);
-      try {
-        const response = await api.updateHospital(id, { available_beds: availableBeds });
-        setFacilities((current) => ({ ...current, hospitals: current.hospitals.map((item) => (item.id === id ? response.hospital : item)) }));
-        setOperatorNotice(`${hospital.name} capacity ${delta > 0 ? 'increased' : 'reduced'} by ${Math.abs(delta)} beds`);
-      } catch (error) {
-        setOperatorNotice(`Hospital capacity was not changed: ${error.message}`);
-        if (isNetworkFailure(error)) setConnectionState('offline');
-      }
+    if (!hospital) return;
+    try {
+      const response = await client.updateHospital(id, payload);
+      setFacilities((current) => ({ ...current, hospitals: current.hospitals.map((item) => (item.id === id ? response.hospital : item)) }));
+      setOperatorNotice(`${hospital.name} capacity saved: ${response.hospital.available_beds} beds, ${response.hospital.icu_beds} ICU, ${response.hospital.emergency_capacity} emergency intake`);
+    } catch (error) {
+      setOperatorNotice(`Hospital capacity was not changed: ${error.message}`);
+      if (isNetworkFailure(error)) setConnectionState('offline');
     }
   }
 
@@ -899,7 +939,7 @@ export default function App() {
     if (shelter) {
       const availableCapacity = clampNumber(shelter.available_capacity + delta, 0, shelter.total_capacity);
       try {
-        const response = await api.updateShelter(id, { available_capacity: availableCapacity });
+        const response = await client.updateShelter(id, { available_capacity: availableCapacity });
         setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? response.shelter : item)) }));
         setOperatorNotice(`${shelter.name} slots ${delta > 0 ? 'opened' : 'filled'} by ${Math.abs(delta)}`);
       } catch (error) {
@@ -909,23 +949,132 @@ export default function App() {
     }
   }
 
-  async function updateAmbulanceStatus(id) {
+  async function updateShelterServices(id, payload) {
+    const shelter = facilities.shelters.find((item) => item.id === id);
+    if (!shelter) return;
+    try {
+      const response = await client.updateShelter(id, payload);
+      setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? response.shelter : item)) }));
+      setOperatorNotice(`${shelter.name} services updated`);
+    } catch (error) {
+      setOperatorNotice(`Shelter services were not changed: ${error.message}`);
+    }
+  }
+
+  async function setAmbulanceStatus(id, status) {
     const ambulance = facilities.ambulances.find((item) => item.id === id);
     if (!ambulance) return;
-    const nextStatus = nextAmbulanceStatus(ambulance.status);
     try {
-      const response = await api.updateAmbulance(id, { status: nextStatus });
+      const response = await client.updateAmbulance(id, { status });
       setFacilities((current) => ({ ...current, ambulances: current.ambulances.map((item) => (item.id === id ? response.ambulance : item)) }));
-      setOperatorNotice(`${ambulance.vehicle_number} marked ${nextStatus}`);
+      setOperatorNotice(`${ambulance.vehicle_number} marked ${status}`);
     } catch (error) {
       setOperatorNotice(`Ambulance status was not changed: ${error.message}`);
       if (isNetworkFailure(error)) setConnectionState('offline');
     }
   }
 
+  function shareAmbulanceLocation(id) {
+    if (!navigator.geolocation) {
+      setOperatorNotice('Device location is not supported by this browser.');
+      return;
+    }
+    setOperatorNotice('Waiting for your device location permission...');
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const response = await client.updateAmbulance(id, { latitude: Number(coords.latitude.toFixed(6)), longitude: Number(coords.longitude.toFixed(6)) });
+          setFacilities((current) => ({ ...current, ambulances: current.ambulances.map((item) => (item.id === id ? response.ambulance : item)) }));
+          setOperatorNotice(`${response.ambulance.vehicle_number} location updated for dispatch and ETA estimates`);
+        } catch (error) {
+          setOperatorNotice(`Vehicle location was not updated: ${error.message}`);
+        }
+      },
+      (error) => setOperatorNotice(`Location was not shared: ${error.message}`),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
+
+  async function submitRoadClosure(draft) {
+    try {
+      const response = await client.createRoadClosure(draft);
+      setFieldData((current) => ({ ...current, road_closures: [response.road_closure, ...current.road_closures] }));
+      setOperatorNotice(`${response.road_closure.road_name} published as ${response.road_closure.status}`);
+      return true;
+    } catch (error) {
+      setOperatorNotice(`Road closure was not published: ${error.message}`);
+      return false;
+    }
+  }
+
+  async function updateRoadClosureStatus(closure, status) {
+    try {
+      const response = await client.updateRoadClosure(closure.id, { status });
+      setFieldData((current) => ({
+        ...current,
+        road_closures: current.road_closures.map((item) => (item.id === closure.id ? response.road_closure : item)),
+      }));
+      setOperatorNotice(`${closure.road_name} marked ${status}`);
+    } catch (error) {
+      setOperatorNotice(`Road status was not changed: ${error.message}`);
+    }
+  }
+
+  async function submitReadinessCheck(payload) {
+    try {
+      const response = await client.createReadinessCheck(payload);
+      setFieldData((current) => ({ ...current, readiness_checks: [response.readiness_check, ...current.readiness_checks] }));
+      const check = response.readiness_check;
+      setOperatorNotice(`Readiness recorded for ${check.subject}: ${check.ready_count}/${check.total_count} items ready`);
+      return true;
+    } catch (error) {
+      setOperatorNotice(`Readiness checklist was not recorded: ${error.message}`);
+      return false;
+    }
+  }
+
+  async function updateVolunteerAvailability(status) {
+    try {
+      const response = await client.updateVolunteerAvailability({ availability_status: status });
+      setFieldData((current) => ({ ...current, volunteer: response.volunteer }));
+      setOperatorNotice(`Duty status changed to ${status}`);
+    } catch (error) {
+      setOperatorNotice(`Duty status was not changed: ${error.message}`);
+    }
+  }
+
+  async function updateVolunteerAssignment(assignment, status) {
+    try {
+      const response = await client.updateVolunteerAssignment(assignment.id, { status });
+      setFieldData((current) => (current.volunteer
+        ? {
+            ...current,
+            volunteer: {
+              ...current.volunteer,
+              availability_status: response.volunteer?.availability_status ?? current.volunteer.availability_status,
+              assignments: current.volunteer.assignments.map((item) => (item.id === assignment.id ? response.assignment : item)),
+            },
+          }
+        : current));
+      setOperatorNotice(`Assignment marked ${status}`);
+    } catch (error) {
+      setOperatorNotice(`Assignment was not updated: ${error.message}`);
+    }
+  }
+
+  async function updateDisasterStatus(disaster, status) {
+    try {
+      const response = await client.updateDisasterStatus(disaster.id, { status });
+      setDisasters((items) => items.map((item) => (item.id === disaster.id ? { ...item, status: response.disaster.status } : item)));
+      setOperatorNotice(`${disaster.title} marked ${status}`);
+    } catch (error) {
+      setOperatorNotice(`Incident status was not changed: ${error.message}`);
+    }
+  }
+
   async function findSafeRoute(destination = 'shelter') {
     try {
-      const result = await api.safeRoute({ latitude: rescueDraft.latitude, longitude: rescueDraft.longitude, destination });
+      const result = await client.safeRoute({ latitude: rescueDraft.latitude, longitude: rescueDraft.longitude, destination });
       setRouteResult(result);
       setOperatorNotice(`Nearest available ${destination}: ${result.destination.name}, ${result.distance_km} km away`);
     } catch (error) {
@@ -936,7 +1085,7 @@ export default function App() {
 
   async function acknowledgeAlert(alert) {
     try {
-      const response = await api.acknowledgeAlert(alert.id, { response: 'received', latitude: rescueDraft.latitude, longitude: rescueDraft.longitude });
+      const response = await client.acknowledgeAlert(alert.id, { response: 'received', latitude: rescueDraft.latitude, longitude: rescueDraft.longitude });
       setAlerts((items) => items.map((item) => (item.id === alert.id ? { ...item, acknowledged: true, acknowledgement_count: Number(item.acknowledgement_count || 0) + (response.created ? 1 : 0) } : item)));
       setOperatorNotice(`Warning receipt confirmed for ${alert.audience}`);
     } catch (error) {
@@ -947,8 +1096,8 @@ export default function App() {
   async function submitDistribution(event) {
     event.preventDefault();
     try {
-      await api.createDistribution(distributionDraft);
-      const coordination = await api.coordination();
+      await client.createDistribution(distributionDraft);
+      const coordination = await client.coordination();
       setCoordinationData(coordination);
       setResources(coordination.resources);
       alignOperationalDrafts({ disasters, resources: coordination.resources, response_hub: responseHub }, coordination);
@@ -961,8 +1110,8 @@ export default function App() {
   async function submitVolunteerAssignment(event) {
     event.preventDefault();
     try {
-      await api.createVolunteerAssignment(volunteerDraft);
-      const coordination = await api.coordination();
+      await client.createVolunteerAssignment(volunteerDraft);
+      const coordination = await client.coordination();
       setCoordinationData(coordination);
       alignOperationalDrafts({ disasters, resources, response_hub: responseHub }, coordination);
       setOperatorNotice('Volunteer assignment created and availability updated');
@@ -984,7 +1133,7 @@ export default function App() {
         if (target === 'supply') setSupplyDraft((current) => ({ ...current, ...location }));
         if (target === 'welfare') setWelfareDraft((current) => ({ ...current, latitude: location.latitude, longitude: location.longitude }));
         try {
-          await api.shareLocation({ latitude: location.latitude, longitude: location.longitude, accuracy_meters: location.location_accuracy, consent_granted: true, source: 'device' });
+          await client.shareLocation({ latitude: location.latitude, longitude: location.longitude, accuracy_meters: location.location_accuracy, consent_granted: true, source: 'device' });
           setOperatorNotice(`Location shared with responders to approximately ${location.location_accuracy} m accuracy`);
         } catch (error) {
           setOperatorNotice(`Location captured for this request; live sharing will retry on submission (${error.message})`);
@@ -998,7 +1147,7 @@ export default function App() {
   async function submitWelfareCheck(event) {
     event.preventDefault();
     try {
-      const response = await api.createWelfareCheck(welfareDraft);
+      const response = await client.createWelfareCheck(welfareDraft);
       setResponseHub((current) => ({ ...current, welfare_checks: [response.welfare_check, ...current.welfare_checks] }));
       setWelfareDraft((current) => ({ ...current, relative_name: '', relative_phone: '', relationship: '', last_known_location: '', consent_to_contact: false }));
       setOperatorNotice(`Welfare check opened for ${response.welfare_check.relative_name}; call responders can now update the case`);
@@ -1011,7 +1160,7 @@ export default function App() {
     const statuses = ['requested', 'assigned', 'contacting', 'located_safe', 'closed'];
     const nextStatus = statuses[Math.min(statuses.length - 1, Math.max(0, statuses.indexOf(item.status)) + 1)];
     try {
-      const response = await api.updateWelfareCheck(item.id, { status: nextStatus, responder_notes: `Responder updated case to ${nextStatus}` });
+      const response = await client.updateWelfareCheck(item.id, { status: nextStatus, responder_notes: `Responder updated case to ${nextStatus}` });
       setResponseHub((current) => ({ ...current, welfare_checks: current.welfare_checks.map((entry) => (entry.id === item.id ? response.welfare_check : entry)) }));
       setOperatorNotice(`${item.relative_name} welfare check updated to ${nextStatus}`);
     } catch (error) {
@@ -1022,7 +1171,7 @@ export default function App() {
   async function submitSupplyRequest(event) {
     event.preventDefault();
     try {
-      const response = await api.createSupplyRequest(supplyDraft);
+      const response = await client.createSupplyRequest(supplyDraft);
       setResponseHub((current) => ({ ...current, supply_requests: [response.supply_request, ...current.supply_requests] }));
       setSupplyDraft((current) => ({ ...current, description: '', location_consent: false }));
       setOperatorNotice(`Supply case #${response.supply_request.id} sent to nearby relief coordinators`);
@@ -1040,7 +1189,7 @@ export default function App() {
       return;
     }
     try {
-      const response = await api.updateSupplyRequest(item.id, {
+      const response = await client.updateSupplyRequest(item.id, {
         status: nextStatus,
         ...(unit ? { assigned_unit: unit } : {}),
       });
@@ -1059,7 +1208,7 @@ export default function App() {
 
   async function acknowledgeHospitalPrep(item) {
     try {
-      const response = await api.acknowledgeHospitalNotification(item.id);
+      const response = await client.acknowledgeHospitalNotification(item.id);
       setResponseHub((current) => ({ ...current, hospital_notifications: current.hospital_notifications.map((entry) => (entry.id === item.id ? { ...entry, ...response.hospital_notification } : entry)) }));
       setOperatorNotice(`Hospital preparation notice #${item.id} acknowledged`);
     } catch (error) {
@@ -1070,7 +1219,7 @@ export default function App() {
   async function submitDonation(event) {
     event.preventDefault();
     try {
-      const response = await api.createDonation(donationDraft);
+      const response = await client.createDonation(donationDraft);
       const amount = Number(response.donation.amount);
       setResponseHub((current) => ({
         ...current,
@@ -1087,7 +1236,7 @@ export default function App() {
   async function publishNewsUpdate(event) {
     event.preventDefault();
     try {
-      const response = await api.createNewsUpdate(newsDraft);
+      const response = await client.createNewsUpdate(newsDraft);
       setResponseHub((current) => ({ ...current, news_updates: [response.news_update, ...current.news_updates] }));
       setNewsDraft((current) => ({ ...current, headline: '', summary: '', stream_url: '' }));
       setOperatorNotice('Verified disaster-area news update published');
@@ -1277,7 +1426,7 @@ export default function App() {
       return;
     }
     try {
-      const response = await api.provisionUser(provisionDraft);
+      const response = await client.provisionUser(provisionDraft);
       setManagedUsers((items) => [response.user, ...items]);
       if (response.facility && provisionDraft.facility_id === 'new') {
         const key = response.user.role === 'Hospital' ? 'hospitals' : response.user.role === 'Shelter' ? 'shelters' : 'ambulances';
@@ -1294,7 +1443,7 @@ export default function App() {
 
   async function updateManagedUser(user, payload) {
     try {
-      const response = await api.updateUserAccess(user.id, payload);
+      const response = await client.updateUserAccess(user.id, payload);
       setManagedUsers((items) => items.map((item) => (item.id === user.id ? response.user : item)));
       setOperatorNotice(`${response.user.name} access updated`);
     } catch (error) {
@@ -1309,7 +1458,7 @@ export default function App() {
       return;
     }
     try {
-      await api.resetUserPassword(resetDraft.user_id, resetDraft);
+      await client.resetUserPassword(resetDraft.user_id, resetDraft);
       setManagedUsers((items) => items.map((item) => (
         String(item.id) === String(resetDraft.user_id)
           ? { ...item, password_change_required: true }
@@ -1339,7 +1488,7 @@ export default function App() {
   async function submitResource(event) {
     event.preventDefault();
     try {
-      const response = await api.createResource(resourceDraft);
+      const response = await client.createResource(resourceDraft);
       setResources((items) => [...items, response.resource]);
       setResourceDraft({ name: '', category: 'food', unit: 'units', available_quantity: 0, storage_location: '' });
       setOperatorNotice(`${response.resource.name} added to the live resource inventory`);
@@ -1351,7 +1500,7 @@ export default function App() {
   async function submitResponder(event) {
     event.preventDefault();
     try {
-      const response = await api.createResponder(responderDraft);
+      const response = await client.createResponder(responderDraft);
       setResponseHub((current) => ({
         ...current,
         responder_units: [...(current.responder_units || []), response.responder],
@@ -1366,7 +1515,7 @@ export default function App() {
   async function submitCampaign(event) {
     event.preventDefault();
     try {
-      const response = await api.createDonationCampaign(campaignDraft);
+      const response = await client.createDonationCampaign(campaignDraft);
       setResponseHub((current) => ({
         ...current,
         campaigns: [response.campaign, ...(current.campaigns || [])],
@@ -1380,11 +1529,16 @@ export default function App() {
   }
 
   async function signOut() {
+    if (sandboxActive) {
+      exitDemo();
+      return;
+    }
     try {
       await logout();
     } catch {
       // Local state is still cleared when the server session has expired.
     }
+    resetOperationalState();
     localStorage.removeItem(OFFLINE_QUEUE_KEY);
     setPendingOperations([]);
     setCurrentUser(null);
@@ -1394,13 +1548,13 @@ export default function App() {
     setIntegrationReadiness(emptyIntegrationReadiness);
     setProvisionDraft({ ...emptyProvisionDraft, facility: { ...emptyProvisionDraft.facility } });
     setResetDraft({ user_id: '', admin_password: '', new_password: '', password_confirmation: '' });
-    setSessionMode(DEMO_ENABLED ? 'demo' : 'account');
-    setShowAccountPanel(!DEMO_ENABLED);
+    setSessionMode('account');
+    setShowAccountPanel(true);
     setActiveRole('Citizen');
     setOperatorNotice('Signed out successfully');
   }
 
-  if (!DEMO_ENABLED && (!currentUser || passwordChangeRequired)) {
+  if (!sandboxActive && (!currentUser || passwordChangeRequired)) {
     return (
       <main className="auth-gate">
         <div className="auth-gate-brand">
@@ -1410,6 +1564,7 @@ export default function App() {
         {sessionMode === 'checking' ? (
           <section className="panel auth-gate-loading"><RefreshCw size={22} /><h1>Restoring your secure session</h1></section>
         ) : (
+          <>
           <AccountPanel
             mode={authMode}
             setMode={changeAuthMode}
@@ -1423,7 +1578,6 @@ export default function App() {
             onPasswordResetComplete={submitPasswordResetCompletion}
             currentUser={currentUser}
             sessionMode={sessionMode}
-            demoEnabled={false}
             notice={operatorNotice}
             passwordDraft={passwordDraft}
             setPasswordDraft={setPasswordDraft}
@@ -1432,19 +1586,22 @@ export default function App() {
             onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
           />
+          {!currentUser && authMode === 'login' && <DemoLauncher onStart={startDemo} starting={demoStarting} />}
+          </>
         )}
       </main>
     );
   }
 
   return (
-    <main className={`app-shell${DEMO_ENABLED ? ' demo-app-shell' : ''}`}>
-        {DEMO_ENABLED && (
-          <div className="demo-mode-banner" role="note" aria-label="Demo environment notice">
-            <strong>Demo environment</strong>
-            <span>Sample data only. Do not enter real personal or incident information.</span>
-          </div>
-        )}
+    <main className={`app-shell${sandboxActive ? ' demo-app-shell' : ''}`}>
+      {sandboxActive && (
+        <div className="demo-mode-banner" role="note" aria-label="Demo environment notice">
+          <strong>Demo sandbox</strong>
+          <span>Fictional sample data. Changes stay in this browser tab and are never sent to live operations. Do not enter real personal information.</span>
+          <button type="button" className="compact-button secondary-button" onClick={exitDemo}>Exit demo</button>
+        </div>
+      )}
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">
@@ -1463,14 +1620,8 @@ export default function App() {
           id="role-select"
           className="form-select"
           value={activeRole}
-          disabled={sessionMode === 'account'}
-          onChange={(event) => {
-            if (!DEMO_ENABLED) return;
-            setSessionMode('demo');
-            setActiveRole(event.target.value);
-            setActiveView('command');
-            setOperatorNotice(`${event.target.value} role selected`);
-          }}
+          disabled={!sandboxActive}
+          onChange={(event) => switchDemoRole(event.target.value)}
         >
           {roles.map((role) => (
             <option key={role}>{role}</option>
@@ -1512,11 +1663,11 @@ export default function App() {
             <button
               type="button"
               className={`sync-state sync-${connectionState}`}
-              onClick={() => flushOfflineQueue()}
-              title={currentUser ? `Authenticated as ${currentUser.name}` : 'Using local fallback data'}
+              onClick={() => (sessionMode === 'account' ? flushOfflineQueue() : undefined)}
+              title={sandboxActive ? 'Demo sandbox data held in this browser tab' : currentUser ? `Authenticated as ${currentUser.name}` : 'Using local fallback data'}
             >
               {connectionState === 'online' ? <Wifi size={16} /> : connectionState === 'connecting' ? <RefreshCw size={16} /> : <CloudOff size={16} />}
-              {connectionState === 'online' ? 'Live API' : connectionState === 'connecting' ? 'Connecting' : 'Offline'}
+              {connectionState === 'online' ? (sandboxActive ? 'Demo data' : 'Live API') : connectionState === 'connecting' ? 'Connecting' : 'Offline'}
               {pendingOperations.length ? ` · ${pendingOperations.length} queued` : ''}
             </button>
             <button type="button" onClick={cycleSortMode}>
@@ -1527,25 +1678,24 @@ export default function App() {
               <SlidersHorizontal size={16} />
               Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAccountPanel((value) => !value);
-              }}
-            >
-              <UserRound size={16} />
-              {sessionMode === 'account' ? currentUser?.name || activeRole : `${activeRole} demo`}
-            </button>
-            {sessionMode === 'account' && currentUser && (
-              <button
-                type="button"
-                className="logout-action"
-                onClick={signOut}
-                title="Log out of your account"
-              >
+            {sandboxActive ? (
+              <button type="button" className="logout-action" onClick={exitDemo} title="Leave the demo sandbox">
                 <LogOut size={16} />
-                Log out
+                Exit demo
               </button>
+            ) : (
+              <>
+                <button type="button" onClick={() => setShowAccountPanel((value) => !value)}>
+                  <UserRound size={16} />
+                  {currentUser?.name || activeRole}
+                </button>
+                {currentUser && (
+                  <button type="button" className="logout-action" onClick={signOut} title="Log out of your account">
+                    <LogOut size={16} />
+                    Log out
+                  </button>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -1561,7 +1711,7 @@ export default function App() {
           </div>
         </header>
 
-        {showAccountPanel && (
+        {showAccountPanel && !sandboxActive && (
           <AccountPanel
             mode={authMode}
             setMode={changeAuthMode}
@@ -1575,7 +1725,6 @@ export default function App() {
             onPasswordResetComplete={submitPasswordResetCompletion}
             currentUser={currentUser}
             sessionMode={sessionMode}
-            demoEnabled={DEMO_ENABLED}
             notice={operatorNotice}
             passwordDraft={passwordDraft}
             setPasswordDraft={setPasswordDraft}
@@ -1583,11 +1732,6 @@ export default function App() {
             sessions={accountSessions}
             onSessionRevoke={revokeAccountSession}
             onLogout={signOut}
-            onReturnToDemo={() => {
-              setSessionMode('demo');
-              setShowAccountPanel(false);
-              setOperatorNotice(`${activeRole} demo session restored`);
-            }}
           />
         )}
 
@@ -1651,6 +1795,10 @@ export default function App() {
                   retryAlertDelivery={retryAlertDelivery}
                   reduceMotion={reduceMotion}
                   filterSummary={filterSummary}
+                  field={fieldData}
+                  onRoadClosureCreate={submitRoadClosure}
+                  onRoadClosureUpdate={updateRoadClosureStatus}
+                  onIncidentStatus={updateDisasterStatus}
                 />
               ) : (
                 <RoleDashboard
@@ -1663,8 +1811,15 @@ export default function App() {
                   resources={resources}
                   responseHub={responseHub}
                   coordination={coordinationData}
+                  field={fieldData}
                   setActiveView={setActiveView}
                   onAcknowledge={acknowledgeAlert}
+                  onRoadClosureCreate={submitRoadClosure}
+                  onRoadClosureUpdate={updateRoadClosureStatus}
+                  onIncidentStatus={updateDisasterStatus}
+                  onReadinessSubmit={submitReadinessCheck}
+                  onVolunteerAvailability={updateVolunteerAvailability}
+                  onVolunteerAssignment={updateVolunteerAssignment}
                 />
               )}
             </MotionPage>
@@ -1702,9 +1857,11 @@ export default function App() {
               <FacilitiesView
                 role={activeRole}
                 facilities={facilities}
-                updateHospital={updateHospital}
-                updateShelter={updateShelter}
-                updateAmbulanceStatus={updateAmbulanceStatus}
+                onHospitalSave={saveHospitalCapacity}
+                onShelterMovement={updateShelter}
+                onShelterServices={updateShelterServices}
+                onAmbulanceStatus={setAmbulanceStatus}
+                onAmbulanceLocation={shareAmbulanceLocation}
               />
             </MotionPage>
           )}
@@ -1812,18 +1969,15 @@ function AccountPanel({
   onPasswordResetComplete,
   currentUser,
   sessionMode,
-  demoEnabled,
   notice,
   passwordDraft,
   setPasswordDraft,
   onPasswordChange,
   onLogout,
-  onReturnToDemo,
   sessions,
   onSessionRevoke,
 }) {
   const hasAccountSession = sessionMode === 'account' && Boolean(currentUser);
-  const publicDemoUrl = getPublicDemoUrl(import.meta.env.VITE_DEMO_URL, window.location.origin);
   const passwordChangeRequired = Boolean(currentUser?.password_change_required);
   const accessTitle = mode === 'register'
     ? 'Create a citizen or volunteer account'
@@ -1847,9 +2001,7 @@ function AccountPanel({
         <span>
           {hasAccountSession
             ? `Signed in as ${currentUser?.name} (${currentUser?.role})`
-            : demoEnabled
-              ? 'Role switching remains available as a clearly marked local demo.'
-              : accessDescription}
+            : accessDescription}
         </span>
       </div>
       {!hasAccountSession && notice && <p className="account-notice" role="status">{notice}</p>}
@@ -1969,23 +2121,6 @@ function AccountPanel({
         )}
         {hasAccountSession && onLogout && (
           <button type="button" className="compact-button secondary-button" onClick={onLogout}>Sign out</button>
-        )}
-        {!hasAccountSession && mode === 'login' && !demoEnabled && publicDemoUrl && (
-          <>
-            <a
-              className="compact-button secondary-button demo-link-button"
-              href={publicDemoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Play size={16} aria-hidden="true" />
-              Play demo
-            </a>
-            <p className="demo-link-note">Explore a separate sandbox with sample data.</p>
-          </>
-        )}
-        {demoEnabled && sessionMode === 'account' && (
-          <button type="button" className="compact-button secondary-button" onClick={onReturnToDemo}>Return to demo mode</button>
         )}
       </div>
     </section>
@@ -2375,12 +2510,6 @@ function recommendedUnitForRescue(rescue, disaster, role, responderUnits, ambula
   return preferred?.name || availableUnits[0]?.name || availableAmbulance?.vehicle_number || null;
 }
 
-function nextAmbulanceStatus(status) {
-  const order = ['available', 'dispatched', 'maintenance'];
-  const currentIndex = order.indexOf(normalizeValue(status));
-  return order[(currentIndex + 1) % order.length];
-}
-
 function rescueActionLabel(role, rescue, canAssign) {
   if (rescue.status === 'rescued') return 'Done';
   if (canAssign) {
@@ -2397,6 +2526,14 @@ function rescueActionLabel(role, rescue, canAssign) {
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
+}
+
+async function loadOperationalSnapshot(source, role) {
+  const [snapshot, coordination] = await Promise.all([
+    source.bootstrap(),
+    ['Admin', 'NGO'].includes(role) ? source.coordination() : Promise.resolve(null),
+  ]);
+  return { snapshot, coordination };
 }
 
 function readOfflineQueue() {
@@ -2458,17 +2595,28 @@ function buildHourlyResponseTrend(disasters, rescues) {
   return buckets.map(({ time, reports, rescued }) => ({ time, reports, rescued }));
 }
 
-function EmptyState({ title, detail }) {
-  return (
-    <div className="empty-state">
-      <strong>{title}</strong>
-      <span>{detail}</span>
-    </div>
-  );
-}
-
-function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination, setActiveView, onAcknowledge }) {
-  const workspace = getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination });
+function RoleDashboard({
+  role,
+  metrics,
+  disasters,
+  rescues,
+  facilities,
+  alerts,
+  resources,
+  responseHub,
+  coordination,
+  field = emptyFieldData,
+  setActiveView,
+  onAcknowledge,
+  onRoadClosureCreate,
+  onRoadClosureUpdate,
+  onIncidentStatus,
+  onReadinessSubmit,
+  onVolunteerAvailability,
+  onVolunteerAssignment,
+}) {
+  const workspace = getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination, field });
+  const isRoadAuthority = ['Police', 'Fire Service'].includes(role);
   const HeroIcon = workspace.icon;
 
   return (
@@ -2554,6 +2702,27 @@ function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, 
           </div>
         </section>
       </section>
+      <section className="department-grid">
+        {role === 'Volunteer' && (
+          <VolunteerDutyPanel volunteer={field.volunteer} disasters={disasters} onAvailability={onVolunteerAvailability} onAssignment={onVolunteerAssignment} />
+        )}
+        {readinessTemplates[role] && (
+          <ReadinessChecklistPanel
+            key={role}
+            role={role}
+            latest={latestReadiness(field.readiness_checks, role)}
+            defaultSubject={defaultReadinessSubject(role, facilities)}
+            onSubmit={onReadinessSubmit}
+          />
+        )}
+        {isRoadAuthority && (
+          <RoadClosurePanel closures={field.road_closures} disasters={disasters} canEdit onCreate={onRoadClosureCreate} onUpdate={onRoadClosureUpdate} />
+        )}
+        {isRoadAuthority && <IncidentStatusPanel disasters={disasters} onUpdate={onIncidentStatus} />}
+        {['Citizen', 'Volunteer', 'Ambulance', 'NGO', 'Shelter'].includes(role) && (
+          <RoadClosurePanel closures={field.road_closures} title="Closed and restricted roads" />
+        )}
+      </section>
       {role === 'Citizen' && alerts[0] && (
         <section className="panel citizen-alert-card">
           <div>
@@ -2571,8 +2740,25 @@ function RoleDashboard({ role, metrics, disasters, rescues, facilities, alerts, 
   );
 }
 
-function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination }) {
-  const topRescue = rescues[0];
+function defaultReadinessSubject(role, facilities) {
+  if (role === 'Ambulance') return facilities.ambulances[0]?.vehicle_number;
+  if (role === 'Hospital') return facilities.hospitals[0]?.name;
+  if (role === 'Shelter') return facilities.shelters[0]?.name;
+  return undefined;
+}
+
+function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alerts, resources, responseHub, coordination, field = emptyFieldData }) {
+  const topRescue = rescues.find((item) => !['rescued', 'cancelled'].includes(item.status)) || rescues[0];
+  const openClosures = activeClosures(field.road_closures);
+  const roleReadiness = readinessSummary(latestReadiness(field.readiness_checks, role));
+  const volunteerCheck = latestReadiness(field.readiness_checks, 'Volunteer');
+  const volunteerProfile = field.volunteer;
+  const openAssignments = (volunteerProfile?.assignments || []).filter((item) => ['assigned', 'in progress'].includes(item.status));
+  const pendingHospitalNotices = (responseHub?.hospital_notifications || []).filter((item) => item.status !== 'acknowledged').length;
+  const ownAmbulance = facilities.ambulances[0];
+  const callDistance = topRescue && ownAmbulance ? distanceKm(ownAmbulance, topRescue) : null;
+  const callEta = topRescue && ownAmbulance ? estimatedTravelMinutes(ownAmbulance, topRescue) : null;
+  const receivingHospital = topRescue ? nearestItem(topRescue, facilities.hospitals.filter((item) => item.available_beds > 0)) : null;
   const activeDisaster = disasters[0];
   const firstHospital = facilities.hospitals[0];
   const firstShelter = facilities.shelters[0];
@@ -2628,13 +2814,13 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       second: { eyebrow: 'Capacity signals', title: 'Surge readiness' },
       tasks: [
         { title: 'Activate triage desk', detail: 'Tag critical, delayed and walking wounded arrivals.', status: 'Checklist' },
-        { title: 'Prepare overflow care area', detail: 'Use the approved overflow plan if emergency demand rises.', status: 'Review' },
+        { title: 'Acknowledge incoming patient notices', detail: `${pendingHospitalNotices} notice${pendingHospitalNotices === 1 ? '' : 's'} awaiting acknowledgement in the Response Hub`, status: pendingHospitalNotices ? 'High' : 'Clear' },
         { title: 'Coordinate patient transfer', detail: 'Share capacity with ambulance and command users.', status: firstHospital ? 'Configured' : 'Missing' },
       ],
       signals: [
         { label: firstHospital?.name || 'Hospital', value: firstHospital?.available_beds || 0, detail: 'Available beds', icon: Building2 },
         { label: 'Emergency capacity', value: firstHospital?.emergency_capacity || 0, detail: 'Immediate intake capacity', icon: Siren },
-        { label: 'Referral route', value: 'Not recorded', detail: 'Confirm the interfacility transfer plan offline', icon: Navigation },
+        { label: 'Surge readiness', value: roleReadiness.value, detail: roleReadiness.detail, icon: ClipboardList },
       ],
       actions: [
         { label: 'Update capacity', view: 'facilities', icon: Building2 },
@@ -2686,13 +2872,14 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       second: { eyebrow: 'Handoff signals', title: 'Route and hospital context' },
       tasks: [
         { title: 'Accept highest-priority dispatch', detail: topRescue?.notes || 'No high-priority dispatch waiting.', status: topRescue?.priority_label || 'Waiting' },
-        { title: 'Confirm receiving hospital', detail: firstHospital ? `${firstHospital.name} has ${firstHospital.available_beds} beds visible.` : 'No receiving hospital is registered.', status: firstHospital ? 'Review' : 'Missing' },
+        { title: 'Confirm receiving hospital', detail: receivingHospital ? `${receivingHospital.item.name} is ${receivingHospital.distance.toFixed(1)} km from the patient with ${receivingHospital.item.available_beds} beds free.` : 'No receiving hospital with free beds is visible.', status: receivingHospital ? 'Review' : 'Missing' },
+        { title: 'Complete vehicle readiness check', detail: roleReadiness.detail, status: roleReadiness.value },
         { title: 'Update vehicle status', detail: 'Keep availability accurate for command allocation.', status: firstAmbulance?.status || 'Missing' },
       ],
       signals: [
-        { label: 'ETA target', value: 'Not recorded', detail: topRescue?.victim_name || 'No assigned call', icon: Navigation },
+        { label: 'ETA to patient', value: callEta ? `~${callEta} min` : 'No active call', detail: callDistance != null ? `${callDistance.toFixed(1)} km to ${topRescue.victim_name} · estimate at 30 km/h` : 'Share the vehicle location to estimate arrival', icon: Navigation },
         { label: 'Patient condition', value: topRescue?.condition || 'stable', detail: 'Reported rescue condition', icon: HeartPulse },
-        { label: 'Hospital handoff', value: firstHospital?.available_beds || metrics.beds, detail: 'Open beds', icon: Building2 },
+        { label: 'Hospital handoff', value: receivingHospital?.item.available_beds ?? metrics.beds, detail: receivingHospital ? `${receivingHospital.item.name} · ${receivingHospital.distance.toFixed(1)} km` : 'Open beds', icon: Building2 },
       ],
       actions: [
         { label: 'Assigned calls', view: 'rescue', icon: Ambulance },
@@ -2736,9 +2923,9 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       summary: 'Focused on assigned work, safety briefing, check-in status and nearby relief locations.',
       metrics: [
         { label: 'Assigned tasks', value: rescues.length, detail: topRescue?.notes || 'No active assignment' },
-        { label: 'Safety briefing', value: 'Not recorded', detail: 'Confirm briefing with the incident supervisor' },
+        { label: 'Safety checklist', value: roleReadiness.value, detail: roleReadiness.detail },
         { label: 'Nearest shelter', value: firstShelter?.available_capacity || 0, detail: firstShelter?.name || 'Open shelter' },
-        { label: 'Check-in', value: topRescue?.status || 'No assignment', detail: topRescue?.assigned_unit || 'No response unit assigned' },
+        { label: 'Duty status', value: volunteerProfile?.availability_status || 'Not linked', detail: `${openAssignments.length} open assignment${openAssignments.length === 1 ? '' : 's'}` },
       ],
       focus: { eyebrow: 'Assignment board', title: 'Volunteer action board' },
       second: { eyebrow: 'Safety signals', title: 'Before deployment' },
@@ -2748,7 +2935,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
         { title: 'Report unsafe conditions', detail: 'Escalate blocked roads, live wires or contaminated water.', status: 'Guidance' },
       ],
       signals: [
-        { label: 'PPE status', value: 'Not recorded', detail: 'Confirm PPE with the incident supervisor', icon: ClipboardList },
+        { label: 'PPE status', value: volunteerCheck ? (volunteerCheck.items?.['PPE issued (gloves, boots, reflective vest)'] ? 'Issued' : 'Missing') : 'Not checked', detail: volunteerCheck ? `Checked ${formatRelativeTime(volunteerCheck.created_at)}` : 'Record the pre-deployment safety check', icon: ClipboardList },
         { label: 'Task area', value: activeDisaster ? 'Assigned area' : 'None', detail: activeDisaster?.address || 'No task location recorded', icon: Navigation },
         { label: 'Buddy system', value: 'Required', detail: 'Do not deploy alone', icon: Users },
       ],
@@ -2766,7 +2953,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       metrics: [
         { label: 'Active incidents', value: disasters.length, detail: 'Public-safety areas to monitor' },
         { label: 'Pending rescues', value: metrics.pending, detail: 'Require coordination support' },
-        { label: 'Road corridors', value: 'Not recorded', detail: 'Validate closures through the authorized traffic system' },
+        { label: 'Road closures', value: openClosures.length, detail: openClosures[0] ? `${openClosures[0].road_name} · ${openClosures[0].status}` : 'No closures reported' },
         { label: 'Alerts sent', value: alerts.length, detail: 'Public warnings visible' },
       ],
       focus: { eyebrow: 'Public-safety board', title: 'Police action board' },
@@ -2777,8 +2964,8 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
         { title: 'Verify public warning reach', detail: 'Confirm ward-level warnings are understood and actionable.', status: alerts.length ? 'Review' : 'Waiting' },
       ],
       signals: [
-        { label: 'Primary corridor', value: activeDisaster ? 'Unverified' : 'None', detail: activeDisaster?.address || 'No incident access route', icon: Navigation },
-        { label: 'Crowd control', value: 'Not recorded', detail: 'No perimeter status has been entered', icon: Users },
+        { label: 'Latest closure', value: openClosures[0]?.status || 'Clear', detail: openClosures[0] ? openClosures[0].diversion || openClosures[0].location : 'No closures reported', icon: Navigation },
+        { label: 'Perimeter readiness', value: roleReadiness.value, detail: roleReadiness.detail, icon: Users },
         { label: 'Hazards', value: metrics.critical, detail: 'Critical rescue zones', icon: AlertTriangle },
       ],
       actions: [
@@ -2796,7 +2983,7 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
         { label: 'Critical rescues', value: metrics.critical, detail: 'AI-prioritized trapped/injured cases' },
         { label: 'Fire incidents', value: disasters.filter((item) => item.disaster_type === 'fire').length, detail: 'Active fire reports' },
         { label: 'Rescue teams', value: responderUnits.length, detail: 'Registered professional responder units' },
-        { label: 'Equipment ready', value: 'Not recorded', detail: 'Equipment inspection is not yet recorded' },
+        { label: 'Equipment ready', value: roleReadiness.value, detail: roleReadiness.detail },
       ],
       focus: { eyebrow: 'Fire rescue board', title: 'Rescue action board' },
       second: { eyebrow: 'Hazard signals', title: 'Scene safety and equipment' },
@@ -2807,8 +2994,8 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
       ],
       signals: [
         { label: 'Scene hazard', value: topRescue?.priority_label || 'Medium', detail: activeDisaster?.title || 'Active incident', icon: AlertTriangle },
-        { label: 'Team ETA', value: 'Not recorded', detail: topRescue?.assigned_unit || 'No response team assigned', icon: Navigation },
-        { label: 'Equipment', value: 'Not recorded', detail: 'Record readiness through the incident supervisor', icon: Package },
+        { label: 'Nearest free team', value: nearestFreeTeam(topRescue, responderUnits), detail: nearestFreeTeamDetail(topRescue, responderUnits), icon: Navigation },
+        { label: 'Road access', value: `${openClosures.length} closed`, detail: openClosures[0] ? `${openClosures[0].road_name}: ${openClosures[0].diversion || openClosures[0].status}` : 'No closures reported', icon: Package },
       ],
       actions: [
         { label: 'Open queue', view: 'rescue', icon: HeartPulse },
@@ -2821,9 +3008,20 @@ function getRoleWorkspace(role, { metrics, disasters, rescues, facilities, alert
   return base[role] || base.Citizen;
 }
 
+function nearestFreeTeam(rescue, units) {
+  const nearest = rescue ? nearestItem(rescue, units.filter((item) => item.availability_status === 'available')) : null;
+  if (!nearest) return 'None free';
+  return `~${estimatedTravelMinutes(nearest.item, rescue)} min`;
+}
+
+function nearestFreeTeamDetail(rescue, units) {
+  const nearest = rescue ? nearestItem(rescue, units.filter((item) => item.availability_status === 'available')) : null;
+  if (!nearest) return rescue?.assigned_unit || 'Register or release a responder unit';
+  return `${nearest.item.name} · ${nearest.distance.toFixed(1)} km from ${rescue.victim_name}`;
+}
+
 function rescueItemsForRole(role, rescues) {
   if (['Citizen', 'Hospital', 'Volunteer', 'Ambulance'].includes(role)) return rescues;
-  if (role === 'Shelter') return rescues.filter((item) => item.condition === 'stable' || item.status === 'en route');
   return rescues;
 }
 
@@ -2848,7 +3046,12 @@ function CommandView({
   retryAlertDelivery,
   reduceMotion,
   filterSummary,
+  field = emptyFieldData,
+  onRoadClosureCreate,
+  onRoadClosureUpdate,
+  onIncidentStatus,
 }) {
+  const closures = field.road_closures;
   const chartOptions = {
     maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
@@ -2890,7 +3093,7 @@ function CommandView({
       {dashboardMode === 'overview' && (
         <>
           <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
-          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+          <MapDecisionSection disasters={disasters} rescues={rescues} closures={closures} allocation={allocation} reduceMotion={reduceMotion} />
           <section className="analytics-wall">
             <PanelTitle eyebrow="Trend analytics" title="Response trend" />
             <div className="chart-box chart-box-wide">
@@ -2918,11 +3121,16 @@ function CommandView({
       {dashboardMode === 'response' && (
         <>
           <ResponseBoard disasters={disasters} rescues={rescues} reduceMotion={reduceMotion} />
-          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+          <MapDecisionSection disasters={disasters} rescues={rescues} closures={closures} allocation={allocation} reduceMotion={reduceMotion} />
           <section className="split-grid split-grid-3">
             <FieldTeamsPanel teams={fieldTeams} />
             <StandardsPanel />
             <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} onRetry={retryAlertDelivery} />
+          </section>
+          <section className="split-grid split-grid-3">
+            <RoadClosurePanel closures={closures} disasters={disasters} canEdit onCreate={onRoadClosureCreate} onUpdate={onRoadClosureUpdate} />
+            <IncidentStatusPanel disasters={disasters} onUpdate={onIncidentStatus} />
+            <ReadinessOverviewPanel checks={field.readiness_checks} />
           </section>
         </>
       )}
@@ -2951,14 +3159,14 @@ function CommandView({
             <StandardsPanel />
             <AlertComposer alerts={alerts} draft={alertDraft} setDraft={setAlertDraft} onSubmit={sendAlert} onRetry={retryAlertDelivery} />
           </section>
-          <MapDecisionSection disasters={disasters} rescues={rescues} allocation={allocation} reduceMotion={reduceMotion} />
+          <MapDecisionSection disasters={disasters} rescues={rescues} closures={closures} allocation={allocation} reduceMotion={reduceMotion} />
         </>
       )}
     </div>
   );
 }
 
-function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
+function MapDecisionSection({ disasters, rescues, closures = [], allocation, reduceMotion }) {
   return (
     <section className="main-grid command-grid">
       <motion.div className="panel map-panel" layout transition={reduceMotion ? quickFade : softSpring}>
@@ -2979,6 +3187,21 @@ function MapDecisionSection({ disasters, rescues, allocation, reduceMotion }) {
                 {item.address}
                 <br />
                 AI damage: {item.label}
+              </Popup>
+            </CircleMarker>
+          ))}
+          {activeClosures(closures).map((item) => (
+            <CircleMarker key={`c-${item.id}`} center={[item.latitude, item.longitude]} radius={8} pathOptions={{ color: '#d97706', fillColor: '#f59e0b', fillOpacity: 0.9 }}>
+              <Popup>
+                <strong>{item.road_name}</strong>
+                <br />
+                Road {item.status}: {item.reason}
+                {item.diversion && (
+                  <>
+                    <br />
+                    Diversion: {item.diversion}
+                  </>
+                )}
               </Popup>
             </CircleMarker>
           ))}
@@ -3167,7 +3390,7 @@ function getResponseBoardColumns(disasters, rescues) {
     title: item.title,
     kicker: item.disaster_type,
     description: `${item.address}. ${item.people_affected} people affected.`,
-    time: item.created_at,
+    time: formatRelativeTime(item.created_at),
     updates: item.sync_status === 'queued' ? 'Queued for reconnection' : `${item.status} status`,
     people: item.people_affected,
     status: item.sync_status === 'queued' ? 'Queued offline' : item.label,
@@ -3182,7 +3405,7 @@ function getResponseBoardColumns(disasters, rescues) {
       title: item.victim_name,
       kicker: `${item.condition} condition`,
       description: item.notes,
-      time: item.created_at,
+      time: formatRelativeTime(item.created_at),
       updates: item.trapped ? 'Trapped reported' : 'Not trapped',
       people: item.people_count,
       status: item.sync_status === 'queued' ? 'Queued offline' : item.priority_label,
@@ -3198,7 +3421,7 @@ function getResponseBoardColumns(disasters, rescues) {
       title: item.assigned_unit || 'Dispatch pending',
       kicker: item.victim_name,
       description: item.notes,
-      time: item.created_at,
+      time: formatRelativeTime(item.updated_at || item.created_at),
       updates: item.status,
       people: item.people_count,
       status: item.status,
@@ -3213,7 +3436,7 @@ function getResponseBoardColumns(disasters, rescues) {
       title: item.victim_name,
       kicker: 'completed rescue',
       description: item.notes || 'Rescue completed and recorded by the response team.',
-      time: item.updated_at || item.created_at,
+      time: formatRelativeTime(item.updated_at || item.created_at),
       updates: item.assigned_unit || 'Response team',
       people: item.people_count,
       status: 'Rescued',
@@ -3411,25 +3634,6 @@ function AlertComposer({ alerts, draft, setDraft, onSubmit, onRetry }) {
   );
 }
 
-function PanelTitle({ eyebrow, title }) {
-  return (
-    <div className="panel-header">
-      <div>
-        <p>{eyebrow}</p>
-        <h2>{title}</h2>
-      </div>
-    </div>
-  );
-}
-
-function ProgressBar({ value }) {
-  return (
-    <div className="progress-track" aria-label={`${value}%`}>
-      <span style={{ width: `${Math.max(3, Math.min(100, value))}%` }} />
-    </div>
-  );
-}
-
 function ReportView({ draft, setDraft, onSubmit, rescueDraft, setRescueDraft, disasters, onRescueSubmit, routeResult, onFindSafeRoute, onUseDeviceLocation }) {
   return (
     <section className="form-grid">
@@ -3554,7 +3758,7 @@ function RescueView({ role, rescues, disasters, selectedRescueId, onAction, onSe
               <tr key={item.id} className={selectedRescue?.id === item.id ? 'selected-row' : ''} onClick={() => onSelect(item.id)}>
                 <td>
                   <strong>{item.victim_name}</strong>
-                  <span>{item.people_count} people - age {item.victim_age}</span>
+                  <span>{item.people_count} {item.people_count === 1 ? 'person' : 'people'}{item.victim_age ? ` · age ${item.victim_age}` : ''} · {formatRelativeTime(item.created_at)}</span>
                 </td>
                 <td>{disasters.find((disaster) => disaster.id === Number(item.disaster_id))?.title || 'Unlinked incident'}</td>
                 <td>
@@ -3990,83 +4194,63 @@ function PhoneCallIcon() {
   return <span aria-hidden="true">☎</span>;
 }
 
-function formatCurrency(value, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0);
-}
-
-function formatDateTime(value) {
-  if (!value) return 'unknown';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function FacilitiesView({ role, facilities, updateHospital, updateShelter, updateAmbulanceStatus }) {
+function FacilitiesView({ role, facilities, onHospitalSave, onShelterMovement, onShelterServices, onAmbulanceStatus, onAmbulanceLocation }) {
   const showHospitals = ['Admin', 'Hospital', 'Ambulance', 'Police', 'Fire Service'].includes(role);
   const showShelters = ['Admin', 'Shelter', 'NGO', 'Citizen', 'Volunteer'].includes(role);
   const showAmbulances = ['Admin', 'Ambulance', 'Police', 'Fire Service'].includes(role);
+  const canEditHospitals = ['Admin', 'Hospital'].includes(role);
+  const canEditShelters = ['Admin', 'Shelter'].includes(role);
+  const canEditAmbulances = ['Admin', 'Ambulance'].includes(role);
 
   return (
     <section className="view-stack">
       <div className="facility-grid">
         {showHospitals && (
           <FacilityPanel title={role === 'Hospital' ? 'My hospital capacity' : 'Hospitals'} icon={Building2}>
-            {facilities.hospitals.map((item) => (
+            {facilities.hospitals.map((item) => (canEditHospitals ? (
+              <HospitalCapacityEditor key={item.id} hospital={item} onSave={onHospitalSave} />
+            ) : (
               <div className="facility-item" key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{item.available_beds}/{item.total_beds} beds - ICU {item.icu_beds}</span>
+                  <span>{item.available_beds}/{item.total_beds} beds · ICU {item.icu_beds} · emergency intake {item.emergency_capacity}</span>
+                  {item.contact_phone && <a className="call-link" href={`tel:${item.contact_phone}`}>{item.contact_phone}</a>}
                 </div>
-                {['Admin', 'Hospital'].includes(role) && (
-                  <div className="stepper">
-                    <button type="button" onClick={() => updateHospital(item.id, -5)}>-</button>
-                    <strong>{item.available_beds}</strong>
-                    <button type="button" onClick={() => updateHospital(item.id, 5)}>+</button>
-                  </div>
-                )}
+                <StatusPill value={item.available_beds > 0 ? 'Accepting' : 'Full'} />
               </div>
-            ))}
+            )))}
             {!facilities.hospitals.length && <p className="muted-copy">No hospital is assigned to this account. Ask an administrator to complete the facility assignment.</p>}
           </FacilityPanel>
         )}
         {showShelters && (
           <FacilityPanel title={role === 'Shelter' ? 'My shelter capacity' : 'Shelters'} icon={Home}>
-            {facilities.shelters.map((item) => (
+            {facilities.shelters.map((item) => (canEditShelters ? (
+              <ShelterControls key={item.id} shelter={item} onMovement={onShelterMovement} onServices={onShelterServices} />
+            ) : (
               <div className="facility-item" key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{item.available_capacity}/{item.total_capacity} slots - {item.medical_support ? 'medical support' : 'basic support'}</span>
+                  <span>{item.available_capacity}/{item.total_capacity} places free · {item.food_available ? 'meals available' : 'no meals'} · {item.medical_support ? 'medical desk' : 'no medical desk'}</span>
                 </div>
-                {['Admin', 'Shelter'].includes(role) && (
-                  <div className="stepper">
-                    <button type="button" onClick={() => updateShelter(item.id, -10)}>-</button>
-                    <strong>{item.available_capacity}</strong>
-                    <button type="button" onClick={() => updateShelter(item.id, 10)}>+</button>
-                  </div>
-                )}
+                <StatusPill value={item.available_capacity > 0 ? 'Open' : 'Full'} />
               </div>
-            ))}
+            )))}
             {!facilities.shelters.length && <p className="muted-copy">No shelter is assigned to this account. Ask an administrator to complete the facility assignment.</p>}
           </FacilityPanel>
         )}
         {showAmbulances && (
           <FacilityPanel title={role === 'Ambulance' ? 'My ambulance status' : 'Ambulances'} icon={Ambulance}>
-            {facilities.ambulances.map((item) => (
+            {facilities.ambulances.map((item) => (canEditAmbulances ? (
+              <AmbulanceControls key={item.id} ambulance={item} onStatus={onAmbulanceStatus} onShareLocation={role === 'Ambulance' ? onAmbulanceLocation : null} />
+            ) : (
               <div className="facility-item" key={item.id}>
                 <div>
                   <strong>{item.vehicle_number}</strong>
                   <span>{item.driver_name}</span>
                 </div>
-                <div className="facility-actions">
-                  <StatusPill value={item.status} />
-                  {['Admin', 'Ambulance'].includes(role) && (
-                    <button type="button" className="compact-button secondary-button" onClick={() => updateAmbulanceStatus(item.id)}>
-                      Next status
-                    </button>
-                  )}
-                </div>
+                <StatusPill value={item.status} />
               </div>
-            ))}
+            )))}
             {!facilities.ambulances.length && <p className="muted-copy">No ambulance is assigned to this account. Ask an administrator to complete the vehicle assignment.</p>}
           </FacilityPanel>
         )}
@@ -4086,60 +4270,6 @@ function FacilityPanel({ title, icon: Icon, children }) {
       </div>
       <div className="facility-list">{children}</div>
     </section>
-  );
-}
-
-function Input({ label, name, value, onChange, type = 'text', required = false, step, minLength, autoComplete, inputMode }) {
-  const [showPassword, setShowPassword] = useState(false);
-  const isPassword = type === 'password';
-  const inputType = isPassword && showPassword ? 'text' : type;
-
-  return (
-    <label className="form-field">
-      <span>{label}</span>
-      <div className="input-with-toggle">
-        <input className="form-control" name={name} type={inputType} step={step} minLength={minLength} autoComplete={autoComplete} inputMode={inputMode} value={value} required={required} onChange={(event) => onChange(event.target.value)} />
-        {isPassword && (
-          <button
-            type="button"
-            className="password-toggle"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-            aria-pressed={showPassword}
-            title={showPassword ? 'Hide password' : 'Show password'}
-            onClick={() => setShowPassword((visible) => !visible)}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        )}
-      </div>
-    </label>
-  );
-}
-
-function Textarea({ label, value, onChange, required = false }) {
-  return (
-    <label className="form-field">
-      <span>{label}</span>
-      <textarea className="form-control" rows="4" value={value} required={required} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
-}
-
-function Select({ label, value, options, onChange }) {
-  return (
-    <label className="form-field">
-      <span>{label}</span>
-      <select className="form-select" value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => {
-          const normalized = typeof option === 'string' ? { label: option, value: option } : option;
-          return (
-            <option key={normalized.value} value={normalized.value}>
-              {normalized.label}
-            </option>
-          );
-        })}
-      </select>
-    </label>
   );
 }
 

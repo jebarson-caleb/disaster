@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 
 const realAccountE2eEnabled = globalThis.process?.env.REAL_ACCOUNT_E2E === 'true';
-const expectedDemoUrl = globalThis.process?.env.DEMO_BASE_URL || 'https://demo.example.invalid/';
 const accountPassword = 'DemoPassword123!';
 
 const roleAccounts = [
@@ -101,11 +100,7 @@ test.describe('production-mode account acceptance', () => {
     ));
 
     await page.goto('/');
-    const demoLink = page.getByRole('link', { name: 'Play demo', exact: true });
-    await expect(demoLink).toBeVisible();
-    await expect(demoLink).toHaveAttribute('href', new URL(expectedDemoUrl).href);
-    await expect(demoLink).toHaveAttribute('target', '_blank');
-    await expect(demoLink).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(page.getByRole('button', { name: 'Demo as Admin', exact: true })).toBeVisible();
 
     for (const account of roleAccounts) {
       await page.goto('/');

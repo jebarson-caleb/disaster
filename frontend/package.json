@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test:e2e": "playwright test",
-    "test:unit": "node --test src/services/demo.test.js"
+    "test:unit": "node --test src/services/demoApi.test.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",

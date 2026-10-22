@@ -1,24 +1,16 @@
 import { expect, test } from '@playwright/test';
 
-const expectedDemoUrl = globalThis.process?.env.DEMO_BASE_URL || '';
-
-async function expectDemoLink(page) {
-  const demoLink = page.getByRole('link', { name: 'Play demo', exact: true });
-  if (!expectedDemoUrl) {
-    await expect(demoLink).toHaveCount(0);
-    return;
+async function expectDemoLauncher(page) {
+  await expect(page.getByRole('heading', { name: 'Try the interactive demo' })).toBeVisible();
+  for (const role of ['Admin', 'Citizen', 'Hospital', 'Shelter', 'Ambulance', 'NGO', 'Volunteer', 'Police', 'Fire Service']) {
+    await expect(page.getByRole('button', { name: `Demo as ${role}`, exact: true })).toBeVisible();
   }
-
-  await expect(demoLink).toBeVisible();
-  await expect(demoLink).toHaveAttribute('href', new URL(expectedDemoUrl).href);
-  await expect(demoLink).toHaveAttribute('target', '_blank');
-  await expect(demoLink).toHaveAttribute('rel', 'noopener noreferrer');
 }
 
 test('public account modes isolate credentials and recovery tokens', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sign in to your operational account' })).toBeVisible();
-  await expectDemoLink(page);
+  await expectDemoLauncher(page);
 
   await page.getByLabel('Email').fill('mode-switch-test@example.invalid');
   const loginPassword = page.locator('input[name="password"]');
@@ -42,7 +34,7 @@ test('public account modes isolate credentials and recovery tokens', async ({ pa
   await expect(page.getByRole('heading', { name: 'Request a password reset link' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to your operational account' })).toBeVisible();
-  await expectDemoLink(page);
+  await expectDemoLauncher(page);
 
   await page.goto('/?reset_token=invalid-browser-smoke-token');
   await expect(page.getByRole('heading', { name: 'Choose a new account password' })).toBeVisible();
