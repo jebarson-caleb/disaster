@@ -58,6 +58,11 @@ def campaign_payload(campaign):
     }
 
 
+def public_record(item, *private_fields):
+    """Serialize a record for anonymous feeds without internal account identifiers."""
+    return {key: value for key, value in item.to_dict().items() if key not in private_fields}
+
+
 def welfare_payload(item):
     responder = db.session.get(User, item.responder_id) if item.responder_id else None
     return {
@@ -85,8 +90,8 @@ def national_alerts():
         {
             "country": "India",
             "alerts": [item.public_dict() for item in alerts],
-            "disasters": [item.to_dict() for item in disasters],
-            "news_updates": [item.to_dict() for item in news],
+            "disasters": [public_record(item, "reported_by_id") for item in disasters],
+            "news_updates": [public_record(item, "published_by_id") for item in news],
             "generated_at": now.isoformat(),
         }
     )
@@ -98,7 +103,7 @@ def list_news_updates():
     disaster_id = request.args.get("disaster_id", type=int)
     if disaster_id:
         query = query.filter_by(disaster_id=disaster_id)
-    return jsonify({"news_updates": [item.to_dict() for item in query.limit(100).all()]})
+    return jsonify({"news_updates": [public_record(item, "published_by_id") for item in query.limit(100).all()]})
 
 
 @community_bp.post("/news-updates")

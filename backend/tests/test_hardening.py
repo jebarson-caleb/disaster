@@ -153,3 +153,12 @@ def test_incident_status_is_managed_by_command_roles(client, app, seeded):
     response = client.patch(endpoint, headers=police, json={"status": "contained"})
     assert response.status_code == 200
     assert response.get_json()["disaster"]["status"] == "contained"
+
+
+def test_public_feeds_do_not_expose_account_identifiers(client, seeded):
+    feed = client.get("/api/v1/national-alerts").get_json()
+    assert feed["disasters"]
+    assert all("reported_by_id" not in item for item in feed["disasters"])
+    assert all("published_by_id" not in item for item in feed["news_updates"])
+    news = client.get("/api/v1/news-updates").get_json()["news_updates"]
+    assert all("published_by_id" not in item for item in news)
