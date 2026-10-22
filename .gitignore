@@ -17,3 +17,5 @@ frontend/test-results/
 .env.local
 .vercel
 .env*.local
+.playwright-cli/
+output/
