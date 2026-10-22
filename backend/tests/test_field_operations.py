@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models import Volunteer
-from tests.test_hardening import bearer, first_disaster_id, seeded  # noqa: F401
+from tests.support import bearer
+from tests.test_hardening import first_disaster_id, seeded  # noqa: F401
 
 
 def closure_payload(**overrides):

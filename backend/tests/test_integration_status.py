@@ -1,10 +1,11 @@
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 
 def role_headers(client, app, role):
     with app.app_context():
         seed_demo_data()
-    session = client.post("/api/v1/auth/demo-session", json={"role": role})
+    session = login_response(client, role)
     return {"Authorization": f"Bearer {session.get_json()['token']}"}
 
 

@@ -12,10 +12,11 @@ from app.models import (
     Volunteer,
 )
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 
 def demo_headers(client, role):
-    response = client.post("/api/v1/auth/demo-session", json={"role": role})
+    response = login_response(client, role)
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.get_json()['token']}"}
 

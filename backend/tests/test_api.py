@@ -4,6 +4,7 @@ from app.bootstrap import initialize_database
 from app.extensions import db
 from app.models import Ambulance, Hospital, ResponderUnit, ResponseDispatch, RoleProfile, Shelter, User, Volunteer
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 
 def test_register_login_and_me(client):
@@ -325,7 +326,7 @@ def test_bootstrap_alert_acknowledgement_and_safe_route(client, app):
     with app.app_context():
         seed_demo_data()
 
-    citizen_session = client.post("/api/v1/auth/demo-session", json={"role": "Citizen"})
+    citizen_session = login_response(client, "Citizen")
     assert citizen_session.status_code == 200
     citizen_headers = {"Authorization": f"Bearer {citizen_session.get_json()['token']}"}
 
@@ -341,7 +342,7 @@ def test_bootstrap_alert_acknowledgement_and_safe_route(client, app):
     )
     assert forbidden.status_code == 403
 
-    admin_session = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
+    admin_session = login_response(client, "Admin")
     admin_headers = {"Authorization": f"Bearer {admin_session.get_json()['token']}"}
     created = client.post(
         "/api/v1/alerts",
@@ -387,12 +388,6 @@ def test_bootstrap_alert_acknowledgement_and_safe_route(client, app):
     assert route.get_json()["navigation_url"].startswith("https://www.google.com/maps/dir/")
 
 
-def test_demo_session_can_be_disabled(client, app):
-    app.config["DEMO_MODE"] = False
-    response = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
-    assert response.status_code == 404
-
-
 def test_production_rejects_demo_mode_before_seeding_or_issuing_sessions(client, app):
     app.config.update(
         APP_ENV="production",
@@ -410,14 +405,12 @@ def test_production_rejects_demo_mode_before_seeding_or_issuing_sessions(client,
     with app.app_context(), pytest.raises(RuntimeError, match="DEMO_MODE must be false"):
         initialize_database()
 
-    assert client.post("/api/v1/auth/demo-session", json={"role": "Admin"}).status_code == 404
-
 
 def test_resource_distribution_and_volunteer_assignment_are_transactional(client, app):
     with app.app_context():
         seed_demo_data()
 
-    admin_session = client.post("/api/v1/auth/demo-session", json={"role": "Admin"}).get_json()
+    admin_session = login_response(client, "Admin").get_json()
     headers = {"Authorization": f"Bearer {admin_session['token']}"}
     coordination = client.get("/api/v1/coordination", headers=headers).get_json()
     resource = coordination["resources"][0]

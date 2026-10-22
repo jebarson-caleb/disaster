@@ -209,7 +209,6 @@ def enforce_csrf():
         "auth.register",
         "auth.request_password_reset",
         "auth.complete_password_reset",
-        "operations.demo_session",
     }:
         return None
     if request.headers.get("Authorization", "").startswith("Bearer "):

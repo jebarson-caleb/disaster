@@ -8,6 +8,7 @@ from app.config import production_configuration_issues
 from app.extensions import db
 from app.models import AuthSession
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 STRONG_PASSWORD = "Correct-Horse-Battery-47"
 
@@ -118,40 +119,11 @@ def test_readiness_and_production_configuration_gate(client, app):
     )
     assert production_configuration_issues(safe_production) == []
 
-    safe_demo = dict(app.config)
-    safe_demo.update(
-        APP_ENV="demo",
-        SQLALCHEMY_DATABASE_URI="postgresql+psycopg://demo:secret@demo-db.example/resq?sslmode=require",
-        SECRET_KEY="c" * 64,
-        JWT_SECRET_KEY="d" * 64,
-        DEMO_MODE=True,
-        AUTO_MIGRATE=True,
-        SESSION_COOKIE_SECURE=True,
-        CORS_ORIGINS=[],
-        BOOTSTRAP_ADMIN_EMAIL="",
-        BOOTSTRAP_ADMIN_PASSWORD="",
-        RATELIMIT_STORAGE_URI="rediss://cache.example/0",
-        RUNNING_ON_VERCEL=True,
-        RELEASE_COMMIT="c" * 40,
-    )
-    assert production_configuration_issues(safe_demo) == []
-
-    unsafe_demo = dict(safe_demo)
-    unsafe_demo.update(
-        SQLALCHEMY_DATABASE_URI="sqlite:////tmp/shared-demo.db",
-        DEMO_MODE=False,
-        SESSION_COOKIE_SECURE=False,
-        RATELIMIT_STORAGE_URI="memory://",
-        BOOTSTRAP_ADMIN_EMAIL="admin@example.com",
-        DONATION_PAYMENT_URL="https://payments.example/checkout",
-    )
-    demo_issues = production_configuration_issues(unsafe_demo)
-    assert any("persistent MySQL or PostgreSQL" in issue for issue in demo_issues)
-    assert any("DEMO_MODE" in issue for issue in demo_issues)
-    assert any("COOKIE_SECURE" in issue for issue in demo_issues)
-    assert any("RATELIMIT_STORAGE_URI" in issue for issue in demo_issues)
-    assert any("provider integrations" in issue for issue in demo_issues)
-    assert any("Bootstrap administrator" in issue for issue in demo_issues)
+    staging = dict(safe_production)
+    staging.update(APP_ENV="staging", DEMO_MODE=True, SESSION_COOKIE_SECURE=False)
+    staging_issues = production_configuration_issues(staging)
+    assert any("DEMO_MODE" in issue for issue in staging_issues)
+    assert any("COOKIE_SECURE" in issue for issue in staging_issues)
 
 
 def test_optional_integration_configuration_is_fail_closed(app):
@@ -372,7 +344,7 @@ def test_volunteer_requires_admin_verification(client, app):
         "/api/v1/auth/login",
         json={"email": "pending-volunteer@example.com", "password": STRONG_PASSWORD},
     ).status_code == 401
-    admin_session = client.post("/api/v1/auth/demo-session", json={"role": "Admin"}).get_json()
+    admin_session = login_response(client, "Admin").get_json()
     admin_headers = {"Authorization": f"Bearer {admin_session['token']}"}
     users = client.get("/api/v1/admin/users", headers=admin_headers).get_json()["users"]
     volunteer = next(user for user in users if user["email"] == "pending-volunteer@example.com")

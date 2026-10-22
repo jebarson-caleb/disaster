@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models import Ambulance, Disaster, Hospital, HospitalNotification, RoleProfile, Shelter, User
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 TEMPORARY_PASSWORD = "Temporary-Access-Password-71"
 PRIVATE_PASSWORD = "Private-Account-Password-83"
@@ -176,7 +177,7 @@ def test_facility_accounts_can_mutate_only_their_assigned_record(client, app):
             "ambulance": (ambulance_user_profile.ambulance_id, other_ambulance.id),
         }
 
-    hospital_token = client.post("/api/v1/auth/demo-session", json={"role": "Hospital"}).get_json()["token"]
+    hospital_token = login_response(client, "Hospital").get_json()["token"]
     hospital_headers = {"Authorization": f"Bearer {hospital_token}"}
     assert client.patch(
         f"/api/v1/hospitals/{identifiers['hospital'][0]}/capacity",
@@ -197,7 +198,7 @@ def test_facility_accounts_can_mutate_only_their_assigned_record(client, app):
         for item in hospital_snapshot["response_hub"]["hospital_notifications"]
     )
 
-    shelter_token = client.post("/api/v1/auth/demo-session", json={"role": "Shelter"}).get_json()["token"]
+    shelter_token = login_response(client, "Shelter").get_json()["token"]
     shelter_headers = {"Authorization": f"Bearer {shelter_token}"}
     assert client.patch(
         f"/api/v1/shelters/{identifiers['shelter'][0]}/capacity",
@@ -210,7 +211,7 @@ def test_facility_accounts_can_mutate_only_their_assigned_record(client, app):
         json={"available_capacity": 100},
     ).status_code == 403
 
-    ambulance_token = client.post("/api/v1/auth/demo-session", json={"role": "Ambulance"}).get_json()["token"]
+    ambulance_token = login_response(client, "Ambulance").get_json()["token"]
     ambulance_headers = {"Authorization": f"Bearer {ambulance_token}"}
     assert client.patch(
         f"/api/v1/ambulances/{identifiers['ambulance'][0]}/status",

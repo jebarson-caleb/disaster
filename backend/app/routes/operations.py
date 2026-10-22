@@ -7,7 +7,7 @@ from sqlalchemy import func, or_
 
 from .. import validation
 from ..access import COMMAND_ROLES, assigned_rescue_ids, role_profile, scoped_rescue_query
-from ..auth import audit_event, authenticated_rate_key, login_required, session_response
+from ..auth import audit_event, authenticated_rate_key, login_required
 from ..extensions import db, limiter
 from ..models import (
     AlertAcknowledgement,
@@ -365,20 +365,6 @@ def coordination():
             "assignments": [item.to_dict() for item in VolunteerAssignment.query.order_by(VolunteerAssignment.assigned_at.desc()).limit(100).all()],
         }
     )
-
-
-@operations_bp.post("/auth/demo-session")
-@limiter.limit("30 per minute")
-def demo_session():
-    if current_app.config.get("APP_ENV") == "production" or not current_app.config.get("DEMO_MODE"):
-        return jsonify({"error": "Demo sessions are disabled"}), 404
-    role = (request.get_json() or {}).get("role", "Citizen")
-    user = User.query.filter_by(role=role).order_by(User.id).first()
-    if user is None:
-        return jsonify({"error": f"No demo user is configured for {role}"}), 404
-    response = session_response(user)
-    db.session.commit()
-    return response
 
 
 def public_user(user):

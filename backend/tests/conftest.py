@@ -4,6 +4,7 @@ from app import create_app
 from app.config import Config
 from app.extensions import db
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 
 class TestConfig(Config):
@@ -53,6 +54,6 @@ def client(app):
 def auth_headers(client, app):
     with app.app_context():
         seed_demo_data()
-    response = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
+    response = login_response(client, "Admin")
     token = response.get_json()["token"]
     return {"Authorization": f"Bearer {token}"}

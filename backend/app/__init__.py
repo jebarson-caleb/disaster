@@ -8,7 +8,7 @@ from sqlalchemy import text
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .auth import enforce_csrf
-from .config import Config, production_configuration_issues
+from .config import LOCAL_ENVIRONMENTS, Config, production_configuration_issues
 from .extensions import db, limiter, migrate
 from .routes.admin import admin_bp
 from .routes.ai import ai_bp
@@ -75,7 +75,7 @@ def create_app(config_object=Config):
         )
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
-        if app.config.get("APP_ENV") in {"production", "demo"}:
+        if app.config.get("APP_ENV") not in LOCAL_ENVIRONMENTS:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 

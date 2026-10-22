@@ -2,34 +2,13 @@ import pytest
 
 from app.models import RescueRequest
 from app.seed import seed_demo_data
-
-SEEDED_PASSWORD = "DemoPassword123!"
-SEEDED_EMAILS = {
-    "Admin": "admin@rescue.local",
-    "Citizen": "citizen@rescue.local",
-    "Volunteer": "volunteer@rescue.local",
-    "Hospital": "hospital@rescue.local",
-    "Shelter": "shelter@rescue.local",
-    "Ambulance": "ambulance@rescue.local",
-    "NGO": "ngo@rescue.local",
-    "Police": "police@rescue.local",
-    "Fire Service": "fire@rescue.local",
-}
+from tests.support import bearer
 
 
 @pytest.fixture()
 def seeded(app):
     with app.app_context():
         seed_demo_data()
-
-
-def bearer(client, role):
-    response = client.post(
-        "/api/v1/auth/login",
-        json={"email": SEEDED_EMAILS[role], "password": SEEDED_PASSWORD},
-    )
-    assert response.status_code == 200, response.get_json()
-    return {"Authorization": f"Bearer {response.get_json()['token']}"}
 
 
 def first_disaster_id(client, headers):

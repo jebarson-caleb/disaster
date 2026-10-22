@@ -7,12 +7,13 @@ from urllib.error import URLError
 from app.extensions import db
 from app.models import AuditEvent, EmergencyAlert
 from app.seed import seed_demo_data
+from tests.support import login_response
 
 
 def admin_headers(client, app):
     with app.app_context():
         seed_demo_data()
-    session = client.post("/api/v1/auth/demo-session", json={"role": "Admin"})
+    session = login_response(client, "Admin")
     return {"Authorization": f"Bearer {session.get_json()['token']}"}
 
 
