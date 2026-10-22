@@ -22,6 +22,22 @@ Hospital, shelter, and ambulance accounts must be linked to their managed record
 | NGO | Administrator provisioning | Password | Relief queue, distribution, volunteers, warnings | Command relief and rescue coordination |
 | Admin | Bootstrap or administrator provisioning | Password | All workspaces, User Access, Operational Setup | Full authorized beta tenant |
 
+## Department tools
+
+| Role | Department-specific tools |
+| --- | --- |
+| Citizen | Active road closures and diversions on the safety dashboard |
+| Volunteer | Available/off-duty status, start and complete assignments, pre-deployment safety and PPE checklist |
+| Police | Publish, restrict, and reopen road closures; incident status board; perimeter and crowd-control checklist |
+| Fire Service | Road closures, incident status board, equipment and crew readiness checklist, nearest free team ETA |
+| Hospital | Edit available, ICU, and emergency-intake capacity; surge readiness checklist; pending patient-notice count |
+| Shelter | Record arrivals and departures, meals and medical-desk status, camp services checklist, nearby expected arrivals |
+| Ambulance | Explicit vehicle status including off duty, share GPS location, ETA to patient, nearest receiving hospital, vehicle checklist |
+| NGO | Relief logistics checklist alongside distribution and volunteer assignment |
+| Admin | All of the above plus a cross-department readiness overview |
+
+Readiness checklists are visible to the submitting role and to administrators. Road closures are visible to every signed-in role.
+
 ## Administrator setup sequence
 
 1. Replace the bootstrap password.
@@ -35,4 +51,4 @@ Hospital, shelter, and ambulance accounts must be linked to their managed record
 
 ## Acceptance evidence
 
-The backend acceptance suite provisions all nine roles, exercises temporary-password replacement and secure self-service recovery, opens each role’s bootstrap workspace, verifies facility ownership, checks citizen case isolation, and exercises resource/responder/campaign setup. One isolated full-stack Chromium acceptance job opens every advertised view for every role, verifies the Shelter arrivals and Volunteer hazard-report shortcuts, and publishes an isolated warning through the command-role interface. A second production-mode Chromium job signs every role directly into its role-locked live workspace. The production smoke workflow separately verifies the public UI, liveness, database/configuration readiness, authentication and recovery boundaries, demo-mode isolation, and security headers.
+The backend acceptance suite provisions all nine roles, exercises temporary-password replacement and secure self-service recovery, opens each role's bootstrap workspace, verifies facility ownership, checks citizen case isolation, exercises resource/responder/campaign setup, and covers road closures, readiness checklists, volunteer duty status, shelter arrivals scoping, and input validation. A second production-mode Chromium job signs every role directly into its role-locked live workspace and confirms its department panel loads from the live API. A role-demo Chromium job opens every advertised view for all nine roles from the login-screen demo, verifies the Shelter arrivals and Volunteer hazard-report shortcuts, publishes a warning, records department closures, readiness, and duty changes, and asserts the sandbox makes no API requests. The production smoke workflow separately verifies the public UI, liveness, database/configuration readiness, authentication and recovery boundaries, removal of the demo-session endpoint, and security headers.

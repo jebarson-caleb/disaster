@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here.
 
+## 1.4.0 - 2026-10-22
+
+### Added
+
+- **Try the interactive demo** on the sign-in screen with one button per role. It runs an in-browser sandbox with fictional sample data that mirrors live role scoping and never contacts the API.
+- Road closures and diversions published by Police, Fire Service, and administrators, visible to every role and on the command map.
+- Readiness checklists for Fire Service, Police, Volunteer, Ambulance, Hospital, Shelter, and NGO teams, with an administrator overview.
+- Incident status control for command roles, volunteer self-service duty status, and assignment start/completion that returns volunteers to the available pool.
+- Hospital ICU and emergency-intake editing, shelter arrival/departure recording and service toggles, explicit ambulance status (including off duty), vehicle GPS sharing, ETA to patient, and nearest receiving hospital.
+- Shelter accounts now receive nearby stable evacuees in transit as expected arrivals.
+
+### Changed
+
+- Every remaining "Not recorded" dashboard placeholder now shows live department data.
+- Board and queue times are shown as relative times instead of raw timestamps.
+- Any `APP_ENV` other than `development` or `testing` receives full production readiness checks.
+- CI role acceptance drives every role demo against a production build without a backend.
+
+### Removed
+
+- The passwordless `/api/v1/auth/demo-session` endpoint, the `APP_ENV=demo` hosted sandbox, its nightly reset workflow and script, and the `VITE_DEMO_MODE`/`VITE_DEMO_URL` build flags.
+- Committed Playwright CLI snapshots and exploratory screenshots.
+
+### Security
+
+- Length, type, range, and allowed-value validation on operational writes; malformed input returns 400 instead of storage errors.
+- Hospital, Ambulance, and Volunteer accounts may set only the rescue statuses for their own leg of a response.
+- Location pings may reference only the caller's own cases; donation and location endpoints are rate limited.
+- Anonymous public feeds no longer include internal account identifiers.
+- Operational data held in browser memory is cleared on sign-out and session expiry.
+- Vite upgraded to 8.3.5 for high-severity development-server advisories.
+
 ## 1.3.4 - 2026-07-31
 
 ### Added

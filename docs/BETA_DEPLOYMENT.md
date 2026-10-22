@@ -5,7 +5,7 @@
 1. Provision PostgreSQL through a Vercel Marketplace integration such as Neon, or another managed provider. Copy its pooled, TLS-enabled connection URL to `DATABASE_URL`. Do not use SQLite on Vercel; the writable `/tmp` directory is temporary.
 2. Generate two different application secrets. For example, run `openssl rand -hex 32` twice and assign the results to `SECRET_KEY` and `JWT_SECRET_KEY`.
 3. Set `BOOTSTRAP_ADMIN_EMAIL` and a unique `BOOTSTRAP_ADMIN_PASSWORD` of at least 15 characters. Set `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_PHONE` if desired.
-4. Leave `DEMO_MODE=false`, `APP_ENV=production`, `AUTO_MIGRATE=true`, and `COOKIE_SECURE=true`. These are already the Vercel defaults. Do not set `VITE_DEMO_MODE` on production builds.
+4. Leave `DEMO_MODE=false`, `APP_ENV=production`, `AUTO_MIGRATE=true`, and `COOKIE_SECURE=true`. These are already the Vercel defaults. Any `APP_ENV` other than `development` or `testing` receives the full production readiness checks, and `DEMO_MODE` is refused outside those two local environments.
 5. Optional but recommended for multi-instance beta traffic: provision Redis and set `RATELIMIT_STORAGE_URI` to its TLS `rediss://` URL. Account-level lockout is not persisted; the login endpoint remains per-IP throttled.
 6. Keep the Vercel application preset as **Services**, root directory `./`, frontend service `frontend` (Vite), and backend service `backend` (`index:app`). Deploy.
 
@@ -21,31 +21,13 @@
 
 Optional production variables include `RATELIMIT_STORAGE_URI`, `CORS_ORIGINS`, `EMERGENCY_HOTLINE`, `ALERT_DELIVERY_WEBHOOK_URL`, `ALERT_DELIVERY_WEBHOOK_SECRET`, `ALERT_DELIVERY_TIMEOUT_SECONDS`, `DONATION_PAYMENT_URL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PUBLIC_BASE_URL`, `PASSWORD_RESET_MINUTES`, and the `SMTP_*` settings documented in `backend/.env.example`.
 
-## Public demo sandbox
+## Login-screen demo
 
-The login page shows **Play demo** only when the production frontend is built with `VITE_DEMO_URL` set to an absolute HTTPS URL on a different origin. The link opens that URL in a new tab with `noopener noreferrer`. Leave it unset until the separate sandbox has passed its acceptance checks.
+The sign-in screen offers **Try the interactive demo** with one button per role (Admin, Citizen, Hospital, Shelter, Ambulance, NGO, Volunteer, Police, Fire Service). No separate deployment, database, Redis instance, or build flag is needed.
 
-Create a separate Vercel Services project and hostname from this repository for the demo. Attach a dedicated managed PostgreSQL database and Redis instance. Do not copy production environment variables, database credentials, provider secrets, or user data into the demo project. Configure the demo backend with:
+The demo runs an in-browser sandbox client that mirrors the live API's response shapes and role scoping using fictional sample data. Every read and write stays in memory in that browser tab; the sandbox never sends a request to the API, and exiting or reloading discards it. The sample dataset is a separate lazily loaded asset, so visitors who only sign in never download it. A persistent banner warns users not to enter real personal or incident information.
 
-| Variable | Demo requirement |
-| --- | --- |
-| `APP_ENV` | `demo` |
-| `DATABASE_URL` | Demo-only persistent PostgreSQL or MySQL database |
-| `SECRET_KEY`, `JWT_SECRET_KEY` | Separate random values, each 32+ characters and different from one another and production |
-| `DEMO_MODE` | `true` |
-| `AUTO_MIGRATE`, `COOKIE_SECURE` | Both `true` |
-| `RATELIMIT_STORAGE_URI` | Demo Redis TLS URL beginning with `rediss://` |
-| `CORS_ORIGINS` | Empty for the same-origin Vercel Services deployment |
-| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` | Unset |
-| Alert webhook, donation checkout, Ollama, and all `SMTP_*` settings | Unset; hosted demo validation rejects live provider configuration |
-
-Build the demo frontend with `VITE_DEMO_MODE=true` and the production frontend with `VITE_DEMO_MODE=false` and `VITE_DEMO_URL=https://<demo-host>`. The backend only enables demo sessions when `DEMO_MODE=true`; production readiness rejects that flag. Both hosted environments enforce persistent storage, independent secrets, secure cookies, migration readiness, and release provenance. The demo requires shared Redis throttling because its role-session endpoint is public.
-
-The demo opens the existing synthetic role accounts and displays a persistent warning not to enter real personal or incident information. All writes remain in the isolated demo database; external messaging, email, payments, and AI providers stay disabled. The scheduled **Reset demo sandbox** GitHub Actions workflow runs nightly at 03:23 UTC and can also be started manually. Configure the GitHub Actions environment named `demo` with these demo-only secrets: `DEMO_DATABASE_URL`, `DEMO_SECRET_KEY`, `DEMO_JWT_SECRET_KEY`, and `DEMO_RATELIMIT_STORAGE_URI`; set the environment variable `DEMO_DATABASE_NAME` to the exact database name in that URL, including the word `demo`. The reset command refuses non-demo environments, invalid hosted configuration, and non-persistent databases; it drops the demo schema, reapplies checked-in migrations, and recreates synthetic seed data. Never point those secrets at a production database.
-
-Restrict the GitHub `demo` environment's deployment branch policy to `main`. The reset job also refuses to run from another branch, so every destructive reset uses the reviewed release code.
-
-Before enabling the production link, verify `/api/v1/health` and `/api/v1/ready` on both hosts, confirm the demo role flows, create a demo record and verify it is absent from production, and run **Reset demo sandbox** once to confirm it returns to the seed state.
+CI verifies every role's demo workspace against a production build and asserts that no `/api/` request is made while the sandbox is active.
 
 ## Database migrations
 
@@ -88,7 +70,7 @@ The administrator-only **Operational Setup → Integration readiness** panel rep
 
 The complete expected login and workspace matrix is in [Role access](ROLE_ACCESS.md).
 
-The checked-in production smoke workflow runs after every `main` push and daily. It rejects known demo strings in the browser bundle, a reachable demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. Its headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials. CI separately runs an isolated production-mode account environment where every role signs in directly to its role-locked workspace.
+The checked-in production smoke workflow runs after every `main` push and daily. It rejects seed credentials or sample records in the main browser bundle, any response other than 404 from the removed demo-session endpoint, malformed JSON acceptance, privileged self-registration, failed readiness/database checks, and missing security headers. Its headless Chromium pass also verifies sign-in, registration, recovery navigation, credential clearing between account modes, reset-token removal, and the mobile login viewport without creating an account or submitting credentials. CI separately runs an isolated production-mode account environment where every role signs in directly to its role-locked workspace.
 
 ## Real-user cutover and acceptance-data removal
 
@@ -156,4 +138,4 @@ The gateway must return any `2xx` status only after accepting responsibility for
 
 ## Release gate
 
-The controlled pilot is ready only when CI passes, Python and npm dependency audits report no known vulnerabilities, production and demo `/ready` checks are green, the demo isolation/reset checks pass, and the pilot owner has documented support/escalation, data retention, monitoring, and a successful database restore drill. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.
+The controlled pilot is ready only when CI passes, Python and npm dependency audits report no known vulnerabilities, production `/ready` checks are green, the role-demo and real-account browser acceptance jobs pass, and the pilot owner has documented support/escalation, data retention, monitoring, and a successful database restore drill. Public emergency use additionally requires organizational authorization, accessibility/user testing, threat modeling, provider integrations, data-protection review, service-level monitoring/on-call coverage, backup recovery evidence, and field exercises. Those are operational approvals and cannot be supplied by source code alone.

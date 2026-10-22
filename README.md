@@ -26,8 +26,9 @@ A persistent PostgreSQL database is mandatory for a real beta. Vercel Functions 
 - Server-side idle and absolute session expiry, logout, in-app session listing, and per-device revocation
 - Role authorization, facility-bound operational accounts, volunteer approval, password reset/change, and security audit events
 - Request IDs, generic error responses, payload limits, security headers, no-store API responses, and readiness gates
-- Production login wall; demo data and role switching require explicit demo build/runtime flags
-- Optional **Play demo** login link to a separate HTTPS demo deployment; it remains hidden until `VITE_DEMO_URL` points to a different origin
+- Production login wall with no passwordless or demo session endpoint; sample-data seeding is refused outside `development`/`testing`
+- **Try the interactive demo** on the sign-in screen: one button per role, running an in-browser sandbox with fictional data that never contacts the API
+- Length, type, range, and allowed-value validation on every operational write
 - CI for linting, migration drift, warning-free tests, backend coverage, production builds, dependency vulnerability audits, and real-account browser login for every role
 - Pinned runtime dependencies with automated weekly update proposals
 - Versioned, data-preserving database migrations with serialized PostgreSQL/MySQL startup upgrades
@@ -37,6 +38,7 @@ These controls are aligned with the OWASP session and authentication guidance li
 ## Features
 
 - Role-aware workspaces for citizens, administrators, police, fire, hospitals, shelters, ambulances, NGOs, and volunteers
+- Department tools: road closures and diversions, readiness checklists, incident status control, volunteer duty status, hospital ICU/emergency capacity, shelter intake and services, ambulance status/GPS/ETA, and an administrator readiness overview
 - Administrator account directory with activation/deactivation, pending-volunteer verification, facility assignment, re-authenticated password recovery, and automatic session revocation
 - Operational Setup workspace for live resource inventory, responder units, verified donation campaigns, and secret-safe integration readiness
 - Incident reporting, deterministic damage scoring, rescue priority, automatic nearest-team/volunteer/ambulance dispatch, and hospital preparation
@@ -72,9 +74,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. For the controlled local role-switching demo, keep `DEMO_MODE=true` in `backend/.env` and start Vite with `VITE_DEMO_MODE=true`. Seeded demo accounts use `DemoPassword123!` with addresses such as `admin@rescue.local` and `citizen@rescue.local`. Never enable demo mode on the production deployment.
-
-The public **Play demo** link uses `VITE_DEMO_URL` to open a separately hosted sandbox. Its Vercel project, database, Redis, and secrets must be separate from production; see [Beta deployment](docs/BETA_DEPLOYMENT.md) before enabling the link.
+Open `http://localhost:5173`. Select **Try the interactive demo** and choose a role to explore every workspace with fictional sample data, with no backend needed. To sign in to real local accounts instead, keep `APP_ENV=development` and `DEMO_MODE=true` in `backend/.env`; seeded accounts such as `admin@rescue.local` and `citizen@rescue.local` use `DemoPassword123!`. `DEMO_MODE` is refused in any other environment.
 
 ## Verification
 
@@ -90,6 +90,7 @@ cd ../frontend
 npm ci
 npm audit --audit-level=moderate
 npm run lint
+npm run test:unit
 npm run build
 npx playwright install chromium
 BASE_URL=https://disaster-delta-eight.vercel.app npm run test:e2e -- --project=chromium

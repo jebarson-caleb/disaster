@@ -20,7 +20,8 @@ This implementation treats the repository SRS as its primary acceptance statemen
 | Unsafe or capacity-blind evacuation | Nearest available shelter/hospital selection, nearby-hazard context, advisory guidance, and navigation link | `GET /api/v1/safe-route` |
 | Resource and volunteer silos | Shared inventory/distribution/volunteer snapshot; allocation decrements inventory and assignments change availability atomically | `GET /api/v1/coordination` |
 | Slow prioritization | Deterministic, offline-capable damage and rescue scoring with audit records | `/api/v1/ai/*` and `ai_assessments` |
-| Role ambiguity | Production login wall, administrator-provisioned operational roles, backend authorization, and controlled demo sessions | `/api/v1/auth/*`; demo endpoint only when explicitly enabled |
+| Role ambiguity | Production login wall, administrator-provisioned operational roles, backend authorization, and an in-browser role demo that never contacts the API | `/api/v1/auth/*` |
+| Department blind spots | Road closures and diversions, readiness checklists for every department, incident status control, volunteer duty status, hospital ICU/emergency capacity, shelter intake and services, and ambulance ETA/location | `/api/v1/road-closures`, `/api/v1/readiness-checks`, `/api/v1/volunteers/me/availability`, `/api/v1/disasters/<id>/status` |
 | Loss of trust through insecure shared access | Revocable server-side sessions, CSRF defense, request throttling, role authorization, audit events, request IDs, reviewed migrations, and production readiness gates | `/api/v1/auth/sessions`, `/api/v1/ready`, `audit_events` |
 | Regional information silos | Public India-wide active incident, warning, and verified field-news aggregation | `GET /api/v1/national-alerts` |
 | Unverified or missing disaster-area coverage | Authorized, source-labelled field updates with optional live-stream URLs and verification state | `GET/POST /api/v1/news-updates` |
