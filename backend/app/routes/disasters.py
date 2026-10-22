@@ -1,18 +1,18 @@
 from flask import Blueprint, jsonify, request
 
+from .. import validation
+from ..access import can_update_rescue, scoped_rescue_query
 from ..auth import login_required
 from ..extensions import db
 from ..models import (
     AiAssessment,
     Ambulance,
     Disaster,
-    HospitalNotification,
     LocationPing,
     RescueRequest,
     RescueStatusHistory,
     ResponderUnit,
     ResponseDispatch,
-    RoleProfile,
     Volunteer,
 )
 from ..services.ai_service import damage_estimation, relief_prioritization
@@ -20,6 +20,16 @@ from ..services.dispatch_service import auto_dispatch_rescue, dispatch_registere
 
 disasters_bp = Blueprint("disasters", __name__)
 VALID_RESCUE_STATUSES = {"pending", "assigned", "en route", "triage", "rescued", "cancelled"}
+DISASTER_TYPES = {"flood", "earthquake", "cyclone", "landslide", "fire", "tsunami", "heatwave", "drought", "industrial", "other"}
+DISASTER_STATUSES = {"active", "monitoring", "contained", "closed"}
+SEVERITY_HINTS = {"low", "medium", "high", "critical"}
+RESCUE_CONDITIONS = {"stable", "injured", "critical", "unconscious", "bleeding"}
+# Assignment-bound roles advance their own leg of a response; only command roles cancel or reopen.
+LIMITED_ROLE_STATUSES = {
+    "Hospital": {"triage", "rescued"},
+    "Ambulance": {"en route", "triage", "rescued"},
+    "Volunteer": {"en route", "rescued"},
+}
 
 
 @disasters_bp.post("/disasters")
@@ -31,15 +41,15 @@ def create_disaster():
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     disaster = Disaster(
-        title=data["title"],
-        disaster_type=data["disaster_type"],
-        description=data["description"],
-        address=data["address"],
-        latitude=float(data["latitude"]),
-        longitude=float(data["longitude"]),
-        people_affected=int(data.get("people_affected") or 0),
-        severity_hint=data.get("severity_hint", "medium"),
-        image_url=data.get("image_url"),
+        title=validation.text(data, "title", 160),
+        disaster_type=validation.choice(data, "disaster_type", DISASTER_TYPES),
+        description=validation.text(data, "description", 4000),
+        address=validation.text(data, "address", 255),
+        latitude=validation.latitude(data["latitude"]),
+        longitude=validation.longitude(data["longitude"]),
+        people_affected=validation.optional_whole_number(data.get("people_affected"), "people_affected", maximum=10_000_000),
+        severity_hint=validation.choice(data, "severity_hint", SEVERITY_HINTS, default="medium"),
+        image_url=validation.http_url(data.get("image_url"), "image_url"),
         reported_by_id=request.user.id,
     )
     db.session.add(disaster)
@@ -69,11 +79,20 @@ def list_disasters():
     return jsonify({"disasters": [item.to_dict() for item in query.limit(200).all()]})
 
 
+@disasters_bp.patch("/disasters/<int:disaster_id>/status")
+@login_required(roles=["Admin", "Police", "Fire Service"])
+def update_disaster_status(disaster_id):
+    disaster = db.get_or_404(Disaster, disaster_id)
+    disaster.status = validation.choice(request.get_json() or {}, "status", DISASTER_STATUSES)
+    db.session.commit()
+    return jsonify({"disaster": disaster.to_dict()})
+
+
 @disasters_bp.get("/disasters/<int:disaster_id>")
 @login_required()
 def get_disaster(disaster_id):
     disaster = db.get_or_404(Disaster, disaster_id)
-    requests = _scoped_rescue_query(
+    requests = scoped_rescue_query(
         RescueRequest.query.filter_by(disaster_id=disaster_id),
         request.user,
     ).order_by(RescueRequest.priority_score.desc()).all()
@@ -94,15 +113,17 @@ def create_rescue_request():
     rescue = RescueRequest(
         disaster_id=disaster.id,
         requester_id=request.user.id,
-        victim_name=data["victim_name"],
-        victim_age=int(data.get("victim_age") or 0),
-        people_count=int(data.get("people_count") or 1),
-        condition=data.get("condition", "stable"),
-        trapped=bool(data.get("trapped")),
-        vulnerable_people=int(data.get("vulnerable_people") or 0),
-        notes=data.get("notes"),
-        latitude=float(data["latitude"]),
-        longitude=float(data["longitude"]),
+        victim_name=validation.text(data, "victim_name", 120),
+        victim_age=validation.optional_whole_number(data.get("victim_age"), "victim_age", maximum=130),
+        people_count=validation.optional_whole_number(
+            data.get("people_count"), "people_count", minimum=1, maximum=10_000, default=1
+        ),
+        condition=validation.choice(data, "condition", RESCUE_CONDITIONS, default="stable"),
+        trapped=data.get("trapped") is True,
+        vulnerable_people=validation.optional_whole_number(data.get("vulnerable_people"), "vulnerable_people", maximum=10_000),
+        notes=validation.optional_text(data, "notes", 2000),
+        latitude=validation.latitude(data["latitude"]),
+        longitude=validation.longitude(data["longitude"]),
         priority_score=priority["score"],
         priority_label=priority["label"],
     )
@@ -117,7 +138,9 @@ def create_rescue_request():
                 rescue_request_id=rescue.id,
                 latitude=rescue.latitude,
                 longitude=rescue.longitude,
-                accuracy_meters=float(data["location_accuracy"]) if data.get("location_accuracy") not in {None, ""} else None,
+                accuracy_meters=validation.coordinate(data["location_accuracy"], "location_accuracy", 0, 100_000)
+                if data.get("location_accuracy") not in {None, ""}
+                else None,
                 consent_granted=True,
             )
         )
@@ -132,7 +155,7 @@ def create_rescue_request():
 @login_required()
 def list_rescue_requests():
     status = request.args.get("status")
-    query = _scoped_rescue_query(RescueRequest.query, request.user).order_by(
+    query = scoped_rescue_query(RescueRequest.query, request.user).order_by(
         RescueRequest.priority_score.desc(),
         RescueRequest.created_at.asc(),
     )
@@ -145,10 +168,7 @@ def list_rescue_requests():
 @login_required(roles=["Admin", "Police", "Fire Service", "Ambulance", "NGO", "Hospital", "Volunteer"])
 def update_rescue_status(request_id):
     rescue = db.get_or_404(RescueRequest, request_id)
-    if request.user.role in {"Hospital", "Ambulance", "Volunteer"} and not _assigned_to_user(
-        rescue.id,
-        request.user,
-    ):
+    if not can_update_rescue(rescue.id, request.user):
         return jsonify({"error": "This rescue request is not assigned to your account"}), 403
     data = request.get_json() or {}
     status = data.get("status")
@@ -156,9 +176,13 @@ def update_rescue_status(request_id):
         return jsonify({"error": "status is required"}), 400
     if status not in VALID_RESCUE_STATUSES:
         return jsonify({"error": "Invalid rescue status"}), 400
+    allowed_statuses = LIMITED_ROLE_STATUSES.get(request.user.role)
+    if allowed_statuses is not None and status not in allowed_statuses:
+        return jsonify({"error": f"Your role may set only: {', '.join(sorted(allowed_statuses))}"}), 403
     rescue.status = status
-    if data.get("assigned_unit"):
-        rescue.assigned_unit = data["assigned_unit"]
+    assigned_unit = validation.optional_text(data, "assigned_unit", 120)
+    if assigned_unit:
+        rescue.assigned_unit = assigned_unit
     if status in {"rescued", "cancelled"}:
         final_dispatch_status = "completed" if status == "rescued" else "cancelled"
         for dispatch in ResponseDispatch.query.filter_by(rescue_request_id=rescue.id).all():
@@ -175,7 +199,14 @@ def update_rescue_status(request_id):
                 ambulance = db.session.get(Ambulance, dispatch.responder_id)
                 if ambulance:
                     ambulance.status = "available"
-    db.session.add(RescueStatusHistory(rescue_request_id=rescue.id, status=status, note=data.get("note"), changed_by_id=request.user.id))
+    db.session.add(
+        RescueStatusHistory(
+            rescue_request_id=rescue.id,
+            status=status,
+            note=validation.optional_text(data, "note", 500),
+            changed_by_id=request.user.id,
+        )
+    )
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict()})
 
@@ -197,51 +228,3 @@ def assign_rescue_request(request_id):
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict(), "dispatch": dispatch.to_dict()})
 
-
-def _scoped_rescue_query(query, user):
-    if user.role in {"Admin", "Police", "Fire Service", "NGO"}:
-        return query
-    if user.role == "Citizen":
-        return query.filter_by(requester_id=user.id)
-    if user.role in {"Hospital", "Ambulance", "Volunteer"}:
-        return query.filter(RescueRequest.id.in_(_assigned_rescue_ids(user)))
-    return query.filter(RescueRequest.id.in_([]))
-
-
-def _assigned_to_user(rescue_id, user):
-    return rescue_id in set(_assigned_rescue_ids(user))
-
-
-def _assigned_rescue_ids(user):
-    profile = RoleProfile.query.filter_by(user_id=user.id).first()
-    if user.role == "Hospital":
-        if profile is None or not profile.hospital_id:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in HospitalNotification.query.with_entities(
-                HospitalNotification.rescue_request_id
-            )
-            .filter_by(hospital_id=profile.hospital_id)
-            .all()
-        ]
-    if user.role == "Ambulance":
-        if profile is None or not profile.ambulance_id:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
-            .filter_by(responder_type="ambulance", responder_id=profile.ambulance_id)
-            .all()
-        ]
-    if user.role == "Volunteer":
-        volunteer = Volunteer.query.filter_by(user_id=user.id).first()
-        if volunteer is None:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
-            .filter_by(responder_type="volunteer", responder_id=volunteer.id)
-            .all()
-        ]
-    return []

@@ -5,6 +5,8 @@ from uuid import uuid4
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
+from .. import validation
+from ..access import COMMAND_ROLES, assigned_rescue_ids, role_profile, scoped_rescue_query
 from ..auth import audit_event, authenticated_rate_key, login_required, session_response
 from ..extensions import db, limiter
 from ..models import (
@@ -22,7 +24,6 @@ from ..models import (
     ResourceDistribution,
     ResponderUnit,
     ResponseDispatch,
-    RoleProfile,
     Shelter,
     SupplyRequest,
     User,
@@ -101,16 +102,16 @@ def bootstrap():
         .group_by(AlertAcknowledgement.alert_id)
         .all()
     )
-    command_role = request.user.role in {"Admin", "Police", "Fire Service", "NGO"}
-    profile = RoleProfile.query.filter_by(user_id=request.user.id).first()
-    rescue_query = RescueRequest.query.order_by(
-        RescueRequest.priority_score.desc(),
-        RescueRequest.created_at.asc(),
+    command_role = request.user.role in COMMAND_ROLES
+    profile = role_profile(request.user)
+    rescue_query = scoped_rescue_query(
+        RescueRequest.query.order_by(
+            RescueRequest.priority_score.desc(),
+            RescueRequest.created_at.asc(),
+        ),
+        request.user,
+        profile,
     )
-    if request.user.role == "Citizen":
-        rescue_query = rescue_query.filter_by(requester_id=request.user.id)
-    elif request.user.role not in {"Admin", "Police", "Fire Service", "NGO"}:
-        rescue_query = rescue_query.filter(RescueRequest.id.in_(_assigned_rescue_ids(request.user, profile)))
 
     hospital_query = Hospital.query.order_by(Hospital.name)
     shelter_query = Shelter.query.order_by(Shelter.name)
@@ -134,7 +135,7 @@ def bootstrap():
         )
     elif request.user.role == "Ambulance":
         hospital_notification_query = hospital_notification_query.filter(
-            HospitalNotification.rescue_request_id.in_(_assigned_rescue_ids(request.user, profile))
+            HospitalNotification.rescue_request_id.in_(assigned_rescue_ids(request.user, profile))
         )
 
     dispatch_query = ResponseDispatch.query.order_by(ResponseDispatch.created_at.desc())
@@ -305,9 +306,9 @@ def acknowledge_alert(alert_id):
     if created:
         acknowledgement = AlertAcknowledgement(alert_id=alert_id, user_id=request.user.id)
         db.session.add(acknowledgement)
-    acknowledgement.response = data.get("response", "received")
-    acknowledgement.latitude = data.get("latitude")
-    acknowledgement.longitude = data.get("longitude")
+    acknowledgement.response = validation.choice(data, "response", {"received", "safe", "need_help"}, default="received")
+    acknowledgement.latitude = validation.optional_latitude(data.get("latitude"))
+    acknowledgement.longitude = validation.optional_longitude(data.get("longitude"))
     db.session.commit()
     return jsonify({"acknowledgement": acknowledgement.to_dict(), "created": created})
 
@@ -316,12 +317,14 @@ def acknowledge_alert(alert_id):
 @login_required()
 def safe_route():
     try:
-        latitude = float(request.args["latitude"])
-        longitude = float(request.args["longitude"])
-    except (KeyError, TypeError, ValueError):
-        return jsonify({"error": "latitude and longitude are required"}), 400
+        latitude = validation.latitude(request.args["latitude"])
+        longitude = validation.longitude(request.args["longitude"])
+    except (KeyError, ValueError):
+        return jsonify({"error": "Valid latitude and longitude are required"}), 400
 
     destination_type = request.args.get("destination", "shelter")
+    if destination_type not in {"shelter", "hospital"}:
+        return jsonify({"error": "destination must be shelter or hospital"}), 400
     candidates = Shelter.query.filter(Shelter.available_capacity > 0).all() if destination_type == "shelter" else Hospital.query.filter(Hospital.available_beds > 0).all()
     if not candidates:
         return jsonify({"error": f"No available {destination_type} found"}), 404
@@ -385,37 +388,3 @@ def distance_km(lat1, lon1, lat2, lon2):
     value = sin(d_lat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
     return 2 * earth_radius_km * asin(sqrt(value))
 
-
-def _assigned_rescue_ids(user, profile=None):
-    profile = profile or RoleProfile.query.filter_by(user_id=user.id).first()
-    if user.role == "Hospital":
-        if not profile or not profile.hospital_id:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in HospitalNotification.query.with_entities(
-                HospitalNotification.rescue_request_id
-            )
-            .filter_by(hospital_id=profile.hospital_id)
-            .all()
-        ]
-    if user.role == "Ambulance":
-        if not profile or not profile.ambulance_id:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
-            .filter_by(responder_type="ambulance", responder_id=profile.ambulance_id)
-            .all()
-        ]
-    if user.role == "Volunteer":
-        volunteer = Volunteer.query.filter_by(user_id=user.id).first()
-        if volunteer is None:
-            return []
-        return [
-            rescue_id
-            for (rescue_id,) in ResponseDispatch.query.with_entities(ResponseDispatch.rescue_request_id)
-            .filter_by(responder_type="volunteer", responder_id=volunteer.id)
-            .all()
-        ]
-    return []

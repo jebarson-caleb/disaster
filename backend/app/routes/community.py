@@ -6,8 +6,9 @@ from uuid import uuid4
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
-from ..auth import audit_event, current_user, login_required
-from ..extensions import db
+from .. import validation
+from ..auth import audit_event, authenticated_rate_key, current_user, login_required
+from ..extensions import db, limiter
 from ..models import (
     Disaster,
     DisasterNewsUpdate,
@@ -32,6 +33,9 @@ community_bp = Blueprint("community", __name__)
 FIELD_ROLES = {"Admin", "Police", "Fire Service", "NGO", "Hospital", "Shelter", "Ambulance", "Volunteer"}
 CASE_RESPONDER_ROLES = {"Admin", "Police", "Fire Service", "NGO", "Volunteer"}
 SUPPLY_COORDINATOR_ROLES = {"Admin", "NGO", "Shelter", "Police", "Fire Service"}
+WELFARE_STATUSES = {"requested", "assigned", "contacting", "located_safe", "needs_help", "closed"}
+SUPPLY_STATUSES = {"requested", "assigned", "packing", "en route", "delivered", "cancelled"}
+SUPPLY_URGENCIES = {"medium", "high", "critical"}
 
 
 def campaign_payload(campaign):
@@ -104,19 +108,17 @@ def create_news_update():
     missing = [field for field in ["disaster_id", "headline", "summary", "source_name", "state", "district"] if data.get(field) in {None, ""}]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    db.get_or_404(Disaster, int(data["disaster_id"]))
-    stream_url = str(data.get("stream_url") or "").strip() or None
-    if stream_url and not stream_url.startswith(("https://", "http://")):
-        return jsonify({"error": "stream_url must start with http:// or https://"}), 400
+    disaster_id = validation.whole_number(data["disaster_id"], "disaster_id", minimum=1, maximum=2**31 - 1)
+    db.get_or_404(Disaster, disaster_id)
     update = DisasterNewsUpdate(
-        disaster_id=int(data["disaster_id"]),
-        headline=str(data["headline"]).strip(),
-        summary=str(data["summary"]).strip(),
-        source_name=str(data["source_name"]).strip(),
-        stream_url=stream_url,
-        state=str(data["state"]).strip(),
-        district=str(data["district"]).strip(),
-        is_live=bool(data.get("is_live")),
+        disaster_id=disaster_id,
+        headline=validation.text(data, "headline", 200),
+        summary=validation.text(data, "summary", 4000),
+        source_name=validation.text(data, "source_name", 120),
+        stream_url=validation.http_url(data.get("stream_url"), "stream_url"),
+        state=validation.text(data, "state", 100),
+        district=validation.text(data, "district", 100),
+        is_live=data.get("is_live") is True,
         is_verified=True,
         published_by_id=request.user.id,
     )
@@ -144,19 +146,23 @@ def create_welfare_check():
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
     if data.get("consent_to_contact") is not True:
         return jsonify({"error": "Consent to contact is required"}), 400
-    disaster_id = int(data["disaster_id"]) if data.get("disaster_id") else None
+    disaster_id = (
+        validation.whole_number(data["disaster_id"], "disaster_id", minimum=1, maximum=2**31 - 1)
+        if data.get("disaster_id")
+        else None
+    )
     if disaster_id:
         db.get_or_404(Disaster, disaster_id)
     item = WelfareCheck(
         requester_id=request.user.id,
         disaster_id=disaster_id,
-        relative_name=str(data["relative_name"]).strip(),
-        relative_phone=str(data.get("relative_phone") or "").strip() or None,
-        relationship=str(data["relationship"]).strip(),
-        last_known_location=str(data["last_known_location"]).strip(),
-        latitude=float(data["latitude"]) if data.get("latitude") not in {None, ""} else None,
-        longitude=float(data["longitude"]) if data.get("longitude") not in {None, ""} else None,
-        requester_phone=str(data["requester_phone"]).strip(),
+        relative_name=validation.text(data, "relative_name", 120),
+        relative_phone=validation.optional_text(data, "relative_phone", 30),
+        relationship=validation.text(data, "relationship", 80),
+        last_known_location=validation.text(data, "last_known_location", 255),
+        latitude=validation.optional_latitude(data.get("latitude")),
+        longitude=validation.optional_longitude(data.get("longitude")),
+        requester_phone=validation.text(data, "requester_phone", 30),
         consent_to_contact=True,
     )
     db.session.add(item)
@@ -171,12 +177,12 @@ def update_welfare_check(check_id):
     item = db.get_or_404(WelfareCheck, check_id)
     data = request.get_json() or {}
     status = data.get("status", item.status)
-    if status not in {"requested", "assigned", "contacting", "located_safe", "needs_help", "closed"}:
+    if status not in WELFARE_STATUSES:
         return jsonify({"error": "Invalid welfare-check status"}), 400
     item.status = status
     item.responder_id = request.user.id
     if "responder_notes" in data:
-        item.responder_notes = str(data["responder_notes"])
+        item.responder_notes = validation.optional_text(data, "responder_notes", 2000)
     db.session.commit()
     return jsonify({"welfare_check": welfare_payload(item)})
 
@@ -231,18 +237,22 @@ def create_supply_request():
     missing = [field for field in required if data.get(field) in {None, ""}]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    disaster = db.get_or_404(Disaster, int(data["disaster_id"]))
+    disaster = db.get_or_404(
+        Disaster, validation.whole_number(data["disaster_id"], "disaster_id", minimum=1, maximum=2**31 - 1)
+    )
     item = SupplyRequest(
         requester_id=request.user.id,
         disaster_id=disaster.id,
-        category=str(data["category"]).strip().lower(),
-        description=str(data["description"]).strip(),
-        people_count=max(1, int(data.get("people_count") or 1)),
-        urgency=str(data.get("urgency") or "high").lower(),
-        contact_phone=str(data["contact_phone"]).strip(),
-        latitude=float(data["latitude"]),
-        longitude=float(data["longitude"]),
-        location_accuracy=float(data["location_accuracy"]) if data.get("location_accuracy") not in {None, ""} else None,
+        category=validation.text(data, "category", 60).lower(),
+        description=validation.text(data, "description", 2000),
+        people_count=validation.optional_whole_number(data.get("people_count"), "people_count", minimum=1, maximum=100_000, default=1),
+        urgency=validation.choice(data, "urgency", SUPPLY_URGENCIES, default="high"),
+        contact_phone=validation.text(data, "contact_phone", 30),
+        latitude=validation.latitude(data["latitude"]),
+        longitude=validation.longitude(data["longitude"]),
+        location_accuracy=validation.coordinate(data["location_accuracy"], "location_accuracy", 0, 100_000)
+        if data.get("location_accuracy") not in {None, ""}
+        else None,
     )
     db.session.add(item)
     db.session.flush()
@@ -260,7 +270,7 @@ def update_supply_request(supply_id):
     item = db.get_or_404(SupplyRequest, supply_id)
     data = request.get_json() or {}
     status = data.get("status", item.status)
-    if status not in {"requested", "assigned", "packing", "en route", "delivered", "cancelled"}:
+    if status not in SUPPLY_STATUSES:
         return jsonify({"error": "Invalid supply-request status"}), 400
     assigned_unit = item.assigned_unit
     selected_unit = ResponderUnit.query.filter_by(name=assigned_unit).first() if assigned_unit else None
@@ -283,7 +293,7 @@ def update_supply_request(supply_id):
     item.status = status
     item.assigned_unit = assigned_unit
     if "responder_notes" in data:
-        item.responder_notes = str(data["responder_notes"]).strip()
+        item.responder_notes = validation.optional_text(data, "responder_notes", 2000)
     db.session.commit()
     return jsonify(
         {
@@ -300,13 +310,16 @@ def list_donation_campaigns():
 
 
 @community_bp.post("/donations")
+@limiter.limit("10 per hour")
 def create_donation():
     data = request.get_json() or {}
     required = ["campaign_id", "donor_name", "donor_email", "amount"]
     missing = [field for field in required if data.get(field) in {None, ""}]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
-    campaign = db.get_or_404(DonationCampaign, int(data["campaign_id"]))
+    campaign = db.get_or_404(
+        DonationCampaign, validation.whole_number(data["campaign_id"], "campaign_id", minimum=1, maximum=2**31 - 1)
+    )
     if campaign.status != "active":
         return jsonify({"error": "This campaign is not accepting donations"}), 409
     try:
@@ -332,7 +345,7 @@ def create_donation():
         amount=amount,
         currency=campaign.currency,
         anonymous=bool(data.get("anonymous")),
-        message=str(data.get("message") or "").strip() or None,
+        message=validation.optional_text(data, "message", 500),
         reference=reference,
         status="pending_payment" if payment_base else "pledged",
     )
@@ -378,20 +391,25 @@ def update_donation_status(donation_id):
 
 @community_bp.post("/location-pings")
 @login_required()
+@limiter.limit("120 per hour", key_func=authenticated_rate_key)
 def create_location_ping():
     data = request.get_json() or {}
     if data.get("consent_granted") is not True:
         return jsonify({"error": "Explicit location consent is required"}), 400
     if data.get("latitude") in {None, ""} or data.get("longitude") in {None, ""}:
         return jsonify({"error": "latitude and longitude are required"}), 400
+    rescue_request_id = _owned_case_id(RescueRequest, data.get("rescue_request_id"))
+    supply_request_id = _owned_case_id(SupplyRequest, data.get("supply_request_id"))
     ping = LocationPing(
         user_id=request.user.id,
-        rescue_request_id=int(data["rescue_request_id"]) if data.get("rescue_request_id") else None,
-        supply_request_id=int(data["supply_request_id"]) if data.get("supply_request_id") else None,
-        latitude=float(data["latitude"]),
-        longitude=float(data["longitude"]),
-        accuracy_meters=float(data["accuracy_meters"]) if data.get("accuracy_meters") not in {None, ""} else None,
-        source=str(data.get("source") or "device"),
+        rescue_request_id=rescue_request_id,
+        supply_request_id=supply_request_id,
+        latitude=validation.latitude(data["latitude"]),
+        longitude=validation.longitude(data["longitude"]),
+        accuracy_meters=validation.coordinate(data["accuracy_meters"], "accuracy_meters", 0, 100_000)
+        if data.get("accuracy_meters") not in {None, ""}
+        else None,
+        source=validation.choice(data, "source", {"device", "manual"}, default="device"),
         consent_granted=True,
     )
     db.session.add(ping)
@@ -410,6 +428,15 @@ def auto_dispatch(request_id):
     allocation = auto_dispatch_rescue(rescue, disaster)
     db.session.commit()
     return jsonify({"rescue_request": rescue.to_dict(), "allocation": allocation, "already_dispatched": False})
+
+
+def _owned_case_id(model, value):
+    if value in {None, ""}:
+        return None
+    item = db.get_or_404(model, validation.whole_number(value, "case id", minimum=1, maximum=2**31 - 1))
+    if item.requester_id != request.user.id:
+        raise ValueError("Location can be attached only to your own request")
+    return item.id
 
 
 def _checkout_url(base_url, parameters):
