@@ -952,11 +952,15 @@ export default function App() {
   async function updateShelterServices(id, payload) {
     const shelter = facilities.shelters.find((item) => item.id === id);
     if (!shelter) return;
+    const replaceShelter = (next) => setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? next : item)) }));
+    // Reflect the toggle immediately; slow field connections otherwise make the checkbox look unresponsive.
+    replaceShelter({ ...shelter, ...payload });
     try {
       const response = await client.updateShelter(id, payload);
-      setFacilities((current) => ({ ...current, shelters: current.shelters.map((item) => (item.id === id ? response.shelter : item)) }));
+      replaceShelter(response.shelter);
       setOperatorNotice(`${shelter.name} services updated`);
     } catch (error) {
+      replaceShelter(shelter);
       setOperatorNotice(`Shelter services were not changed: ${error.message}`);
     }
   }

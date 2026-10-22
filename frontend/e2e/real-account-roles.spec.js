@@ -9,48 +9,56 @@ const roleAccounts = [
     name: 'Kavya Raman',
     email: 'citizen@rescue.local',
     heading: 'Report, track and stay safe',
+    department: 'Closed and restricted roads',
   },
   {
     role: 'Volunteer',
     name: 'Ravi Kumar',
     email: 'volunteer@rescue.local',
     heading: 'Assignments, safety and check-in',
+    department: 'My availability and assignments',
   },
   {
     role: 'Police',
     name: 'Police Control Room',
     email: 'police@rescue.local',
     heading: 'Perimeters, road access and crowd safety',
+    department: 'Road closures and diversions',
   },
   {
     role: 'Fire Service',
     name: 'Fire Control Officer',
     email: 'fire@rescue.local',
     heading: 'Rescue hazards, teams and equipment',
+    department: 'Equipment and crew readiness',
   },
   {
     role: 'Hospital',
     name: 'Hospital Duty Officer',
     email: 'hospital@rescue.local',
     heading: 'Capacity, triage and patient flow',
+    department: 'Emergency surge readiness',
   },
   {
     role: 'Shelter',
     name: 'Shelter Coordinator',
     email: 'shelter@rescue.local',
     heading: 'Occupancy, intake and relief supplies',
+    department: 'Camp services check',
   },
   {
     role: 'Ambulance',
     name: '108 Dispatcher',
     email: 'ambulance@rescue.local',
     heading: 'Assigned calls, ETA and hospital handoff',
+    department: 'Vehicle readiness',
   },
   {
     role: 'NGO',
     name: 'Relief NGO Lead',
     email: 'ngo@rescue.local',
     heading: 'Distribution, volunteers and unmet needs',
+    department: 'Relief logistics check',
   },
   {
     role: 'Admin',
@@ -74,6 +82,9 @@ async function expectWorkspace(page, account) {
   await expect(rolePicker).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Live API', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible();
+  if (account.department) {
+    await expect(page.getByRole('heading', { name: account.department, level: 2 })).toBeVisible();
+  }
 }
 
 async function signOut(page) {
