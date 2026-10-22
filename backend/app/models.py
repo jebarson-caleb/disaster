@@ -552,3 +552,38 @@ class MfaChallenge(db.Model, SerializerMixin):
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     consumed_at = db.Column(db.DateTime(timezone=True), index=True)
     failed_attempts = db.Column(db.Integer, default=0, nullable=False)
+
+
+class RoadClosure(db.Model, SerializerMixin):
+    """Police/fire-reported road closure, restriction, or diversion."""
+
+    __tablename__ = "road_closures"
+
+    id = db.Column(db.Integer, primary_key=True)
+    disaster_id = db.Column(db.Integer, db.ForeignKey("disasters.id"), index=True)
+    road_name = db.Column(db.String(160), nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(30), default="closed", nullable=False, index=True)
+    reason = db.Column(db.String(500), nullable=False)
+    diversion = db.Column(db.String(255))
+    reported_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class ReadinessCheck(db.Model, SerializerMixin):
+    """Department readiness checklist: equipment, PPE, briefings, or facility services."""
+
+    __tablename__ = "readiness_checks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    role = db.Column(db.String(40), nullable=False, index=True)
+    subject = db.Column(db.String(160), nullable=False)
+    items = db.Column(db.Text, nullable=False, default="{}")
+    ready_count = db.Column(db.Integer, default=0, nullable=False)
+    total_count = db.Column(db.Integer, default=0, nullable=False)
+    notes = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)

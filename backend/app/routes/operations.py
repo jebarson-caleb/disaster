@@ -32,6 +32,7 @@ from ..models import (
     WelfareCheck,
 )
 from ..services.alert_delivery_service import AlertDeliveryError, deliver_alert
+from .field import READINESS_ROLES, readiness_payload, road_closures_payload, volunteer_payload
 
 operations_bp = Blueprint("operations", __name__)
 
@@ -209,6 +210,11 @@ def bootstrap():
                 else [],
                 "responder_units": [item.to_dict() for item in ResponderUnit.query.order_by(ResponderUnit.availability_status, ResponderUnit.name).all()] if request.user.role in {"Admin", "Police", "Fire Service", "NGO", "Shelter", "Ambulance", "Volunteer"} else [],
                 "emergency_hotline": current_app.config.get("EMERGENCY_HOTLINE", "112"),
+            },
+            "field": {
+                "road_closures": road_closures_payload(),
+                "readiness_checks": readiness_payload(request.user) if request.user.role in READINESS_ROLES else [],
+                "volunteer": volunteer_payload(request.user) if request.user.role == "Volunteer" else None,
             },
             "server_time": datetime.now(UTC).isoformat(),
         }

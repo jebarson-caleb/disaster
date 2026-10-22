@@ -16,6 +16,7 @@ from .routes.auth import auth_bp
 from .routes.community import community_bp
 from .routes.disasters import disasters_bp
 from .routes.facilities import facilities_bp
+from .routes.field import field_bp
 from .routes.operations import operations_bp
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
@@ -45,6 +46,7 @@ def create_app(config_object=Config):
     app.register_blueprint(admin_bp, url_prefix="/api/v1/admin")
     app.register_blueprint(operations_bp, url_prefix="/api/v1")
     app.register_blueprint(community_bp, url_prefix="/api/v1")
+    app.register_blueprint(field_bp, url_prefix="/api/v1")
 
     @app.before_request
     def request_context_and_csrf():
