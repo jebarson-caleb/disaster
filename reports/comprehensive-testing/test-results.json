@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "project": "ResQ — Disaster Management & Emergency Response Platform",
+  "repository": "https://github.com/jebarson-caleb/disaster.git",
+  "commit": "891bc60c1d8bebf86867d58d7f015de755c8b839",
+  "execution_date": "2026-10-26T22:45:00+05:30",
+  "environment": {
+    "os": "Windows 11",
+    "python": "3.13.14",
+    "node": "24.22.1",
+    "npm": "11.19.1",
+    "playwright": "1.62.0",
+    "live_url": "https://disaster-delta-eight.vercel.app/"
+  },
+  "metrics": {
+    "total_tests_executed": 90,
+    "passed": 90,
+    "failed": 0,
+    "code_coverage_percent": 89.38,
+    "coverage_threshold_percent": 75.0
+  },
+  "suites": [
+    {
+      "name": "Backend Pytest Core Suite",
+      "tool": "pytest",
+      "count": 72,
+      "passed": 72,
+      "failed": 0,
+      "coverage": 89.38,
+      "status": "PASSED"
+    },
+    {
+      "name": "Additional Gap Checks Suite",
+      "tool": "pytest",
+      "file": "backend/tests/test_additional_gap_checks.py",
+      "count": 6,
+      "passed": 6,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    {
+      "name": "Frontend Unit Tests",
+      "tool": "node --test",
+      "file": "frontend/src/services/demoApi.test.js",
+      "count": 6,
+      "passed": 6,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    {
+      "name": "Frontend Static Linter",
+      "tool": "eslint",
+      "warnings": 0,
+      "errors": 0,
+      "status": "PASSED"
+    },
+    {
+      "name": "Live E2E Auth & Mobile",
+      "tool": "playwright",
+      "file": "frontend/e2e/production-auth.spec.js",
+      "target": "https://disaster-delta-eight.vercel.app/",
+      "count": 2,
+      "passed": 2,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    {
+      "name": "Live E2E 9-Role Demo",
+      "tool": "playwright",
+      "file": "frontend/e2e/demo-roles.spec.js",
+      "target": "https://disaster-delta-eight.vercel.app/",
+      "count": 4,
+      "passed": 4,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    {
+      "name": "Database Migrations",
+      "tool": "flask db upgrade & check",
+      "status": "PASSED",
+      "drift_detected": false
+    },
+    {
+      "name": "Bundle Credential Scan",
+      "tool": "regex scan on frontend/dist/",
+      "status": "PASSED",
+      "leaked_secrets_count": 0
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-01",
+      "severity": "HIGH",
+      "component": "backend/tests/conftest.py",
+      "title": "Python 3.13 SQLite ResourceWarning causes unraisable exception under -W error",
+      "status": "IDENTIFIED"
+    },
+    {
+      "id": "DEF-02",
+      "severity": "HIGH",
+      "component": "frontend/package.json",
+      "title": "GHSA-mrhx-c7xc-m3w5 in zod < 4.6.6",
+      "status": "IDENTIFIED"
+    },
+    {
+      "id": "DEF-03",
+      "severity": "MEDIUM",
+      "component": "frontend/src/App.jsx",
+      "title": "Vercel Serverless Function cold start creates UI freeze on session restore",
+      "status": "IDENTIFIED"
+    }
+  ]
+}

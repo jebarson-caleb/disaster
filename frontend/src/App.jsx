@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
@@ -271,6 +271,7 @@ export default function App() {
   const [connectionState, setConnectionState] = useState('connecting');
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionMode, setSessionMode] = useState('checking');
+  const sessionCheckActiveRef = useRef(true);
   const [showAccountPanel, setShowAccountPanel] = useState(true);
   const [authMode, setAuthMode] = useState(passwordResetToken ? 'reset' : 'login');
   const [authDraft, setAuthDraft] = useState(emptyAuthDraft);
@@ -455,28 +456,45 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    restoreSession()
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+    restoreSession({ signal: controller?.signal })
       .then((session) => {
-        if (cancelled) return;
-        const { user } = session;
-        setCurrentUser(user);
-        setActiveRole(user.role);
-        setSessionMode('account');
-        const passwordRequired = Boolean(user.password_change_required);
-        setShowAccountPanel(passwordRequired);
-        setOperatorNotice(
-          passwordRequired
-            ? 'Replace your temporary password to continue.'
-            : `${user.name} session restored`,
-        );
+        if (cancelled || !sessionCheckActiveRef.current) return;
+        sessionCheckActiveRef.current = false;
+        if (!session?.user?.role) {
+          setSessionMode((currentMode) => (currentMode === 'checking' ? 'account' : currentMode));
+          setShowAccountPanel(true);
+          return;
+        }
+        setCurrentUser((existingUser) => {
+          if (existingUser) return existingUser;
+          setSessionMode((currentMode) => {
+            if (currentMode === 'sandbox') return currentMode;
+            const { user } = session;
+            setActiveRole(user.role);
+            const passwordRequired = Boolean(user.password_change_required);
+            setShowAccountPanel(passwordRequired);
+            setOperatorNotice(
+              passwordRequired
+                ? 'Replace your temporary password to continue.'
+                : `${user.name} session restored`,
+            );
+            return 'account';
+          });
+          return session.user;
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        setSessionMode('account');
+        sessionCheckActiveRef.current = false;
+        setSessionMode((currentMode) => (currentMode === 'checking' ? 'account' : currentMode));
         setShowAccountPanel(true);
       });
     return () => {
       cancelled = true;
+      sessionCheckActiveRef.current = false;
+      controller?.abort();
     };
   }, []);
 
@@ -645,6 +663,7 @@ export default function App() {
   }
 
   async function startDemo(role) {
+    sessionCheckActiveRef.current = false;
     setDemoStarting(role);
     try {
       const { createDemoClient } = await import('./services/demoApi.js');
@@ -679,6 +698,7 @@ export default function App() {
   }
 
   function exitDemo() {
+    sessionCheckActiveRef.current = false;
     resetOperationalState();
     setDemoClient(null);
     setCurrentUser(null);
@@ -1333,6 +1353,7 @@ export default function App() {
 
   async function submitAuthentication(event) {
     event.preventDefault();
+    sessionCheckActiveRef.current = false;
     if (authMode === 'register' && authDraft.password !== authDraft.password_confirmation) {
       setOperatorNotice('Registration failed: password confirmation does not match');
       return;
@@ -1533,6 +1554,7 @@ export default function App() {
   }
 
   async function signOut() {
+    sessionCheckActiveRef.current = false;
     if (sandboxActive) {
       exitDemo();
       return;

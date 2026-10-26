@@ -7,29 +7,50 @@ function readCookie(name) {
   return item ? decodeURIComponent(item.slice(prefix.length)) : '';
 }
 
+export const DEFAULT_SESSION_RESTORE_TIMEOUT_MS = 3500;
+
 async function request(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const csrfToken = !['GET', 'HEAD', 'OPTIONS'].includes(method) ? readCookie('resq_csrf') : '';
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-      ...options.headers,
-    },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(body.error || `Request failed with status ${response.status}`);
-    error.status = response.status;
-    error.requestId = body.request_id || response.headers.get('X-Request-ID');
-    if (response.status === 401 && !path.startsWith('/auth/')) {
-      window.dispatchEvent(new CustomEvent('resq:session-expired'));
-    }
-    throw error;
+  const timeoutMs = options.timeoutMs;
+  let timeoutId;
+  let signal = options.signal;
+
+  if (timeoutMs && !signal && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => {
+      controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError'));
+    }, timeoutMs);
   }
-  return body;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      signal,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+        ...options.headers,
+      },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(body.error || `Request failed with status ${response.status}`);
+      error.status = response.status;
+      error.requestId = body.request_id || response.headers.get('X-Request-ID');
+      if (response.status === 401 && !path.startsWith('/auth/')) {
+        window.dispatchEvent(new CustomEvent('resq:session-expired'));
+      }
+      throw error;
+    }
+    return body;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export function login(payload) {
@@ -48,8 +69,9 @@ export function completePasswordReset(payload) {
   return request('/auth/password-reset/complete', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export function restoreSession() {
-  return request('/auth/me');
+export function restoreSession(options = {}) {
+  const { timeoutMs = DEFAULT_SESSION_RESTORE_TIMEOUT_MS, ...fetchOptions } = options;
+  return request('/auth/me', { timeoutMs, ...fetchOptions });
 }
 
 export function logout() {
