@@ -89,6 +89,7 @@ async function expectWorkspace(page, account) {
 
 async function signOut(page) {
   const signOutButton = page.getByRole('button', { name: 'Log out', exact: true });
+  await signOutButton.scrollIntoViewIfNeeded();
   const [response] = await Promise.all([
     page.waitForResponse((item) => (
       item.url().endsWith('/api/v1/auth/logout') && item.request().method() === 'POST'

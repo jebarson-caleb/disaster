@@ -1,4 +1,3 @@
-import pytest
 from app.seed import seed_demo_data
 from tests.support import bearer
 

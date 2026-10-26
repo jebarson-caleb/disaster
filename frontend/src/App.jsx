@@ -1372,6 +1372,7 @@ export default function App() {
       setCurrentUser(session.user);
       setSessionMode('account');
       setActiveRole(session.user.role);
+      setActiveView('command');
       setAuthDraft((current) => ({ ...current, password: '', password_confirmation: '' }));
       const passwordRequired = Boolean(session.user.password_change_required);
       setShowAccountPanel(passwordRequired);
@@ -1577,6 +1578,7 @@ export default function App() {
     setSessionMode('account');
     setShowAccountPanel(true);
     setActiveRole('Citizen');
+    setActiveView('command');
     setOperatorNotice('Signed out successfully');
   }
 

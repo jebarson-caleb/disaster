@@ -297,13 +297,15 @@ button {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .search-shell {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1 1 420px;
+  flex: 1 2 240px;
+  min-width: 140px;
   max-width: 480px;
   min-height: 42px;
   color: #777;
@@ -329,6 +331,8 @@ button {
   justify-content: flex-end;
   gap: 12px;
   min-width: 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .topbar-tools button {
